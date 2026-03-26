@@ -14,6 +14,7 @@
 ![better--sqlite3](https://img.shields.io/badge/better--sqlite3-11.7-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![React Router](https://img.shields.io/badge/React_Router-6.28-CA4245?style=flat-square&logo=reactrouter&logoColor=white)
 ![Lucide](https://img.shields.io/badge/Lucide_Icons-0.474-F56565?style=flat-square&logo=lucide&logoColor=white)
+![D3.js](https://img.shields.io/badge/D3.js-7-F9A03C?style=flat-square&logo=d3dotjs&logoColor=white)
 ![PostCSS](https://img.shields.io/badge/PostCSS-8.5-DD3A0A?style=flat-square&logo=postcss&logoColor=white)
 ![Autoprefixer](https://img.shields.io/badge/Autoprefixer-10.4-DD3735?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-%3E%3D3.6-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -118,7 +119,7 @@ graph TB
         APP[React App]
         WS_CLIENT[WebSocket Client]
         EB[Event Bus]
-        PAGES[Pages:<br/>Dashboard / Kanban /<br/>Sessions / Activity]
+        PAGES[Pages:<br/>Dashboard / Kanban /<br/>Sessions / Activity /<br/>Workflows]
 
         VITE --> APP
         APP --> WS_CLIENT
@@ -223,10 +224,11 @@ graph TD
     STATS[routes/stats.js<br/>Aggregate queries]
     PRICING[routes/pricing.js<br/>Cost calculation + pricing CRUD]
     SETTINGS[routes/settings.js<br/>System info + data management]
+    WORKFLOWS[routes/workflows.js<br/>Workflow visualizations]
 
     INDEX --> DB
     INDEX --> WS
-    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & PRICING & SETTINGS
+    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & PRICING & SETTINGS & WORKFLOWS
 
     HOOKS --> DB & WS & TC
     SETTINGS --> DB & TC
@@ -236,6 +238,7 @@ graph TD
     EVENTS --> DB
     STATS --> DB & WS
     PRICING --> DB
+    WORKFLOWS --> DB
 
     style INDEX fill:#6366f1,stroke:#818cf8,color:#fff
     style DB fill:#003B57,stroke:#005f8a,color:#fff
@@ -258,6 +261,7 @@ graph TD
 | `routes/analytics.js`     | Extended analytics — token totals, tool usage counts, daily event/session trends, agent type distribution                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `routes/pricing.js`       | Model pricing CRUD (list/upsert/delete), per-session and global cost calculation with pattern-based model matching                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data, reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
+| `routes/workflows.js`     | Aggregate workflow visualization data (agent orchestration graphs, tool transition flows, collaboration networks, workflow pattern detection, model delegation, error propagation, concurrency timelines, session complexity metrics, compaction impact). Per-session drill-in endpoint with agent tree, tool timeline, and event details                                                                                                                                                                                               |
 | `lib/transcript-cache.js` | Stat-based JSONL transcript cache with incremental byte-offset reads. Shared between `hooks.js` (token extraction on every event) and the periodic compaction scanner (`index.js`). Uses `(path, mtime, size)` cache key — unchanged files return cached results instantly, grown files only parse new bytes, shrunk files (compaction) trigger full re-read. LRU eviction caps at 200 entries. Entries evicted on SessionEnd and abandoned session cleanup                                                                            |
 
 ### Request Processing
@@ -274,6 +278,7 @@ flowchart LR
     ROUTER -->|/api/stats| STATS[stats.js]
     ROUTER -->|/api/pricing| PRICING[pricing.js]
     ROUTER -->|/api/settings| SETTINGS[settings.js]
+    ROUTER -->|/api/workflows| WORKFLOWS[workflows.js]
     ROUTER -->|/api/health| HEALTH[Health Check]
     ROUTER -->|"* (prod)"| STATIC[Static Files<br/>client/dist]
 
@@ -284,6 +289,7 @@ flowchart LR
     STATS --> DB
     PRICING --> DB
     SETTINGS --> DB
+    WORKFLOWS --> DB
 
     HOOKS --> WS[WebSocket<br/>Broadcast]
     SESSIONS --> WS
@@ -309,11 +315,12 @@ graph TD
     SETTINGS_P["Settings.tsx"]
 
     ANALYTICS_P["Analytics.tsx"]
+    WORKFLOWS_P["Workflows.tsx"]
     NOTFOUND["NotFound.tsx"]
 
     APP --> LAYOUT
     LAYOUT --> SIDEBAR
-    LAYOUT --> DASH & KANBAN & SESS & DETAIL & ACTIVITY & ANALYTICS_P & SETTINGS_P & NOTFOUND
+    LAYOUT --> DASH & KANBAN & SESS & DETAIL & ACTIVITY & ANALYTICS_P & WORKFLOWS_P & SETTINGS_P & NOTFOUND
 
     DASH --> SC1["StatCard x6<br/>(sessions/agents/subagents/<br/>events today/total events/cost)<br/>3-column grid"]
     DASH --> AC1["AgentCard[]<br/>with collapsible subagent hierarchy"]
@@ -326,6 +333,7 @@ graph TD
     DETAIL --> AC3["AgentCard hierarchy<br/>parent → children tree"]
     DETAIL --> TL["Event Timeline"]
     ACTIVITY --> FEED["Streaming<br/>Event List"]
+    WORKFLOWS_P --> WFC["12 D3.js components<br/>(workflows/ directory)"]
 
     style APP fill:#6366f1,stroke:#818cf8,color:#fff
     style LAYOUT fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
@@ -359,14 +367,15 @@ graph TD
         SD[SessionDetail]
         AF[ActivityFeed]
         AN[Analytics]
+        WF[Workflows]
         SET[Settings]
         NF[NotFound]
     end
 
-    APP --> D & K & S & SD & AF & AN
-    D & K & S & SD & AF & AN --> API
-    D & K & S & SD & AF & AN --> EB
-    D & K & S & SD & AF & AN --> FMT
+    APP --> D & K & S & SD & AF & AN & WF
+    D & K & S & SD & AF & AN & WF --> API
+    D & K & S & SD & AF & AN & WF --> EB
+    D & K & S & SD & AF & AN & WF --> FMT
     SET --> API
     SET --> EB
     SET --> FMT
@@ -404,6 +413,7 @@ graph LR
     DETAIL_R["/sessions/:id"] --> DETAIL[SessionDetail]
     ACT_R["/activity"] --> ACT[ActivityFeed]
     AN_R["/analytics"] --> AN[Analytics]
+    WF_R["/workflows"] --> WF[Workflows]
     SET_R["/settings"] --> SET[Settings]
     NF_R["/*"] --> NF[NotFound]
 
@@ -418,8 +428,56 @@ graph LR
 | `/sessions/:id` | SessionDetail | `GET /api/sessions/:id` (includes agents + events)     |
 | `/activity`     | ActivityFeed  | `GET /api/events?limit=100`                            |
 | `/analytics`    | Analytics     | `GET /api/analytics/tokens`, `GET /api/analytics/tools`, `GET /api/analytics/trends`, `GET /api/analytics/agents` |
+| `/workflows`    | Workflows     | `GET /api/workflows`, `GET /api/workflows/session/:id` + WebSocket auto-refresh (3s debounce) |
 | `/settings`     | Settings      | `GET /api/settings/info`, `GET /api/pricing`, `GET /api/pricing/cost` + `localStorage` for notification prefs |
 | `/*`            | NotFound      | None (static 404 page)                                 |
+
+### Workflows Page Architecture
+
+The Workflows page (`/workflows`) is the most visualization-heavy page, composed of 12 child components in `client/src/components/workflows/`. All D3.js rendering is done client-side using data from two API endpoints.
+
+```mermaid
+graph TD
+    WF["Workflows.tsx<br/>Page orchestrator"]:::root
+    API_AGG["GET /api/workflows<br/>Aggregate data"]
+    API_DI["GET /api/workflows/session/:id<br/>Session drill-in"]
+    WS_D["WebSocket auto-refresh<br/>(3s debounce)"]
+
+    WF --> API_AGG
+    WF --> API_DI
+    WS_D --> WF
+
+    WF --> S1["WorkflowStats<br/>Summary cards"]
+    WF --> S2["OrchestrationDAG<br/>Horizontal DAG —<br/>Sessions → Main → Subagents → Outcomes"]
+    WF --> S3["ToolExecutionFlow<br/>d3-sankey tool transitions"]
+    WF --> S4["AgentCollaborationNetwork<br/>Force-directed pipeline graph"]
+    WF --> S5["SubagentEffectiveness<br/>SVG success rings + sparklines"]
+    WF --> S6["WorkflowPatterns<br/>Auto-detected sequences"]
+    WF --> S7["ModelDelegationFlow<br/>Model → agent routing"]
+    WF --> S8["ErrorPropagationMap<br/>Error clustering by depth"]
+    WF --> S9["ConcurrencyTimeline<br/>Swim-lane parallel execution"]
+    WF --> S10["SessionComplexityScatter<br/>D3 bubble chart"]
+    WF --> S11["CompactionImpact<br/>Token compression analysis"]
+    WF --> S12["SessionDrillIn<br/>Searchable session explorer<br/>(3 tabs: tree / timeline / events)"]
+
+    classDef root fill:#6366f1,stroke:#818cf8,color:#fff
+```
+
+| Component | Visualization | D3 Feature |
+| --- | --- | --- |
+| `OrchestrationDAG` | Horizontal DAG of aggregate spawning patterns | Custom DAG layout, capped at top 7 subagent types with overflow node |
+| `ToolExecutionFlow` | Tool-to-tool transition Sankey diagram | `d3-sankey` |
+| `AgentCollaborationNetwork` | Agent pipeline graph with directed edges | `d3-force` with arrowheads and frequency labels |
+| `SubagentEffectiveness` | Scorecard grid with success rate rings | SVG arc rendering, sparklines (max 3 per row) |
+| `WorkflowPatterns` | Common orchestration sequences | Pattern detection from event data |
+| `ModelDelegationFlow` | Model routing through agent hierarchies | Hierarchical layout |
+| `ErrorPropagationMap` | Error clustering by hierarchy depth | Depth-based grouping |
+| `ConcurrencyTimeline` | Swim-lane parallel agent execution | Time-scaled horizontal bars |
+| `SessionComplexityScatter` | Duration vs agents vs tokens | D3 bubble/scatter chart |
+| `CompactionImpact` | Token compression events and recovery | Before/after comparison |
+| `SessionDrillIn` | Per-session agent tree, tool timeline, events | Searchable dropdown with pagination, 3 tabs |
+
+**Cross-filtering:** Clicking nodes in the OrchestrationDAG filters data in other sections. **JSON export:** All workflow data can be exported as JSON from the page header.
 
 ---
 
@@ -570,12 +628,13 @@ graph TD
         SUB3["Sessions subscriber"]
         SUB4["SessionDetail subscriber"]
         SUB5["ActivityFeed subscriber"]
+        SUB6["Workflows subscriber<br/>(3s debounce)"]
     end
 
     A & B & C --> BC
     BC --> WS
     WS --> EB
-    EB --> SUB1 & SUB2 & SUB3 & SUB4 & SUB5
+    EB --> SUB1 & SUB2 & SUB3 & SUB4 & SUB5 & SUB6
 
     style BC fill:#10b981,stroke:#34d399,color:#fff
     style EB fill:#f59e0b,stroke:#fbbf24,color:#000
@@ -802,12 +861,13 @@ graph TD
         US4["useState<br/>SessionDetail"]
         US5["useState<br/>ActivityFeed"]
         US6["useState<br/>Analytics"]
+        US8["useState<br/>Workflows"]
         US7["useState<br/>Settings"]
     end
 
-    REST --> US1 & US2 & US3 & US4 & US5 & US6 & US7
+    REST --> US1 & US2 & US3 & US4 & US5 & US6 & US8 & US7
     WSM --> EB
-    EB --> US1 & US2 & US3 & US4 & US5 & US6 & US7
+    EB --> US1 & US2 & US3 & US4 & US5 & US6 & US8 & US7
     EB --> NOTIF_H
     LS --> NOTIF_H
     LS --> US7
@@ -944,7 +1004,7 @@ The Settings page provides a UI for toggling each preference, managing browser p
 | **CORS**               | Enabled for development; in production, same-origin (Express serves the client)                                                                            |
 | **No auth**            | Intentional -- this is a local development tool. Server binds to `0.0.0.0` only for LAN access; restrict with `DASHBOARD_PORT` or firewall rules if needed |
 | **No secrets**         | No API keys, tokens, or credentials stored or transmitted                                                                                                  |
-| **Dependency surface** | Minimal: 5 runtime server deps, 4 runtime client deps                                                                                                      |
+| **Dependency surface** | Minimal: 5 runtime server deps, 6 runtime client deps (includes `d3` and `d3-sankey` for Workflows visualizations)                                          |
 
 ---
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  LayoutDashboard,
   FolderOpen,
   Bot,
   Zap,
@@ -112,9 +113,16 @@ export function Dashboard() {
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-100 mb-1">Dashboard</h2>
-          <p className="text-sm text-gray-500">Real-time overview of Claude Code agent activity</p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center">
+            <LayoutDashboard className="w-4.5 h-4.5 text-accent" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-100">Dashboard</h1>
+            <p className="text-xs text-gray-500">
+              Real-time overview of Claude Code agent activity
+            </p>
+          </div>
         </div>
         <button onClick={load} className="btn-ghost flex-shrink-0">
           <RefreshCw className="w-4 h-4" /> Refresh

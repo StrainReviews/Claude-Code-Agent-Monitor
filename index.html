@@ -589,6 +589,18 @@
               </p>
             </div>
             <div class="feature-card">
+              <div class="feature-icon ic-teal">⬡</div>
+              <h3>Workflows</h3>
+              <p>
+                D3.js-powered visualization page with 11 interactive sections: agent orchestration
+                DAG, tool execution Sankey diagram, collaboration network, subagent effectiveness
+                scorecards, workflow pattern detection, model delegation flow, error propagation map,
+                concurrency timeline, session complexity scatter, compaction impact analysis, and
+                per-session drill-in. Cross-filtering, JSON export, and real-time WebSocket
+                auto-refresh.
+              </p>
+            </div>
+            <div class="feature-card">
               <div class="feature-icon ic-blue">⚡</div>
               <h3>WebSocket Push</h3>
               <p>
@@ -1351,7 +1363,7 @@ npm run codex:sync</code></pre>
                   APP["React App"]
                   WS_C["WS Client"]
                   EB["Event Bus"]
-                  PAGES["Dashboard / Kanban /\nSessions / Analytics"]
+                  PAGES["Dashboard / Kanban /\nSessions / Analytics /\nWorkflows"]
                   APP --> WS_C
                   WS_C --> EB
                   EB --> PAGES
@@ -1495,6 +1507,7 @@ npm run codex:sync</code></pre>
                 ANALYTICS["routes/analytics.js<br/>Analytics metrics"]
                 PRICING["routes/pricing.js<br/>Pricing CRUD + cost calc"]
                 SETTINGS_R["routes/settings.js<br/>System info + data mgmt"]
+                WORKFLOWS_R["routes/workflows.js<br/>Workflow visualizations"]
 
                 INDEX --> DB
                 INDEX --> WS
@@ -1506,6 +1519,7 @@ npm run codex:sync</code></pre>
                 INDEX --> ANALYTICS
                 INDEX --> PRICING
                 INDEX --> SETTINGS_R
+                INDEX --> WORKFLOWS_R
                 HOOKS --> DB
                 HOOKS --> WS
                 SESSIONS --> DB
@@ -1517,6 +1531,7 @@ npm run codex:sync</code></pre>
                 ANALYTICS --> DB
                 PRICING --> DB
                 SETTINGS_R --> DB
+                WORKFLOWS_R --> DB
             </div>
             <p class="diagram-label">Server module dependency graph</p>
           </div>
@@ -1618,6 +1633,15 @@ npm run codex:sync</code></pre>
                     sessions). Clear all data. Reset pricing to defaults. Reinstall hooks.
                   </td>
                 </tr>
+                <tr>
+                  <td><code>routes/workflows.js</code></td>
+                  <td>
+                    Aggregate workflow visualization data (agent orchestration, tool transitions,
+                    collaboration networks, workflow patterns, model delegation, error propagation,
+                    concurrency, session complexity, compaction impact). Per-session drill-in with
+                    agent tree, tool timeline, and events.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -1641,6 +1665,7 @@ npm run codex:sync</code></pre>
                 DETAIL["SessionDetail.tsx"]
                 ACTIVITY["ActivityFeed.tsx"]
                 ANALYTICS["Analytics.tsx"]
+                WORKFLOWS["Workflows.tsx"]
                 SETTINGS_P["Settings.tsx"]
                 SC["StatCard x4"]
                 AC["AgentCard list"]
@@ -1655,6 +1680,7 @@ npm run codex:sync</code></pre>
                 LAYOUT --> DETAIL
                 LAYOUT --> ACTIVITY
                 LAYOUT --> ANALYTICS
+                LAYOUT --> WORKFLOWS
                 LAYOUT --> SETTINGS_P
                 DASH --> SC
                 DASH --> AC
@@ -1695,6 +1721,12 @@ npm run codex:sync</code></pre>
               >
             </div>
             <div class="route-item">
+              <span class="route-path">/workflows</span>
+              <span class="route-desc"
+                >Workflows — D3.js visualizations, cross-filtering, session drill-in</span
+              >
+            </div>
+            <div class="route-item">
               <span class="route-path">/settings</span>
               <span class="route-desc"
                 >Settings — model pricing, hook status, data export, session cleanup</span
@@ -1723,7 +1755,9 @@ npm run codex:sync</code></pre>
                   <td>
                     TypeScript interfaces: <code>Session</code>, <code>Agent</code>,
                     <code>DashboardEvent</code>, <code>Stats</code>, <code>Analytics</code>,
-                    <code>WSMessage</code>. Status config maps.
+                    <code>WSMessage</code>, plus all workflow-related types
+                    (<code>WorkflowData</code>, <code>SessionDrillIn</code>, etc). Status config
+                    maps.
                   </td>
                 </tr>
                 <tr>
@@ -1771,6 +1805,7 @@ npm run codex:sync</code></pre>
                 US4["useState\nSessionDetail"]
                 US5["useState\nActivityFeed"]
                 US6["useState\nAnalytics"]
+                US8["useState\nWorkflows"]
                 US7["useState\nSettings"]
 
                 REST --> US1
@@ -1779,6 +1814,7 @@ npm run codex:sync</code></pre>
                 REST --> US4
                 REST --> US5
                 REST --> US6
+                REST --> US8
                 REST --> US7
                 WSM --> EB
                 EB --> US1
@@ -1787,6 +1823,7 @@ npm run codex:sync</code></pre>
                 EB --> US4
                 EB --> US5
                 EB --> US6
+                EB --> US8
                 EB --> US7
 
                 classDef source fill:#6366f1,stroke:#818cf8,color:#fff
@@ -2145,6 +2182,26 @@ npm run codex:sync</code></pre>
               <span class="route-path">/api/settings/cleanup</span>
               <span class="route-desc"
                 >Abandon stale sessions (by hours), purge old data (by days)</span
+              >
+            </div>
+          </div>
+
+          <h3>Workflows</h3>
+          <div class="route-list">
+            <div class="route-item">
+              <span class="method method-get">GET</span>
+              <span class="route-path">/api/workflows</span>
+              <span class="route-desc"
+                >Aggregate workflow data — orchestration graphs, tool flows, effectiveness,
+                patterns, model delegation, error propagation, concurrency, complexity,
+                compaction impact</span
+              >
+            </div>
+            <div class="route-item">
+              <span class="method method-get">GET</span>
+              <span class="route-path">/api/workflows/session/:id</span>
+              <span class="route-desc"
+                >Per-session drill-in — agent tree, tool timeline, event details</span
               >
             </div>
           </div>
@@ -2816,7 +2873,7 @@ docker run -d --name agent-monitor \
                 </tr>
                 <tr>
                   <td>Dependency surface</td>
-                  <td>5 runtime server deps, 4 runtime client deps — minimal attack surface</td>
+                  <td>5 runtime server deps, 6 runtime client deps (includes D3.js for Workflows) — minimal attack surface</td>
                 </tr>
               </tbody>
             </table>
@@ -3007,6 +3064,15 @@ npm run install-hooks</code></pre>
                     Catches null/undefined bugs at compile time.
                     <code>noUncheckedIndexedAccess</code> prevents array bounds issues in analytics
                     aggregations.
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>D3.js + d3-sankey</strong></td>
+                  <td>
+                    Industry-standard data visualization library. Powers the Workflows page's 11
+                    interactive sections — DAG layouts, Sankey diagrams, force-directed graphs,
+                    bubble charts, and swim-lane timelines. No wrapper libraries needed; direct
+                    SVG rendering keeps bundle impact minimal.
                   </td>
                 </tr>
                 <tr>

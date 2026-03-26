@@ -18,6 +18,7 @@ A professional dashboard to track and visualize your Claude Code agent sessions,
 ![better--sqlite3](https://img.shields.io/badge/better--sqlite3-11.7_(optional)-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![React Router](https://img.shields.io/badge/React_Router-6.28-CA4245?style=flat-square&logo=reactrouter&logoColor=white)
 ![Lucide](https://img.shields.io/badge/Lucide_Icons-0.474-F56565?style=flat-square&logo=lucide&logoColor=white)
+![D3.js](https://img.shields.io/badge/D3.js-7-F9A03C?style=flat-square&logo=d3dotjs&logoColor=white)
 ![PostCSS](https://img.shields.io/badge/PostCSS-8.5-DD3A0A?style=flat-square&logo=postcss&logoColor=white)
 ![Autoprefixer](https://img.shields.io/badge/Autoprefixer-10.4-DD3735?style=flat-square)
 ![Python](https://img.shields.io/badge/Python-%3E%3D3.6-3776AB?style=flat-square&logo=python&logoColor=white)
@@ -100,7 +101,7 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
   <img src="images/settings.png" alt="Settings Overview" width="100%">
 </p>
 
-The sidebar provides quick access to the Dashboard, Kanban Board, Sessions list, Activity Feed, Analytics, and Settings. Each page is designed to give you deep insights into your Claude Code agent activity with real-time updates and rich visualizations.
+The sidebar provides quick access to the Dashboard, Kanban Board, Sessions list, Activity Feed, Analytics, Workflows, and Settings. Each page is designed to give you deep insights into your Claude Code agent activity with real-time updates and rich visualizations.
 
 ---
 
@@ -125,6 +126,7 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 | **Notifications**                  | Browser notifications for session starts, completions, errors, and subagent spawns. Configurable per-event toggles with permission management                                                                                                                                |
 | **Settings**                       | System info, hook status, model pricing management, notification preferences, data export, session cleanup                                                                                                                                                                   |
 | **MCP Server (Local)**             | Enterprise-grade local MCP server in `mcp/` exposing dashboard operations as tools for Claude Code and other MCP hosts, with strict input schemas, retries/timeouts, localhost-only API target enforcement, and mutation/destructive safety gates                            |
+| **Workflows**                      | D3.js-powered visualization page with 11 interactive sections: agent orchestration DAG, tool execution Sankey diagram, collaboration network, subagent effectiveness scorecards, detected workflow patterns, model delegation flow, error propagation map, concurrency timeline, session complexity scatter, compaction impact analysis, and per-session drill-in with agent tree and tool timeline. Cross-filtering, JSON export, and real-time WebSocket auto-refresh with 3-second debounce |
 | **Compaction Tracking**            | Detects `/compact` events from JSONL transcripts, creates compaction agents and events. Backfills legacy compactions on startup. Periodic scanner catches compactions within 2 minutes even when no hooks fire. Shares the transcript cache so no duplicate file reads occur |
 | **Subsessions/Resumed Sessions**   | Automatically reactivates sessions when new events arrive, correctly handles `/resume` and orphaned sessions. Periodic sweep (every 2 min) marks abandoned sessions that slip past event-based detection                                                                     |
 | **Pre-Existing Session Detection** | Sessions already running when the server starts are imported as "active" (based on recent JSONL file modification). Stop events also reactivate imported completed/abandoned sessions, so the first hook from an in-progress session always surfaces it on the dashboard     |
@@ -572,6 +574,13 @@ All endpoints return JSON. Error responses follow the shape `{ error: { code, me
 | `GET`    | `/api/pricing/cost`      | Total cost across all sessions           |
 | `GET`    | `/api/pricing/cost/:id`  | Cost breakdown for a specific session    |
 
+### Workflows
+
+| Method | Path                          | Description                                             |
+| ------ | ----------------------------- | ------------------------------------------------------- |
+| `GET`  | `/api/workflows`              | Aggregate workflow data (orchestration, tools, patterns) |
+| `GET`  | `/api/workflows/session/:id`  | Per-session drill-in (agent tree, tool timeline, events) |
+
 ### Settings
 
 | Method | Path                           | Description                                      |
@@ -763,9 +772,10 @@ graph TD
     ANALYTICS["routes/analytics.js"]
     PRICING["routes/pricing.js<br/>Cost calculation"]
     SETTINGS["routes/settings.js<br/>System management"]
+    WORKFLOWS["routes/workflows.js<br/>Workflow visualizations"]
 
     INDEX --> DB & WS
-    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & ANALYTICS & PRICING & SETTINGS
+    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & ANALYTICS & PRICING & SETTINGS & WORKFLOWS
     HOOKS --> DB & WS
     SESSIONS --> DB & WS
     AGENTS --> DB & WS
@@ -774,6 +784,7 @@ graph TD
     ANALYTICS --> DB
     PRICING --> DB
     SETTINGS --> DB
+    WORKFLOWS --> DB
 
     style INDEX fill:#6366f1,stroke:#818cf8,color:#fff
     style DB fill:#003B57,stroke:#005f8a,color:#fff
@@ -792,6 +803,7 @@ graph LR
     D["/sessions/:id"] --> DETAIL["SessionDetail<br/>agents + timeline + cost"]
     A["/activity"] --> ACT["ActivityFeed<br/>streaming event log"]
     AN["/analytics"] --> ANALYTICS["Analytics<br/>tokens + heatmap + trends"]
+    WF["/workflows"] --> WORKFLOWS["Workflows<br/>D3 visualizations + drill-in"]
     ST["/settings"] --> SETTINGS["Settings<br/>pricing + notifications + hooks + export"]
     NF["/*"] --> NOTFOUND["NotFound<br/>404 catch-all"]
 
@@ -879,6 +891,7 @@ agent-dashboard/
 |       |-- events.js            # Event listing
 |       |-- stats.js             # Aggregate statistics
 |       |-- analytics.js         # Token, tool, and trend analytics
+|       |-- workflows.js         # Aggregate workflow data and per-session drill-in
 |       |-- pricing.js           # Model pricing CRUD and cost calculation
 |       +-- settings.js          # System info, data management, export, cleanup
 |   +-- lib/
@@ -908,7 +921,20 @@ agent-dashboard/
 |       |   |-- AgentCard.tsx    # Agent info card with status
 |       |   |-- StatCard.tsx     # Metric card
 |       |   |-- StatusBadge.tsx  # Color-coded status pills
-|       |   +-- EmptyState.tsx   # Placeholder for empty lists
+|       |   |-- EmptyState.tsx   # Placeholder for empty lists
+|       |   +-- workflows/       # D3.js workflow visualization components
+|       |       |-- OrchestrationDAG.tsx           # Horizontal DAG of agent spawning patterns
+|       |       |-- ToolExecutionFlow.tsx           # d3-sankey diagram of tool-to-tool transitions
+|       |       |-- AgentCollaborationNetwork.tsx   # Force-directed agent pipeline graph
+|       |       |-- SubagentEffectiveness.tsx       # Scorecard grid with SVG success rings
+|       |       |-- WorkflowPatterns.tsx            # Auto-detected orchestration sequences
+|       |       |-- ModelDelegationFlow.tsx         # Model routing through agent hierarchies
+|       |       |-- ErrorPropagationMap.tsx         # Error clustering by hierarchy depth
+|       |       |-- ConcurrencyTimeline.tsx         # Swim-lane parallel agent execution
+|       |       |-- SessionComplexityScatter.tsx    # D3 bubble chart (duration vs agents vs tokens)
+|       |       |-- CompactionImpact.tsx            # Token compression events and recovery
+|       |       |-- WorkflowStats.tsx               # Aggregate workflow statistics
+|       |       +-- SessionDrillIn.tsx              # Per-session agent tree, tool timeline, events
 |       +-- pages/
 |           |-- Dashboard.tsx      # Overview page
 |           |-- KanbanBoard.tsx    # Agent status columns
@@ -916,6 +942,7 @@ agent-dashboard/
 |           |-- SessionDetail.tsx  # Single session deep dive
 |           |-- ActivityFeed.tsx   # Real-time event stream
 |           |-- Analytics.tsx      # Token usage, heatmap, trends
+|           |-- Workflows.tsx      # D3.js workflow visualizations and session drill-in
 |           |-- Settings.tsx       # Model pricing, notifications, hooks, export, cleanup
 |           +-- NotFound.tsx       # 404 catch-all page
 |-- scripts/

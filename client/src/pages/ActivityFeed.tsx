@@ -78,14 +78,19 @@ export function ActivityFeed() {
   return (
     <div className="animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-100 mb-1">Activity Feed</h2>
-          <p className="text-sm text-gray-500">
-            Real-time stream of all agent events
-            {paused && (
-              <span className="ml-2 text-yellow-400">(paused — {bufferCount} buffered)</span>
-            )}
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center">
+            <Activity className="w-4.5 h-4.5 text-accent" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-100">Activity Feed</h1>
+            <p className="text-xs text-gray-500">
+              Real-time stream of all agent events
+              {paused && (
+                <span className="ml-2 text-yellow-400">(paused — {bufferCount} buffered)</span>
+              )}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={() => (paused ? resume() : setPaused(true))} className="btn-ghost">

@@ -1,5 +1,15 @@
 import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
-import { RefreshCw, Download, Zap, Bot, FolderOpen, Cpu, DollarSign, Clock } from "lucide-react";
+import {
+  RefreshCw,
+  Download,
+  Zap,
+  Bot,
+  FolderOpen,
+  Cpu,
+  DollarSign,
+  Clock,
+  BarChart3,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
 import { fmt, fmtCost, fmtCostFull } from "../lib/format";
@@ -528,25 +538,32 @@ export function Analytics() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
-            <h2 className="text-xl font-semibold text-gray-100">Analytics</h2>
-            {wsConnected ? (
-              <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
-                Live
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-2 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                Offline
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-            <span>Real-time monitoring and analytics for Claude Code sessions</span>
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 bg-surface-2 px-2 py-0.5 rounded-md font-mono">
-              <Clock className="w-3 h-3" />
-              {lastUpdate.toLocaleTimeString()}
-            </span>
+            <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center flex-shrink-0">
+              <BarChart3 className="w-4.5 h-4.5 text-accent" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-semibold text-gray-100">Analytics</h1>
+                {wsConnected ? (
+                  <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+                    Live
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                    Offline
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 flex items-center gap-2">
+                Real-time monitoring and analytics for Claude Code sessions
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 bg-surface-2 border border-border px-2 py-0.5 rounded-md font-mono ml-2">
+                  <Clock className="w-3 h-3" />
+                  {lastUpdate.toLocaleTimeString()}
+                </span>
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">

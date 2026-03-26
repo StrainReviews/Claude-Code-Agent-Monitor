@@ -7,6 +7,7 @@ import { Sessions } from "./pages/Sessions";
 import { SessionDetail } from "./pages/SessionDetail";
 import { ActivityFeed } from "./pages/ActivityFeed";
 import { Analytics } from "./pages/Analytics";
+import { Workflows } from "./pages/Workflows";
 import { Settings } from "./pages/Settings";
 import { NotFound } from "./pages/NotFound";
 import { useWebSocket } from "./hooks/useWebSocket";
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="sessions/:id" element={<SessionDetail />} />
           <Route path="activity" element={<ActivityFeed />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="workflows" element={<Workflows />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Route>

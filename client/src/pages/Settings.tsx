@@ -36,6 +36,7 @@ import {
   Layers,
   Coins,
   BarChart3,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
@@ -495,9 +496,14 @@ export function Settings() {
     <div className="animate-fade-in space-y-8">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-100 mb-1">Settings</h2>
-          <p className="text-sm text-gray-500">Manage pricing, notifications, data, and hooks</p>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center">
+            <SettingsIcon className="w-4.5 h-4.5 text-accent" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-gray-100">Settings</h1>
+            <p className="text-xs text-gray-500">Manage pricing, notifications, data, and hooks</p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <a

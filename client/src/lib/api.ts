@@ -5,7 +5,9 @@ import type {
   DashboardEvent,
   ModelPricing,
   Session,
+  SessionDrillIn,
   Stats,
+  WorkflowData,
 } from "./types";
 
 const BASE = "/api";
@@ -103,6 +105,12 @@ export const api = {
         purged_events: number;
         purged_agents: number;
       }>("/settings/cleanup", { method: "POST", body: JSON.stringify(params) }),
+  },
+
+  workflows: {
+    get: () => request<WorkflowData>("/workflows"),
+    session: (id: string) =>
+      request<SessionDrillIn>(`/workflows/session/${encodeURIComponent(id)}`),
   },
 
   pricing: {

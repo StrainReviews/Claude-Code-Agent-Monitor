@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Activity,
   BarChart3,
+  Workflow,
   Settings,
   Wifi,
   WifiOff,
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: "/sessions", icon: FolderOpen, label: "Sessions" },
   { to: "/activity", icon: Activity, label: "Activity Feed" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/workflows", icon: Workflow, label: "Workflows" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ] as const;
 

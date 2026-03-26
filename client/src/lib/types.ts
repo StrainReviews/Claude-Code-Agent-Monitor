@@ -111,6 +111,168 @@ export interface WSMessage {
   timestamp: string;
 }
 
+// ── Workflow types ──
+
+export interface WorkflowStats {
+  totalSessions: number;
+  totalAgents: number;
+  totalSubagents: number;
+  avgSubagents: number;
+  successRate: number;
+  avgDepth: number;
+  avgDurationSec: number;
+  totalCompactions: number;
+  avgCompactions: number;
+  topFlow: { source: string; target: string; count: number } | null;
+}
+
+export interface OrchestrationEdge {
+  source: string;
+  target: string;
+  weight: number;
+}
+
+export interface OrchestrationData {
+  sessionCount: number;
+  mainCount: number;
+  subagentTypes: Array<{ subagent_type: string; count: number; completed: number; errors: number }>;
+  edges: OrchestrationEdge[];
+  outcomes: Array<{ status: string; count: number }>;
+  compactions: { total: number; sessions: number };
+}
+
+export interface ToolFlowTransition {
+  source: string;
+  target: string;
+  value: number;
+}
+
+export interface ToolFlowData {
+  transitions: ToolFlowTransition[];
+  toolCounts: Array<{ tool_name: string; count: number }>;
+}
+
+export interface SubagentEffectivenessItem {
+  subagent_type: string;
+  total: number;
+  completed: number;
+  errors: number;
+  sessions: number;
+  successRate: number;
+  avgDuration: number | null;
+  trend: number[];
+}
+
+export interface WorkflowPattern {
+  steps: string[];
+  count: number;
+  percentage: number;
+}
+
+export interface WorkflowPatternsData {
+  patterns: WorkflowPattern[];
+  soloSessionCount: number;
+  soloPercentage: number;
+}
+
+export interface ModelDelegationData {
+  mainModels: Array<{ model: string; agent_count: number; session_count: number }>;
+  subagentModels: Array<{ model: string; agent_count: number }>;
+  tokensByModel: Array<{
+    model: string;
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_write_tokens: number;
+  }>;
+}
+
+export interface ErrorPropagationData {
+  byDepth: Array<{ depth: number; count: number }>;
+  byType: Array<{ subagent_type: string; count: number }>;
+  sessionsWithErrors: number;
+  totalSessions: number;
+  errorRate: number;
+}
+
+export interface ConcurrencyLane {
+  name: string;
+  avgStart: number;
+  avgEnd: number;
+  count: number;
+}
+
+export interface ConcurrencyData {
+  aggregateLanes: ConcurrencyLane[];
+}
+
+export interface SessionComplexityItem {
+  id: string;
+  name: string | null;
+  status: string;
+  duration: number;
+  agentCount: number;
+  subagentCount: number;
+  totalTokens: number;
+  model: string | null;
+}
+
+export interface CompactionImpactData {
+  totalCompactions: number;
+  tokensRecovered: number;
+  perSession: Array<{ session_id: string; compactions: number }>;
+  sessionsWithCompactions: number;
+  totalSessions: number;
+}
+
+export interface WorkflowData {
+  stats: WorkflowStats;
+  orchestration: OrchestrationData;
+  toolFlow: ToolFlowData;
+  effectiveness: SubagentEffectivenessItem[];
+  patterns: WorkflowPatternsData;
+  modelDelegation: ModelDelegationData;
+  errorPropagation: ErrorPropagationData;
+  concurrency: ConcurrencyData;
+  complexity: SessionComplexityItem[];
+  compaction: CompactionImpactData;
+  cooccurrence: Array<{ source: string; target: string; weight: number }>;
+}
+
+export interface SessionDrillIn {
+  session: Session;
+  tree: Array<{
+    id: string;
+    name: string;
+    type: string;
+    subagent_type: string | null;
+    status: string;
+    task: string | null;
+    started_at: string;
+    ended_at: string | null;
+    children: SessionDrillIn["tree"];
+  }>;
+  toolTimeline: Array<{
+    id: number;
+    tool_name: string;
+    event_type: string;
+    agent_id: string | null;
+    created_at: string;
+    summary: string | null;
+  }>;
+  swimLanes: Array<{
+    id: string;
+    name: string;
+    type: string;
+    subagent_type: string | null;
+    status: string;
+    started_at: string;
+    ended_at: string | null;
+    parent_agent_id: string | null;
+  }>;
+  events: DashboardEvent[];
+}
+
 export const STATUS_CONFIG: Record<
   AgentStatus,
   { label: string; color: string; bg: string; dot: string }
