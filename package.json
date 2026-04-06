@@ -3,6 +3,29 @@
   "version": "1.0.0",
   "description": "Real-time dashboard for tracking Claude Code agent activity",
   "private": true,
+  "author": "Son Nguyen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hoangsonww/Claude-Code-Agent-Monitor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hoangsonww/Claude-Code-Agent-Monitor/issues"
+  },
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "agent",
+    "dashboard",
+    "real-time",
+    "monitoring",
+    "activity-tracking",
+    "nodejs",
+    "express",
+    "react",
+    "websocket",
+    "sqlite",
+    "better-sqlite3"
+  ],
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "node --watch server/index.js",
