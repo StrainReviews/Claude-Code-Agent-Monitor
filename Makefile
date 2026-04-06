@@ -105,12 +105,6 @@ import-history: ## Import sessions from ~/.claude/ history
 clear-data: ## Delete all data rows (preserves schema)
 	node scripts/clear-data.js
 
-# ─── Codex Extensions ──────────────────────────────────────────────────────
-
-.PHONY: codex-sync
-codex-sync: ## Sync Codex extension templates to runtime dirs
-	node scripts/setup-codex-extensions.js
-
 # ─── Docker / Podman ───────────────────────────────────────────────────────
 
 .PHONY: docker-build

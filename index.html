@@ -513,7 +513,7 @@
               <div class="stat-label">Hook latency</div>
             </div>
             <div class="stat-highlight">
-              <div class="stat-val">5</div>
+              <div class="stat-val">7</div>
               <div class="stat-label">Hook types captured</div>
             </div>
             <div class="stat-highlight">
@@ -746,6 +746,13 @@
               </thead>
               <tbody>
                 <tr>
+                  <td><code>SessionStart</code></td>
+                  <td>Claude Code session begins</td>
+                  <td>
+                    Creates session and main agent. Reactivates resumed sessions. Abandons orphaned sessions with no activity for 5+ minutes.
+                  </td>
+                </tr>
+                <tr>
                   <td><code>PreToolUse</code></td>
                   <td>Agent begins using a tool</td>
                   <td>
@@ -802,6 +809,16 @@
                     <span class="status-chip chip-completed"
                       ><span class="chip-dot"></span>Completed</span
                     >. Detected via <code>isCompactSummary</code> entries in the transcript. Token baselines preserve pre-compaction totals. Periodic scanner (every 2 min) catches compactions when no hooks fire.
+                  </td>
+                </tr>
+                <tr>
+                  <td><code>SessionEnd</code></td>
+                  <td>Claude Code CLI process exits</td>
+                  <td>
+                    Marks all agents and the session as
+                    <span class="status-chip chip-completed"
+                      ><span class="chip-dot"></span>Completed</span
+                    >.
                   </td>
                 </tr>
               </tbody>
@@ -1034,6 +1051,9 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
           <div class="code-header"><span class="code-lang">json</span></div>
           <pre><code>{
   "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" SessionStart" }] }
+    ],
     "PreToolUse": [
       { "matcher": "*", "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" PreToolUse" }] }
     ],
@@ -1042,7 +1062,10 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
     ],
     "Stop":         [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" Stop" }] }],
     "SubagentStop": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" SubagentStop" }] }],
-    "Notification": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" Notification" }] }]
+    "Notification": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" Notification" }] }],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "node \"/path/to/scripts/hook-handler.js\" SessionEnd" }] }
+    ]
   }
 }</code></pre>
 
@@ -1228,16 +1251,20 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
               graph TB
                 subgraph Claude["Claude Code Process"]
                   CC["Claude Code CLI"]
+                  H0["SessionStart Hook"]
                   H1["PreToolUse Hook"]
                   H2["PostToolUse Hook"]
                   H3["Stop Hook"]
                   H4["SubagentStop Hook"]
                   H5["Notification Hook"]
+                  H6["SessionEnd Hook"]
+                  CC --> H0
                   CC --> H1
                   CC --> H2
                   CC --> H3
                   CC --> H4
                   CC --> H5
+                  CC --> H6
                 end
 
                 subgraph Hook["Hook Layer"]
@@ -1275,11 +1302,13 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                   EB --> PAGES
                 end
 
+                H0 -->|stdin JSON| HH
                 H1 -->|stdin JSON| HH
                 H2 -->|stdin JSON| HH
                 H3 -->|stdin JSON| HH
                 H4 -->|stdin JSON| HH
                 H5 -->|stdin JSON| HH
+                H6 -->|stdin JSON| HH
                 HH -->|"POST /api/hooks/event"| HR
                 WSS -->|push| WS_C
                 PAGES -->|fetch| EX
@@ -2224,7 +2253,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                 READ -->|No| EMPTY[Start with empty object]
                 PARSE --> CHECK[Ensure hooks section exists]
                 EMPTY --> CHECK
-                CHECK --> LOOP["For each hook type:\nPreToolUse, PostToolUse,\nStop, SubagentStop, Notification"]
+                CHECK --> LOOP["For each hook type:\nSessionStart, PreToolUse, PostToolUse,\nStop, SubagentStop, Notification, SessionEnd"]
                 LOOP --> EXISTS{"Our hook\nalready installed?"}
                 EXISTS -->|Yes| UPDATE[Update command path]
                 EXISTS -->|No| APPEND[Append to array]
@@ -2565,8 +2594,8 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
               <div class="feature-icon ic-emerald">🪝</div>
               <h3>Hook Configuration</h3>
               <p>
-                Shows per-hook installation status (PreToolUse, PostToolUse, Stop, SubagentStop,
-                Notification). One-click reinstall if hooks are missing or outdated.
+                Shows per-hook installation status (SessionStart, PreToolUse, PostToolUse, Stop, SubagentStop,
+                Notification, SessionEnd). One-click reinstall if hooks are missing or outdated.
               </p>
             </div>
             <div class="feature-card">
