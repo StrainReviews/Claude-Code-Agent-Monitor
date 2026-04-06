@@ -151,10 +151,12 @@ describe("loadConfig", () => {
 
   // ── Custom server name/version ──────────────────────────────
   it("parses custom server name and version", () => {
-    const cfg = loadConfig(env({
-      MCP_SERVER_NAME: "my-mcp",
-      MCP_SERVER_VERSION: "2.0.0",
-    }));
+    const cfg = loadConfig(
+      env({
+        MCP_SERVER_NAME: "my-mcp",
+        MCP_SERVER_VERSION: "2.0.0",
+      })
+    );
     assert.equal(cfg.serverName, "my-mcp");
     assert.equal(cfg.serverVersion, "2.0.0");
   });

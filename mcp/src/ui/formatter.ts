@@ -49,7 +49,11 @@ export interface Column {
   color?: (t: string) => string;
 }
 
-function alignText(text: string, width: number, align: "left" | "right" | "center" = "left"): string {
+function alignText(
+  text: string,
+  width: number,
+  align: "left" | "right" | "center" = "left"
+): string {
   const len = c.stripAnsi(text).length;
   const diff = Math.max(0, width - len);
   if (align === "right") return " ".repeat(diff) + text;
@@ -155,7 +159,13 @@ export function formatToolError(name: string, error: string, durationMs: number)
 function syntaxHighlight(json: string): string {
   return json.replace(
     /("(?:\\.|[^"\\])*")\s*(:)?|(\b(?:true|false|null)\b)|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
-    (_match, str: string | undefined, colon: string | undefined, bool: string | undefined, num: string | undefined) => {
+    (
+      _match,
+      str: string | undefined,
+      colon: string | undefined,
+      bool: string | undefined,
+      num: string | undefined
+    ) => {
       if (str) {
         if (colon) return c.cyan(str) + c.dim(":");
         return c.green(str);
@@ -170,9 +180,7 @@ function syntaxHighlight(json: string): string {
 // ── Key-value list ────────────────────────────────────────────
 
 export function keyValue(pairs: [string, string][], labelWidth = 20): string {
-  return pairs
-    .map(([k, v]) => `  ${c.label(k.padEnd(labelWidth))} ${v}`)
-    .join("\n");
+  return pairs.map(([k, v]) => `  ${c.label(k.padEnd(labelWidth))} ${v}`).join("\n");
 }
 
 // ── Section header ────────────────────────────────────────────

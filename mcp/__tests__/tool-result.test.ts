@@ -9,7 +9,9 @@ describe("jsonResult", () => {
     assert.equal(result.content.length, 1);
     assert.equal(result.content[0].type, "text");
     assert.ok(result.content[0].type === "text" && result.content[0].text.includes("my_tool"));
-    assert.ok(result.content[0].type === "text" && result.content[0].text.includes('"status": "ok"'));
+    assert.ok(
+      result.content[0].type === "text" && result.content[0].text.includes('"status": "ok"')
+    );
   });
 
   it("handles null payload", () => {
@@ -27,7 +29,11 @@ describe("jsonResult", () => {
 
 describe("errorResult", () => {
   it("handles ApiError with status and details", () => {
-    const apiErr = new ApiError("Not found", { status: 404, code: "NOT_FOUND", details: { path: "/api/sessions/x" } });
+    const apiErr = new ApiError("Not found", {
+      status: 404,
+      code: "NOT_FOUND",
+      details: { path: "/api/sessions/x" },
+    });
     const result = errorResult(apiErr);
     assert.equal(result.isError, true);
     assert.equal(result.content.length, 1);

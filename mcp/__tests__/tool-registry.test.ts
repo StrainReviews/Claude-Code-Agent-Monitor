@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createCollectorRegistrar, createDualRegistrar, type ToolEntry } from "../src/core/tool-registry.js";
+import {
+  createCollectorRegistrar,
+  createDualRegistrar,
+  type ToolEntry,
+} from "../src/core/tool-registry.js";
 import { z } from "zod";
 
 describe("createCollectorRegistrar", () => {

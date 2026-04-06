@@ -56,10 +56,7 @@ describe("collectAllTools", () => {
         tool.name.startsWith("dashboard_"),
         `Tool ${tool.name} should start with 'dashboard_'`
       );
-      assert.ok(
-        /^[a-z_]+$/.test(tool.name),
-        `Tool ${tool.name} should be lowercase snake_case`
-      );
+      assert.ok(/^[a-z_]+$/.test(tool.name), `Tool ${tool.name} should be lowercase snake_case`);
     }
   });
 

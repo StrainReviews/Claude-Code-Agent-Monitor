@@ -47,16 +47,10 @@ export function printServerInfo(info: {
   }
   process.stdout.write(line("Tools Registered", c.brightWhite(String(info.tools))) + "\n");
   process.stdout.write(
-    line(
-      "Mutations",
-      info.mutations ? c.warn("ENABLED") : c.success("disabled")
-    ) + "\n"
+    line("Mutations", info.mutations ? c.warn("ENABLED") : c.success("disabled")) + "\n"
   );
   process.stdout.write(
-    line(
-      "Destructive",
-      info.destructive ? c.error("ENABLED") : c.success("disabled")
-    ) + "\n"
+    line("Destructive", info.destructive ? c.error("ENABLED") : c.success("disabled")) + "\n"
   );
   process.stdout.write(divider + "\n");
   process.stdout.write(

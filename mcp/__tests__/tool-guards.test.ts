@@ -30,9 +30,7 @@ describe("assertMutationsEnabled", () => {
   });
 
   it("does not throw when mutations enabled", () => {
-    assert.doesNotThrow(() =>
-      assertMutationsEnabled(fakeConfig({ allowMutations: true }))
-    );
+    assert.doesNotThrow(() => assertMutationsEnabled(fakeConfig({ allowMutations: true })));
   });
 });
 

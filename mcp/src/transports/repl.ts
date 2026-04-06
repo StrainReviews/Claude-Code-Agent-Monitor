@@ -4,7 +4,14 @@ import type { DashboardApiClient } from "../clients/dashboard-api-client.js";
 import type { Logger } from "../core/logger.js";
 import { printBanner, printServerInfo, printShutdown } from "../ui/banner.js";
 import * as c from "../ui/colors.js";
-import { formatToolResult, formatToolError, table, sectionHeader, divider, badge } from "../ui/formatter.js";
+import {
+  formatToolResult,
+  formatToolError,
+  table,
+  sectionHeader,
+  divider,
+  badge,
+} from "../ui/formatter.js";
 import type { ToolHandler } from "../core/tool-registry.js";
 
 interface ToolEntry {
@@ -115,7 +122,9 @@ export async function startRepl(
     try {
       await handleCommand(input, config, api, tools, toolMap, logger);
     } catch (err) {
-      process.stdout.write(`  ${c.error("Error:")} ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stdout.write(
+        `  ${c.error("Error:")} ${err instanceof Error ? err.message : String(err)}\n`
+      );
     }
 
     rl.prompt();
@@ -266,9 +275,7 @@ function printHelp(): void {
 
   const maxCmd = Math.max(...commands.map(([cmd]) => cmd.length));
   for (const [cmd, desc] of commands) {
-    process.stdout.write(
-      `    ${c.accent(cmd.padEnd(maxCmd + 2))} ${c.muted(desc)}\n`
-    );
+    process.stdout.write(`    ${c.accent(cmd.padEnd(maxCmd + 2))} ${c.muted(desc)}\n`);
   }
   process.stdout.write("\n");
 
@@ -284,13 +291,13 @@ function printToolList(tools: ToolEntry[], domainFilter?: string): void {
     : tools;
 
   if (filtered.length === 0) {
-    process.stdout.write(`  ${c.warn("!")} No tools found${domainFilter ? ` for domain '${domainFilter}'` : ""}\n`);
+    process.stdout.write(
+      `  ${c.warn("!")} No tools found${domainFilter ? ` for domain '${domainFilter}'` : ""}\n`
+    );
     return;
   }
 
-  const title = domainFilter
-    ? `Tools — ${domainFilter}`
-    : `All Tools (${filtered.length})`;
+  const title = domainFilter ? `Tools — ${domainFilter}` : `All Tools (${filtered.length})`;
 
   process.stdout.write(sectionHeader(title));
 
@@ -304,10 +311,15 @@ function printToolList(tools: ToolEntry[], domainFilter?: string): void {
     table(
       [
         { key: "name", label: "Tool", width: 38, color: c.brightWhite },
-        { key: "domain", label: "Domain", width: 14, color: (t) => {
-          const fn = DOMAIN_COLORS[t] ?? c.muted;
-          return fn(t);
-        }},
+        {
+          key: "domain",
+          label: "Domain",
+          width: 14,
+          color: (t) => {
+            const fn = DOMAIN_COLORS[t] ?? c.muted;
+            return fn(t);
+          },
+        },
         { key: "description", label: "Description", width: 52, color: c.muted },
       ],
       rows
@@ -328,7 +340,9 @@ function printDomains(tools: ToolEntry[]): void {
       `    ${colorFn("●")} ${c.bold(c.brightWhite(domain.padEnd(18)))} ${c.muted(`${count} tools`)}\n`
     );
   }
-  process.stdout.write(`\n  ${c.muted("Use")} ${c.accent("tools <domain>")} ${c.muted("to filter by domain.")}\n\n`);
+  process.stdout.write(
+    `\n  ${c.muted("Use")} ${c.accent("tools <domain>")} ${c.muted("to filter by domain.")}\n\n`
+  );
 }
 
 function printConfig(config: AppConfig): void {

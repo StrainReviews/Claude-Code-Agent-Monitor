@@ -1,7 +1,11 @@
 import type { AppConfig } from "../config/app-config.js";
 import type { DashboardApiClient } from "../clients/dashboard-api-client.js";
 import type { Logger } from "../core/logger.js";
-import { type ToolEntry, createCollectorRegistrar, type ToolHandler } from "../core/tool-registry.js";
+import {
+  type ToolEntry,
+  createCollectorRegistrar,
+  type ToolHandler,
+} from "../core/tool-registry.js";
 import { assertMutationsEnabled, assertDestructiveEnabled } from "../policy/tool-guards.js";
 import { z } from "zod";
 import {
@@ -15,13 +19,20 @@ import {
  * Collect all tool handlers without requiring an MCP Server instance.
  * Used by REPL mode to invoke tools directly.
  */
-export function collectAllTools(config: AppConfig, api: DashboardApiClient, logger: Logger): ToolEntry[] {
+export function collectAllTools(
+  config: AppConfig,
+  api: DashboardApiClient,
+  logger: Logger
+): ToolEntry[] {
   const tools: ToolEntry[] = [];
   const register = createCollectorRegistrar(tools);
 
   // ── Observability ───────────────────────────────────────────
-  register("dashboard_health_check", "Check health of the local Agent Dashboard API.", {}, async () =>
-    api.get("/api/health")
+  register(
+    "dashboard_health_check",
+    "Check health of the local Agent Dashboard API.",
+    {},
+    async () => api.get("/api/health")
   );
   register("dashboard_get_stats", "Get dashboard overview stats.", {}, async () =>
     api.get("/api/stats")
@@ -52,50 +63,119 @@ export function collectAllTools(config: AppConfig, api: DashboardApiClient, logg
           api.get("/api/stats"),
           api.get("/api/analytics"),
           api.get("/api/events", { query: { limit: eventsLimit, offset: 0 } }),
-          api.get("/api/sessions", { query: { status: "active", limit: sessionsLimit, offset: 0 } }),
+          api.get("/api/sessions", {
+            query: { status: "active", limit: sessionsLimit, offset: 0 },
+          }),
           api.get("/api/agents", { query: { status: "working", limit: agentsLimit, offset: 0 } }),
           api.get("/api/agents", { query: { status: "connected", limit: agentsLimit, offset: 0 } }),
         ]);
-      return { stats, analytics, recent_events: recentEvents, active_sessions: activeSessions, active_agents: { working: workingAgents, connected: connectedAgents }, generated_at: new Date().toISOString() };
+      return {
+        stats,
+        analytics,
+        recent_events: recentEvents,
+        active_sessions: activeSessions,
+        active_agents: { working: workingAgents, connected: connectedAgents },
+        generated_at: new Date().toISOString(),
+      };
     }
   );
 
   // ── Sessions ────────────────────────────────────────────────
   register("dashboard_list_sessions", "List sessions with optional filter.", {}, async (args) => {
-    return api.get("/api/sessions", { query: { limit: (args.limit as number) ?? 50, offset: (args.offset as number) ?? 0, status: args.status as string | undefined } });
+    return api.get("/api/sessions", {
+      query: {
+        limit: (args.limit as number) ?? 50,
+        offset: (args.offset as number) ?? 0,
+        status: args.status as string | undefined,
+      },
+    });
   });
   register("dashboard_get_session", "Get one session with agents and events.", {}, async (args) => {
     return api.get(`/api/sessions/${encodeURIComponent(args.session_id as string)}`);
   });
   register("dashboard_create_session", "Create a new session record.", {}, async (args) => {
     assertMutationsEnabled(config);
-    return api.post("/api/sessions", { body: { id: args.id, name: args.name, cwd: args.cwd, model: args.model, metadata: args.metadata } });
+    return api.post("/api/sessions", {
+      body: {
+        id: args.id,
+        name: args.name,
+        cwd: args.cwd,
+        model: args.model,
+        metadata: args.metadata,
+      },
+    });
   });
   register("dashboard_update_session", "Update session metadata or status.", {}, async (args) => {
     assertMutationsEnabled(config);
-    return api.patch(`/api/sessions/${encodeURIComponent(args.session_id as string)}`, { body: { name: args.name, status: args.status, ended_at: args.ended_at, metadata: args.metadata } });
+    return api.patch(`/api/sessions/${encodeURIComponent(args.session_id as string)}`, {
+      body: {
+        name: args.name,
+        status: args.status,
+        ended_at: args.ended_at,
+        metadata: args.metadata,
+      },
+    });
   });
 
   // ── Agents ──────────────────────────────────────────────────
   register("dashboard_list_agents", "List agents with filters.", {}, async (args) => {
-    return api.get("/api/agents", { query: { limit: (args.limit as number) ?? 50, offset: (args.offset as number) ?? 0, status: args.status as string | undefined, session_id: args.session_id as string | undefined } });
+    return api.get("/api/agents", {
+      query: {
+        limit: (args.limit as number) ?? 50,
+        offset: (args.offset as number) ?? 0,
+        status: args.status as string | undefined,
+        session_id: args.session_id as string | undefined,
+      },
+    });
   });
   register("dashboard_get_agent", "Get a single agent by ID.", {}, async (args) => {
     return api.get(`/api/agents/${encodeURIComponent(args.agent_id as string)}`);
   });
   register("dashboard_create_agent", "Create a new agent in a session.", {}, async (args) => {
     assertMutationsEnabled(config);
-    return api.post("/api/agents", { body: { id: args.id, session_id: args.session_id, name: args.name, type: args.type, subagent_type: args.subagent_type, status: args.status, task: args.task, parent_agent_id: args.parent_agent_id, metadata: args.metadata } });
+    return api.post("/api/agents", {
+      body: {
+        id: args.id,
+        session_id: args.session_id,
+        name: args.name,
+        type: args.type,
+        subagent_type: args.subagent_type,
+        status: args.status,
+        task: args.task,
+        parent_agent_id: args.parent_agent_id,
+        metadata: args.metadata,
+      },
+    });
   });
   register("dashboard_update_agent", "Update agent lifecycle state.", {}, async (args) => {
     assertMutationsEnabled(config);
-    return api.patch(`/api/agents/${encodeURIComponent(args.agent_id as string)}`, { body: { name: args.name, status: args.status, task: args.task, current_tool: args.current_tool, ended_at: args.ended_at, metadata: args.metadata } });
+    return api.patch(`/api/agents/${encodeURIComponent(args.agent_id as string)}`, {
+      body: {
+        name: args.name,
+        status: args.status,
+        task: args.task,
+        current_tool: args.current_tool,
+        ended_at: args.ended_at,
+        metadata: args.metadata,
+      },
+    });
   });
 
   // ── Events ──────────────────────────────────────────────────
-  register("dashboard_list_events", "List events with optional session filter.", {}, async (args) => {
-    return api.get("/api/events", { query: { limit: (args.limit as number) ?? 50, offset: (args.offset as number) ?? 0, session_id: args.session_id as string | undefined } });
-  });
+  register(
+    "dashboard_list_events",
+    "List events with optional session filter.",
+    {},
+    async (args) => {
+      return api.get("/api/events", {
+        query: {
+          limit: (args.limit as number) ?? 50,
+          offset: (args.offset as number) ?? 0,
+          session_id: args.session_id as string | undefined,
+        },
+      });
+    }
+  );
   register("dashboard_ingest_hook_event", "Ingest a Claude Code hook event.", {}, async (args) => {
     assertMutationsEnabled(config);
     return api.post("/api/hooks/event", { body: { hook_type: args.hook_type, data: args.data } });
@@ -108,13 +188,32 @@ export function collectAllTools(config: AppConfig, api: DashboardApiClient, logg
   register("dashboard_get_total_cost", "Get total usage cost.", {}, async () =>
     api.get("/api/pricing/cost")
   );
-  register("dashboard_get_session_cost", "Get cost breakdown for one session.", {}, async (args) => {
-    return api.get(`/api/pricing/cost/${encodeURIComponent(args.session_id as string)}`);
-  });
-  register("dashboard_upsert_pricing_rule", "Create or update a pricing rule.", {}, async (args) => {
-    assertMutationsEnabled(config);
-    return api.put("/api/pricing", { body: { model_pattern: args.model_pattern, display_name: args.display_name, input_per_mtok: args.input_per_mtok ?? 0, output_per_mtok: args.output_per_mtok ?? 0, cache_read_per_mtok: args.cache_read_per_mtok ?? 0, cache_write_per_mtok: args.cache_write_per_mtok ?? 0 } });
-  });
+  register(
+    "dashboard_get_session_cost",
+    "Get cost breakdown for one session.",
+    {},
+    async (args) => {
+      return api.get(`/api/pricing/cost/${encodeURIComponent(args.session_id as string)}`);
+    }
+  );
+  register(
+    "dashboard_upsert_pricing_rule",
+    "Create or update a pricing rule.",
+    {},
+    async (args) => {
+      assertMutationsEnabled(config);
+      return api.put("/api/pricing", {
+        body: {
+          model_pattern: args.model_pattern,
+          display_name: args.display_name,
+          input_per_mtok: args.input_per_mtok ?? 0,
+          output_per_mtok: args.output_per_mtok ?? 0,
+          cache_read_per_mtok: args.cache_read_per_mtok ?? 0,
+          cache_write_per_mtok: args.cache_write_per_mtok ?? 0,
+        },
+      });
+    }
+  );
   register("dashboard_delete_pricing_rule", "Delete one pricing rule.", {}, async (args) => {
     assertMutationsEnabled(config);
     return api.delete(`/api/pricing/${encodeURIComponent(args.model_pattern as string)}`);
@@ -125,13 +224,21 @@ export function collectAllTools(config: AppConfig, api: DashboardApiClient, logg
   });
 
   // ── Maintenance ─────────────────────────────────────────────
-  register("dashboard_cleanup_data", "Abandon stale sessions or purge old data.", {}, async (args) => {
-    assertMutationsEnabled(config);
-    const abandonHours = args.abandon_hours as number | undefined;
-    const purgeDays = args.purge_days as number | undefined;
-    if (!abandonHours && !purgeDays) throw new Error("At least one of abandon_hours or purge_days is required.");
-    return api.post("/api/settings/cleanup", { body: { abandon_hours: abandonHours, purge_days: purgeDays } });
-  });
+  register(
+    "dashboard_cleanup_data",
+    "Abandon stale sessions or purge old data.",
+    {},
+    async (args) => {
+      assertMutationsEnabled(config);
+      const abandonHours = args.abandon_hours as number | undefined;
+      const purgeDays = args.purge_days as number | undefined;
+      if (!abandonHours && !purgeDays)
+        throw new Error("At least one of abandon_hours or purge_days is required.");
+      return api.post("/api/settings/cleanup", {
+        body: { abandon_hours: abandonHours, purge_days: purgeDays },
+      });
+    }
+  );
   register("dashboard_reimport_history", "Re-import legacy Claude sessions.", {}, async () => {
     assertMutationsEnabled(config);
     return api.post("/api/settings/reimport");
