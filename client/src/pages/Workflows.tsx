@@ -31,7 +31,7 @@ export function Workflows() {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const result = await api.workflows.get();
+      const result = await api.workflows.get(statusFilter);
       setData(result);
       setLastUpdated(new Date());
     } catch (err) {
@@ -39,7 +39,7 @@ export function Workflows() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
     fetchData();

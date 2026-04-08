@@ -1,4 +1,7 @@
+import { useState } from "react";
 import type { SubagentEffectivenessItem } from "../../lib/types";
+
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 const COLORS = [
   "#10b981",
@@ -96,35 +99,60 @@ interface SparklineProps {
 }
 
 function Sparkline({ data, color }: SparklineProps) {
-  if (data.length === 0) {
-    return (
-      <div className="flex items-end gap-px h-8">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="flex-1 rounded-sm bg-surface-4" style={{ height: "2px" }} />
-        ))}
-      </div>
-    );
-  }
-
-  const max = Math.max(...data, 1);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const bars = data.length > 0 ? data : Array.from({ length: 7 }, () => 0);
+  const max = Math.max(...bars, 1);
 
   return (
-    <div className="flex items-end gap-px h-8" aria-label="Weekly activity sparkline">
-      {data.map((value, i) => {
-        const heightPct = Math.max((value / max) * 100, value > 0 ? 8 : 4);
-        return (
-          <div
+    <div aria-label="Weekly activity sparkline">
+      {/* Bars */}
+      <div className="flex items-end gap-1 h-8 relative">
+        {bars.map((value, i) => {
+          const heightPct = Math.max((value / max) * 100, value > 0 ? 8 : 4);
+          const label = DAY_LABELS[i % DAY_LABELS.length];
+          return (
+            <div
+              key={i}
+              className="flex-1 relative group"
+              style={{ height: "100%" }}
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            >
+              {/* Tooltip */}
+              {hoveredIndex === i && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 px-2 py-1 bg-[#12121f] border border-[#2a2a4a] rounded-md shadow-xl text-[10px] text-gray-200 whitespace-nowrap pointer-events-none">
+                  <span className="font-medium">{label}</span>
+                  <span className="text-gray-400 mx-1">·</span>
+                  <span className="tabular-nums" style={{ color }}>
+                    {value} {value === 1 ? "session" : "sessions"}
+                  </span>
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-[#2a2a4a]" />
+                </div>
+              )}
+              {/* Bar (anchored to bottom) */}
+              <div
+                className="absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-300"
+                style={{
+                  height: `${heightPct}%`,
+                  backgroundColor: value > 0 ? color : "#2a2a3d",
+                  opacity: hoveredIndex === i ? 1 : value > 0 ? 0.85 : 0.4,
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      {/* Day labels */}
+      <div className="flex gap-1 mt-1">
+        {bars.map((_, i) => (
+          <span
             key={i}
-            className="flex-1 rounded-sm transition-all duration-300"
-            style={{
-              height: `${heightPct}%`,
-              backgroundColor: value > 0 ? color : "#2a2a3d",
-              opacity: value > 0 ? 0.85 : 0.4,
-            }}
-            title={`${value}`}
-          />
-        );
-      })}
+            className="flex-1 text-center text-[8px] text-gray-600 leading-none select-none"
+          >
+            {DAY_LABELS[i % DAY_LABELS.length]}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

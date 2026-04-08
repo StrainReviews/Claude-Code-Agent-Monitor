@@ -190,6 +190,7 @@ export interface ModelDelegationData {
 export interface ErrorPropagationData {
   byDepth: Array<{ depth: number; count: number }>;
   byType: Array<{ subagent_type: string; count: number }>;
+  eventErrors: Array<{ summary: string; count: number }>;
   sessionsWithErrors: number;
   totalSessions: number;
   errorRate: number;

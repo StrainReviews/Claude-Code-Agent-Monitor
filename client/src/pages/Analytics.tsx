@@ -75,6 +75,7 @@ const MONTH_LABELS = [
   "Dec",
 ];
 const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function cellColor(count: number, max: number) {
   if (count === 0) return "#161625";
@@ -149,17 +150,20 @@ function Heatmap({ weeks }: { weeks: Array<Array<{ date: string; count: number }
             {week.map((cell) => (
               <div
                 key={cell.date}
-                onMouseEnter={(e) =>
+                onMouseEnter={(e) => {
+                  const dow = new Date(cell.date + "T12:00:00").getDay();
                   show(
                     e,
                     <>
-                      <span className="text-gray-400">{cell.date}</span>
+                      <span className="text-gray-400">
+                        {DAY_NAMES[dow]}, {cell.date}
+                      </span>
                       <span className="ml-2 font-medium">
                         {cell.count} event{cell.count !== 1 ? "s" : ""}
                       </span>
                     </>
-                  )
-                }
+                  );
+                }}
                 onMouseMove={move}
                 onMouseLeave={hide}
                 style={{
@@ -459,12 +463,17 @@ export function Analytics() {
   }
 
   // Build heatmap: 52 weeks × 7 days
+  // Align start to Sunday (day 0) so row indices match day-of-week labels correctly.
+  // JavaScript getDay(): 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
   const today = new Date();
   const startDate = new Date(today);
   startDate.setDate(today.getDate() - 363);
+  // Roll back to the previous Sunday so columns align to week boundaries
+  const startDow = startDate.getDay(); // 0=Sun
+  startDate.setDate(startDate.getDate() - startDow);
 
   const weeks: Array<Array<{ date: string; count: number }>> = [];
-  for (let w = 0; w < 52; w++) {
+  for (let w = 0; w < 53; w++) {
     const week: Array<{ date: string; count: number }> = [];
     for (let d = 0; d < 7; d++) {
       const cell = new Date(startDate);
@@ -630,7 +639,7 @@ export function Analytics() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card p-5 lg:col-span-2 overflow-x-auto">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Event Activity — Last 52 Weeks</h3>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto flex justify-center">
             <Heatmap weeks={weeks} />
           </div>
         </div>

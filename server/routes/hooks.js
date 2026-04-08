@@ -397,6 +397,90 @@ const processEvent = db.transaction((hookType, data) => {
           );
         }
       }
+
+      // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)
+      if (result.errors) {
+        for (const apiErr of result.errors) {
+          // Deduplicate: check if we already recorded this error (same type+message+timestamp)
+          const errKey = `${apiErr.type}:${apiErr.timestamp || ""}`;
+          const existing = db
+            .prepare(
+              `SELECT 1 FROM events WHERE session_id = ? AND event_type = 'APIError'
+               AND summary = ? LIMIT 1`
+            )
+            .get(sessionId, `${apiErr.type}: ${apiErr.message}`);
+          if (existing) continue;
+
+          stmts.insertEvent.run(
+            sessionId,
+            mainAgentId,
+            "APIError",
+            null,
+            `${apiErr.type}: ${apiErr.message}`,
+            JSON.stringify(apiErr)
+          );
+          broadcast("new_event", {
+            session_id: sessionId,
+            agent_id: mainAgentId,
+            event_type: "APIError",
+            tool_name: null,
+            summary: `${apiErr.type}: ${apiErr.message}`,
+            created_at: apiErr.timestamp || new Date().toISOString(),
+          });
+        }
+      }
+
+      // Register turn duration events from transcript
+      if (result.turnDurations) {
+        for (const td of result.turnDurations) {
+          const tdTs = td.timestamp || new Date().toISOString();
+          // Deduplicate by checking if we already have this turn duration event
+          const existing = db
+            .prepare(
+              "SELECT 1 FROM events WHERE session_id = ? AND event_type = 'TurnDuration' AND created_at = ? LIMIT 1"
+            )
+            .get(sessionId, tdTs);
+          if (existing) continue;
+
+          const tdSummary = `Turn completed in ${(td.durationMs / 1000).toFixed(1)}s`;
+          stmts.insertEvent.run(
+            sessionId,
+            mainAgentId,
+            "TurnDuration",
+            null,
+            tdSummary,
+            JSON.stringify({ durationMs: td.durationMs })
+          );
+          broadcast("new_event", {
+            session_id: sessionId,
+            agent_id: mainAgentId,
+            event_type: "TurnDuration",
+            tool_name: null,
+            summary: tdSummary,
+            created_at: tdTs,
+          });
+        }
+      }
+
+      // Update session metadata with enriched data (thinking blocks, usage extras)
+      if (result.usageExtras || result.thinkingBlockCount > 0) {
+        const session = stmts.getSession.get(sessionId);
+        if (session) {
+          const meta = session.metadata ? JSON.parse(session.metadata) : {};
+          if (result.usageExtras) {
+            meta.usage_extras = result.usageExtras;
+          }
+          if (result.thinkingBlockCount > 0) {
+            meta.thinking_blocks = (meta.thinking_blocks || 0) + result.thinkingBlockCount;
+          }
+          if (result.turnDurations) {
+            meta.turn_count = (meta.turn_count || 0) + result.turnDurations.length;
+            const totalMs = result.turnDurations.reduce((s, t) => s + t.durationMs, 0);
+            meta.total_turn_duration_ms = (meta.total_turn_duration_ms || 0) + totalMs;
+          }
+          stmts.updateSession.run(null, null, null, JSON.stringify(meta), sessionId);
+        }
+      }
     }
   }
 

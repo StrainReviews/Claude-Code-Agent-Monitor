@@ -108,7 +108,8 @@ export const api = {
   },
 
   workflows: {
-    get: () => request<WorkflowData>("/workflows"),
+    get: (status?: string) =>
+      request<WorkflowData>(`/workflows${status && status !== "all" ? `?status=${status}` : ""}`),
     session: (id: string) =>
       request<SessionDrillIn>(`/workflows/session/${encodeURIComponent(id)}`),
   },

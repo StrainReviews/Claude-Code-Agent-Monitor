@@ -39,6 +39,10 @@ class TranscriptCache {
           bytesRead: stat.size,
           tokensByModel: result ? this._cloneTokens(result.tokensByModel) : null,
           compaction: result ? this._cloneCompaction(result.compaction) : null,
+          errors: result?.errors ? [...result.errors] : null,
+          turnDurations: result?.turnDurations ? [...result.turnDurations] : null,
+          thinkingBlockCount: result?.thinkingBlockCount || 0,
+          usageExtras: result ? this._cloneUsageExtras(result.usageExtras) : null,
           result,
         });
         return result;
@@ -51,17 +55,38 @@ class TranscriptCache {
           const incremental = this._parseContent(newContent);
           const merged = this._merge(cached, incremental);
           const hasTokens = Object.keys(merged.tokensByModel).length > 0;
+          const hasTurnDurations = merged.turnDurations && merged.turnDurations.length > 0;
+          const hasUsageExtras =
+            merged.usageExtras &&
+            (merged.usageExtras.service_tiers.length > 0 ||
+              merged.usageExtras.speeds.length > 0 ||
+              merged.usageExtras.inference_geos.length > 0);
           const result = {
             tokensByModel: hasTokens ? merged.tokensByModel : null,
             compaction: merged.compaction,
+            errors: merged.errors,
+            turnDurations: hasTurnDurations ? merged.turnDurations : null,
+            thinkingBlockCount: merged.thinkingBlockCount || 0,
+            usageExtras: hasUsageExtras ? merged.usageExtras : null,
           };
-          if (!result.tokensByModel && !result.compaction) {
+          if (
+            !result.tokensByModel &&
+            !result.compaction &&
+            !result.errors &&
+            !result.turnDurations &&
+            !result.thinkingBlockCount &&
+            !result.usageExtras
+          ) {
             this._set(key, {
               mtimeMs: stat.mtimeMs,
               size: stat.size,
               bytesRead: stat.size,
               tokensByModel: null,
               compaction: null,
+              errors: null,
+              turnDurations: null,
+              thinkingBlockCount: 0,
+              usageExtras: null,
               result: null,
             });
             return null;
@@ -72,6 +97,10 @@ class TranscriptCache {
             bytesRead: stat.size,
             tokensByModel: this._cloneTokens(result.tokensByModel),
             compaction: this._cloneCompaction(result.compaction),
+            errors: result.errors ? [...result.errors] : null,
+            turnDurations: result.turnDurations ? [...result.turnDurations] : null,
+            thinkingBlockCount: result.thinkingBlockCount || 0,
+            usageExtras: this._cloneUsageExtras(result.usageExtras),
             result,
           });
           return result;
@@ -95,6 +124,10 @@ class TranscriptCache {
         bytesRead: stat.size,
         tokensByModel: result ? this._cloneTokens(result.tokensByModel) : null,
         compaction: result ? this._cloneCompaction(result.compaction) : null,
+        errors: result?.errors ? [...result.errors] : null,
+        turnDurations: result?.turnDurations ? [...result.turnDurations] : null,
+        thinkingBlockCount: result?.thinkingBlockCount || 0,
+        usageExtras: result ? this._cloneUsageExtras(result.usageExtras) : null,
         result,
       });
       return result;
@@ -137,6 +170,11 @@ class TranscriptCache {
   _parseContent(content) {
     const tokensByModel = {};
     let compaction = null;
+    const errors = [];
+    const turnDurations = [];
+    let thinkingBlockCount = 0;
+    const usageExtras = { service_tiers: new Set(), speeds: new Set(), inference_geos: new Set() };
+
     for (const line of content.split("\n")) {
       if (!line) continue;
       try {
@@ -149,7 +187,41 @@ class TranscriptCache {
             timestamp: entry.timestamp || null,
           });
         }
+
+        // Turn duration tracking (system entries with subtype "turn_duration")
+        if (entry.type === "system" && entry.subtype === "turn_duration" && entry.durationMs) {
+          const turnTs = entry.timestamp
+            ? typeof entry.timestamp === "number"
+              ? new Date(entry.timestamp).toISOString()
+              : entry.timestamp
+            : null;
+          turnDurations.push({ durationMs: entry.durationMs, timestamp: turnTs });
+        }
+
+        // Detect API errors in transcript: error responses from Claude API
+        // (quota limits, rate limits, overloaded, auth errors, etc.)
         const msg = entry.message || entry;
+        if (msg.type === "error" && msg.error) {
+          errors.push({
+            type: msg.error.type || "unknown_error",
+            message: msg.error.message || "Unknown API error",
+            timestamp: entry.timestamp || null,
+          });
+          continue;
+        }
+
+        // Detect isApiErrorMessage entries (quota limits, rate limits, etc.)
+        if (entry.isApiErrorMessage) {
+          const errContent = Array.isArray(entry.message?.content) ? entry.message.content : [];
+          const errText = errContent[0]?.text ? errContent[0].text.slice(0, 500) : "Unknown error";
+          errors.push({
+            type: entry.error || "unknown_error",
+            message: errText,
+            timestamp: entry.timestamp || null,
+          });
+          continue;
+        }
+
         const model = msg.model;
         if (!model || model === "<synthetic>" || !msg.usage) continue;
         if (!tokensByModel[model]) {
@@ -159,13 +231,58 @@ class TranscriptCache {
         tokensByModel[model].output += msg.usage.output_tokens || 0;
         tokensByModel[model].cacheRead += msg.usage.cache_read_input_tokens || 0;
         tokensByModel[model].cacheWrite += msg.usage.cache_creation_input_tokens || 0;
+
+        // Track usage extras (service_tier, speed, inference_geo)
+        if (msg.usage.service_tier) usageExtras.service_tiers.add(msg.usage.service_tier);
+        if (msg.usage.speed) usageExtras.speeds.add(msg.usage.speed);
+        if (msg.usage.inference_geo && msg.usage.inference_geo !== "not_available") {
+          usageExtras.inference_geos.add(msg.usage.inference_geo);
+        }
+
+        // Count thinking blocks in assistant message content
+        const msgContent = msg.content || [];
+        if (Array.isArray(msgContent)) {
+          for (const block of msgContent) {
+            if (block.type === "thinking") thinkingBlockCount++;
+          }
+        }
       } catch {
         continue;
       }
     }
     const hasTokens = Object.keys(tokensByModel).length > 0;
-    if (!hasTokens && !compaction) return null;
-    return { tokensByModel: hasTokens ? tokensByModel : null, compaction };
+    const hasErrors = errors.length > 0;
+    const hasTurnDurations = turnDurations.length > 0;
+    const hasUsageExtras =
+      usageExtras.service_tiers.size > 0 ||
+      usageExtras.speeds.size > 0 ||
+      usageExtras.inference_geos.size > 0;
+    if (
+      !hasTokens &&
+      !compaction &&
+      !hasErrors &&
+      !hasTurnDurations &&
+      !thinkingBlockCount &&
+      !hasUsageExtras
+    )
+      return null;
+
+    const serializedExtras = hasUsageExtras
+      ? {
+          service_tiers: [...usageExtras.service_tiers],
+          speeds: [...usageExtras.speeds],
+          inference_geos: [...usageExtras.inference_geos],
+        }
+      : null;
+
+    return {
+      tokensByModel: hasTokens ? tokensByModel : null,
+      compaction,
+      errors: hasErrors ? errors : null,
+      turnDurations: hasTurnDurations ? turnDurations : null,
+      thinkingBlockCount,
+      usageExtras: serializedExtras,
+    };
   }
 
   _merge(cached, incremental) {
@@ -189,7 +306,46 @@ class TranscriptCache {
       compaction.entries.push(...incremental.compaction.entries);
     }
 
-    return { tokensByModel, compaction };
+    let errors = cached.errors ? [...cached.errors] : null;
+    if (incremental && incremental.errors) {
+      if (!errors) errors = [];
+      errors.push(...incremental.errors);
+    }
+
+    let turnDurations = cached.turnDurations ? [...cached.turnDurations] : null;
+    if (incremental && incremental.turnDurations) {
+      if (!turnDurations) turnDurations = [];
+      turnDurations.push(...incremental.turnDurations);
+    }
+
+    const thinkingBlockCount =
+      (cached.thinkingBlockCount || 0) + (incremental?.thinkingBlockCount || 0);
+
+    let usageExtras = cached.usageExtras ? this._cloneUsageExtras(cached.usageExtras) : null;
+    if (incremental && incremental.usageExtras) {
+      if (!usageExtras) {
+        usageExtras = { service_tiers: [], speeds: [], inference_geos: [] };
+      }
+      // Merge and deduplicate
+      const merged = {
+        service_tiers: new Set([
+          ...usageExtras.service_tiers,
+          ...incremental.usageExtras.service_tiers,
+        ]),
+        speeds: new Set([...usageExtras.speeds, ...incremental.usageExtras.speeds]),
+        inference_geos: new Set([
+          ...usageExtras.inference_geos,
+          ...incremental.usageExtras.inference_geos,
+        ]),
+      };
+      usageExtras = {
+        service_tiers: [...merged.service_tiers],
+        speeds: [...merged.speeds],
+        inference_geos: [...merged.inference_geos],
+      };
+    }
+
+    return { tokensByModel, compaction, errors, turnDurations, thinkingBlockCount, usageExtras };
   }
 
   _cloneTokens(tokensByModel) {
@@ -204,6 +360,15 @@ class TranscriptCache {
   _cloneCompaction(compaction) {
     if (!compaction) return null;
     return { count: compaction.count, entries: compaction.entries.map((e) => ({ ...e })) };
+  }
+
+  _cloneUsageExtras(extras) {
+    if (!extras) return null;
+    return {
+      service_tiers: [...(extras.service_tiers || [])],
+      speeds: [...(extras.speeds || [])],
+      inference_geos: [...(extras.inference_geos || [])],
+    };
   }
 
   /** Set cache entry with LRU eviction when at capacity */
