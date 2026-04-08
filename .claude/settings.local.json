@@ -24,7 +24,17 @@
       "Bash(xargs kill:*)",
       "Bash(lsof -ti:5173)",
       "Bash(lsof -ti:5174)",
-      "Bash(curl -s http://localhost:4820/api/health)"
+      "Bash(curl -s http://localhost:4820/api/health)",
+      "Bash(node -e \"require\\('./server/lib/transcript-cache'\\); console.log\\('transcript-cache OK'\\)\")",
+      "Bash(python3:*)",
+      "Bash(node -c scripts/import-history.js)",
+      "Bash(node -e \"const m = require\\('./scripts/import-history'\\); console.log\\(Object.keys\\(m\\).sort\\(\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"const TC = require\\('./server/lib/transcript-cache'\\); const tc = new TC\\(\\); console.log\\('transcript-cache loaded OK, methods:', Object.getOwnPropertyNames\\(TC.prototype\\).filter\\(n => n !== 'constructor'\\).join\\(', '\\)\\)\")",
+      "Bash(node -e \"try { require\\('./server/routes/hooks'\\); } catch\\(e\\) { console.log\\('Expected error \\(db not available in isolation\\):', e.message.slice\\(0, 100\\)\\); }\")",
+      "Bash(node --check server/routes/hooks.js)",
+      "Bash(node --check server/lib/transcript-cache.js)",
+      "Bash(node -e ':*)",
+      "Bash(node -e \"require\\('./server/lib/transcript-cache'\\); require\\('./scripts/import-history'\\); console.log\\('All modules load OK'\\)\")"
     ]
   }
 }
