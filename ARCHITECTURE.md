@@ -929,7 +929,7 @@ claude plugin install ccam-analytics@hoangsonww-claude-code-agent-monitor
 claude --plugin-dir plugins/ccam-analytics
 ```
 
-Full documentation: [`docs/plugins.md`](docs/plugins.md)
+Full documentation: [`docs/plugins.md`](docs/PLUGINS.md)
 
 ---
 

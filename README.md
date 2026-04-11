@@ -881,7 +881,7 @@ claude plugin marketplace add hoangsonww/Claude-Code-Agent-Monitor
 /ccam-dashboard:quick-stats
 ```
 
-📖 Full documentation: [docs/plugins.md](docs/plugins.md)
+📖 Full documentation: [docs/plugins.md](docs/PLUGINS.md)
 
 ---
 
