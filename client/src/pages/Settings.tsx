@@ -495,7 +495,9 @@ export function Settings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">{t("common:loading")}</div>
+      <div className="flex items-center justify-center h-64 text-gray-500">
+        {t("common:loading")}
+      </div>
     );
   }
 
@@ -564,9 +566,7 @@ export function Settings() {
               <DollarSign className="w-4 h-4 text-gray-500" />
               {t("pricing.title")}
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {t("pricing.description")}
-            </p>
+            <p className="text-xs text-gray-500 mt-0.5">{t("pricing.description")}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -583,7 +583,9 @@ export function Settings() {
               }`}
             >
               <RotateCcw className="w-3 h-3 inline mr-1" />
-              {confirmAction === "reset-pricing" ? t("pricing.resetConfirm") : t("pricing.resetDefaults")}
+              {confirmAction === "reset-pricing"
+                ? t("pricing.resetConfirm")
+                : t("pricing.resetDefaults")}
             </button>
             <button
               onClick={startAdd}
@@ -686,7 +688,10 @@ export function Settings() {
         </div>
 
         {lastUpdated && (
-          <p className="text-xs text-gray-600 mt-3">{t("pricing.lastUpdated")}{formatTimestamp(lastUpdated)}</p>
+          <p className="text-xs text-gray-600 mt-3">
+            {t("pricing.lastUpdated")}
+            {formatTimestamp(lastUpdated)}
+          </p>
         )}
       </section>
 
@@ -696,9 +701,7 @@ export function Settings() {
           <Plug className="w-4 h-4 text-gray-500" />
           {t("hooks.title")}
         </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          {t("hooks.description")}
-        </p>
+        <p className="text-xs text-gray-500 mb-4">{t("hooks.description")}</p>
 
         <div className="card p-5 space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -758,9 +761,7 @@ export function Settings() {
           <Bell className="w-4 h-4 text-gray-500" />
           {t("notifications.title")}
         </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          {t("notifications.description")}
-        </p>
+        <p className="text-xs text-gray-500 mb-4">{t("notifications.description")}</p>
 
         <div className="card p-5 space-y-5">
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -950,7 +951,9 @@ export function Settings() {
                 <div className="bg-surface-2 rounded-lg px-3 py-3 border-l-2 border-indigo-500/20">
                   <div className="flex items-center gap-2 mb-1.5">
                     <HardDrive className="w-4 h-4 text-indigo-400" />
-                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t("data.dbSize")}</p>
+                    <p className="text-[11px] text-gray-500 uppercase tracking-wider">
+                      {t("data.dbSize")}
+                    </p>
                   </div>
                   <p className="text-xl font-semibold text-gray-200">
                     {formatBytes(sysInfo.db.size)}
@@ -976,9 +979,7 @@ export function Settings() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-surface-2 rounded-lg px-4 py-3">
-                <label className="text-xs text-gray-400 block mb-2">
-                  {t("data.abandonAfter")}
-                </label>
+                <label className="text-xs text-gray-400 block mb-2">{t("data.abandonAfter")}</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -991,9 +992,7 @@ export function Settings() {
                 </div>
               </div>
               <div className="bg-surface-2 rounded-lg px-4 py-3">
-                <label className="text-xs text-gray-400 block mb-2">
-                  {t("data.purgeAfter")}
-                </label>
+                <label className="text-xs text-gray-400 block mb-2">{t("data.purgeAfter")}</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -1037,17 +1036,13 @@ export function Settings() {
               </div>
               <div>
                 <p className="text-sm font-medium text-red-400">{t("danger.title")}</p>
-                <p className="text-xs text-gray-500">
-                  {t("danger.description")}
-                </p>
+                <p className="text-xs text-gray-500">{t("danger.description")}</p>
               </div>
             </div>
 
             {confirmAction === "clear" ? (
               <div className="bg-red-500/5 border border-red-500/20 rounded-lg px-4 py-3 flex items-center justify-between flex-wrap gap-3">
-                <span className="text-xs text-amber-400">
-                  {t("danger.warning")}
-                </span>
+                <span className="text-xs text-amber-400">{t("danger.warning")}</span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={handleClearData}
@@ -1097,7 +1092,9 @@ export function Settings() {
               <div className="bg-surface-2 rounded-lg px-4 py-3">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Clock className="w-4 h-4 text-blue-400" />
-                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t("about.uptime")}</p>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">
+                    {t("about.uptime")}
+                  </p>
                 </div>
                 <p className="text-sm font-semibold text-gray-200">
                   {formatUptime(sysInfo.server.uptime)}
@@ -1106,7 +1103,9 @@ export function Settings() {
               <div className="bg-surface-2 rounded-lg px-4 py-3">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Cpu className="w-4 h-4 text-emerald-400" />
-                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t("about.nodejs")}</p>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">
+                    {t("about.nodejs")}
+                  </p>
                 </div>
                 <p className="text-sm font-semibold text-gray-200 font-mono">
                   {sysInfo.server.node_version}
@@ -1115,14 +1114,18 @@ export function Settings() {
               <div className="bg-surface-2 rounded-lg px-4 py-3">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Globe className="w-4 h-4 text-violet-400" />
-                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t("about.platform")}</p>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">
+                    {t("about.platform")}
+                  </p>
                 </div>
                 <p className="text-sm font-semibold text-gray-200">{sysInfo.server.platform}</p>
               </div>
               <div className="bg-surface-2 rounded-lg px-4 py-3">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Wifi className="w-4 h-4 text-amber-400" />
-                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">{t("about.wsClients")}</p>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">
+                    {t("about.wsClients")}
+                  </p>
                 </div>
                 <p className="text-sm font-semibold text-gray-200">
                   {sysInfo.server.ws_connections}

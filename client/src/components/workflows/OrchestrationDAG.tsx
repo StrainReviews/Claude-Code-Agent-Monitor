@@ -134,7 +134,10 @@ function outcomeColorSet(status: string) {
 
 // ── Layout builder ────────────────────────────────────────────────────────────
 
-function buildGraph(data: OrchestrationData, t: (key: string) => string): {
+function buildGraph(
+  data: OrchestrationData,
+  t: (key: string) => string
+): {
   nodes: DAGNode[];
   edges: DAGEdge[];
   svgWidth: number;
@@ -704,9 +707,7 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
           </svg>
         </div>
         <h3 className="text-base font-medium text-gray-300 mb-2">{t("orchestration.noData")}</h3>
-        <p className="text-sm text-gray-500 max-w-sm">
-          {t("orchestration.noDataDesc")}
-        </p>
+        <p className="text-sm text-gray-500 max-w-sm">{t("orchestration.noDataDesc")}</p>
       </div>
     );
   }
@@ -778,17 +779,32 @@ function DAGTooltip({ tooltip }: { tooltip: TooltipState }) {
 
   if (node.kind === "subagent" && node.meta) {
     const { completed = 0, errors = 0 } = node.meta;
-    lines.push({ label: t("common:status.completed", { defaultValue: "Completed" }), value: String(completed) });
-    lines.push({ label: t("common:status.error", { defaultValue: "Errors" }), value: String(errors) });
-    lines.push({ label: t("effectiveness.success", { defaultValue: "Success rate" }), value: successRate(completed, node.count) });
+    lines.push({
+      label: t("common:status.completed", { defaultValue: "Completed" }),
+      value: String(completed),
+    });
+    lines.push({
+      label: t("common:status.error", { defaultValue: "Errors" }),
+      value: String(errors),
+    });
+    lines.push({
+      label: t("effectiveness.success", { defaultValue: "Success rate" }),
+      value: successRate(completed, node.count),
+    });
   }
 
   if (node.kind === "nested" && node.meta?.subagent_type) {
-    lines.push({ label: t("common:type", { defaultValue: "Type" }), value: node.meta.subagent_type });
+    lines.push({
+      label: t("common:type", { defaultValue: "Type" }),
+      value: node.meta.subagent_type,
+    });
   }
 
   if (node.kind === "outcome" && node.meta?.status) {
-    lines.push({ label: t("common:status.status", { defaultValue: "Status" }), value: node.meta.status });
+    lines.push({
+      label: t("common:status.status", { defaultValue: "Status" }),
+      value: node.meta.status,
+    });
   }
 
   return (

@@ -68,7 +68,13 @@ const MAX_R = 44;
 
 // ── Safe tooltip DOM builder ──
 
-function showTooltip(el: HTMLDivElement, d: PipelineNode, x: number, y: number, t: (key: string) => string) {
+function showTooltip(
+  el: HTMLDivElement,
+  d: PipelineNode,
+  x: number,
+  y: number,
+  t: (key: string) => string
+) {
   el.textContent = "";
 
   const title = document.createElement("p");
@@ -462,9 +468,7 @@ export function AgentCollaborationNetwork({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-center">
         <p className="text-sm font-medium text-gray-400">{t("pipeline.noData")}</p>
-        <p className="text-xs text-gray-600 mt-1">
-          {t("pipeline.noDataDesc")}
-        </p>
+        <p className="text-xs text-gray-600 mt-1">{t("pipeline.noDataDesc")}</p>
       </div>
     );
   }

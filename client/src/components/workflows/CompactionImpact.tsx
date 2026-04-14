@@ -25,7 +25,11 @@ const CHART_HEIGHT = 160;
 
 // ── D3 renderer ───────────────────────────────────────────────────────────────
 
-function renderBars(svg: SVGSVGElement, perSession: CompactionImpactData["perSession"], t: (key: string) => string): void {
+function renderBars(
+  svg: SVGSVGElement,
+  perSession: CompactionImpactData["perSession"],
+  t: (key: string) => string
+): void {
   const container = svg.parentElement;
   const width = container ? container.clientWidth : 400;
   const innerW = width - MARGIN.left - MARGIN.right;
@@ -228,9 +232,7 @@ export function CompactionImpact({ data }: CompactionImpactProps) {
       </div>
 
       {/* Summary line */}
-      <p className="text-xs text-gray-500">
-        {t("compaction.hadCompactions", { pct: sessionPct })}
-      </p>
+      <p className="text-xs text-gray-500">{t("compaction.hadCompactions", { pct: sessionPct })}</p>
     </div>
   );
 }

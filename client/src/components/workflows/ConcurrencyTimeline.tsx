@@ -98,9 +98,7 @@ function EmptyState() {
         </svg>
       </div>
       <p className="text-sm font-medium text-gray-400">{t("concurrency.noData")}</p>
-      <p className="text-xs text-gray-600 mt-1">
-        {t("concurrency.noDataDesc")}
-      </p>
+      <p className="text-xs text-gray-600 mt-1">{t("concurrency.noDataDesc")}</p>
     </div>
   );
 }
@@ -140,8 +138,13 @@ export function ConcurrencyTimeline({ data }: ConcurrencyTimelineProps) {
       <div className="flex items-center gap-3 mb-2">
         <div className="flex-shrink-0 w-[140px]" />
         <div className="flex-1 flex items-center justify-between">
-          <span className="text-[10px] text-gray-600 uppercase tracking-wider">{t("concurrency.sessions")}</span>
-          <span className="text-[10px] text-gray-600 tabular-nums">{maxCount}{t("concurrency.max")}</span>
+          <span className="text-[10px] text-gray-600 uppercase tracking-wider">
+            {t("concurrency.sessions")}
+          </span>
+          <span className="text-[10px] text-gray-600 tabular-nums">
+            {maxCount}
+            {t("concurrency.max")}
+          </span>
         </div>
         <div className="flex-shrink-0 w-[72px] text-[10px] text-gray-600 uppercase tracking-wider">
           {t("concurrency.timing")}

@@ -789,9 +789,7 @@ export function Analytics() {
                 ))}
               </div>
               {totalTokens === 0 && (
-                <p className="text-[11px] text-gray-600 mt-4">
-                  {t("tokenInfo")}
-                </p>
+                <p className="text-[11px] text-gray-600 mt-4">{t("tokenInfo")}</p>
               )}
             </div>
 

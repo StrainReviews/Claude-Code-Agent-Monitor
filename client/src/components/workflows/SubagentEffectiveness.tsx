@@ -221,12 +221,17 @@ function ScoreCard({ item, colorIndex }: ScoreCardProps) {
       {/* Metric boxes */}
       <div className="flex gap-2">
         <MetricBox label={t("effectiveness.sessions")} value={String(item.sessions)} />
-        <MetricBox label={t("effectiveness.avgDuration")} value={formatDurationSec(item.avgDuration)} />
+        <MetricBox
+          label={t("effectiveness.avgDuration")}
+          value={formatDurationSec(item.avgDuration)}
+        />
       </div>
 
       {/* Sparkline */}
       <div className="flex flex-col gap-1">
-        <span className="text-[10px] text-gray-500 uppercase tracking-wider">{t("effectiveness.weeklyActivity")}</span>
+        <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+          {t("effectiveness.weeklyActivity")}
+        </span>
         <Sparkline data={item.trend} color={color} />
       </div>
     </div>

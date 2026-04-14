@@ -77,11 +77,23 @@ function Tooltip({ state }: { state: TooltipState }) {
         {state.item.name ?? state.item.id.slice(0, 12)}
       </p>
       <div className="flex flex-col gap-0.5 text-gray-400">
-        <span>{t("complexity.tooltip.duration")} {formatDurationSec(state.item.duration)}</span>
-        <span>{t("complexity.tooltip.agents")} {state.item.agentCount}</span>
-        <span>{t("complexity.tooltip.subagents")} {state.item.subagentCount}</span>
-        <span>{t("complexity.tooltip.tokens")} {fmtTokens(state.item.totalTokens)}</span>
-        {state.item.model && <span>{t("complexity.tooltip.model")} {state.item.model}</span>}
+        <span>
+          {t("complexity.tooltip.duration")} {formatDurationSec(state.item.duration)}
+        </span>
+        <span>
+          {t("complexity.tooltip.agents")} {state.item.agentCount}
+        </span>
+        <span>
+          {t("complexity.tooltip.subagents")} {state.item.subagentCount}
+        </span>
+        <span>
+          {t("complexity.tooltip.tokens")} {fmtTokens(state.item.totalTokens)}
+        </span>
+        {state.item.model && (
+          <span>
+            {t("complexity.tooltip.model")} {state.item.model}
+          </span>
+        )}
       </div>
       <div className="mt-1 pt-1 border-t border-[#2a2a4a]">
         <span className="font-medium" style={{ color: statusColor(state.item.status) }}>
@@ -132,9 +144,7 @@ function EmptyState() {
         </svg>
       </div>
       <p className="text-sm font-medium text-gray-400">{t("complexity.noData")}</p>
-      <p className="text-xs text-gray-600 mt-1">
-        {t("complexity.noDataDesc")}
-      </p>
+      <p className="text-xs text-gray-600 mt-1">{t("complexity.noDataDesc")}</p>
     </div>
   );
 }

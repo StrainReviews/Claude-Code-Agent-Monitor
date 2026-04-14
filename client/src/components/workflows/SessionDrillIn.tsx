@@ -65,9 +65,21 @@ interface TabBarProps {
 function TabBar({ active, onChange }: TabBarProps) {
   const { t } = useTranslation("workflows");
   const tabs = [
-    { id: "tree" as Tab, label: t("drillIn.tabs.agentTree"), icon: <GitFork className="w-3.5 h-3.5" /> },
-    { id: "timeline" as Tab, label: t("drillIn.tabs.toolTimeline"), icon: <Wrench className="w-3.5 h-3.5" /> },
-    { id: "events" as Tab, label: t("drillIn.tabs.eventSequence"), icon: <List className="w-3.5 h-3.5" /> },
+    {
+      id: "tree" as Tab,
+      label: t("drillIn.tabs.agentTree"),
+      icon: <GitFork className="w-3.5 h-3.5" />,
+    },
+    {
+      id: "timeline" as Tab,
+      label: t("drillIn.tabs.toolTimeline"),
+      icon: <Wrench className="w-3.5 h-3.5" />,
+    },
+    {
+      id: "events" as Tab,
+      label: t("drillIn.tabs.eventSequence"),
+      icon: <List className="w-3.5 h-3.5" />,
+    },
   ];
   return (
     <div className="flex gap-1 p-1 bg-surface-3 rounded-lg">
@@ -233,9 +245,7 @@ function eventTypeColor(type: string): string {
 function EventSequence({ events }: EventSequenceProps) {
   const { t } = useTranslation("workflows");
   if (events.length === 0) {
-    return (
-      <p className="text-sm text-gray-500 text-center py-8">{t("drillIn.noEvents")}</p>
-    );
+    return <p className="text-sm text-gray-500 text-center py-8">{t("drillIn.noEvents")}</p>;
   }
 
   const recent = events.slice(0, 100);
@@ -315,9 +325,21 @@ interface NoSessionStateProps {
 function NoSessionState({ onSelectSession }: NoSessionStateProps) {
   const { t } = useTranslation("workflows");
   const tabs = [
-    { id: "tree" as Tab, label: t("drillIn.tabs.agentTree"), icon: <GitFork className="w-3.5 h-3.5" /> },
-    { id: "timeline" as Tab, label: t("drillIn.tabs.toolTimeline"), icon: <Wrench className="w-3.5 h-3.5" /> },
-    { id: "events" as Tab, label: t("drillIn.tabs.eventSequence"), icon: <List className="w-3.5 h-3.5" /> },
+    {
+      id: "tree" as Tab,
+      label: t("drillIn.tabs.agentTree"),
+      icon: <GitFork className="w-3.5 h-3.5" />,
+    },
+    {
+      id: "timeline" as Tab,
+      label: t("drillIn.tabs.toolTimeline"),
+      icon: <Wrench className="w-3.5 h-3.5" />,
+    },
+    {
+      id: "events" as Tab,
+      label: t("drillIn.tabs.eventSequence"),
+      icon: <List className="w-3.5 h-3.5" />,
+    },
   ];
   return (
     <div className="flex flex-col py-6 px-4 border-2 border-dashed border-border rounded-xl">
@@ -328,9 +350,7 @@ function NoSessionState({ onSelectSession }: NoSessionStateProps) {
           <GitFork className="w-5 h-5 text-gray-600" />
         </div>
         <p className="text-sm font-medium text-gray-400 mb-1">{t("drillIn.noSessionSelected")}</p>
-        <p className="text-xs text-gray-600 max-w-xs">
-          {t("drillIn.noSessionDesc")}
-        </p>
+        <p className="text-xs text-gray-600 max-w-xs">{t("drillIn.noSessionDesc")}</p>
 
         {/* Preview tab pills */}
         <div className="flex gap-2 mt-5">
