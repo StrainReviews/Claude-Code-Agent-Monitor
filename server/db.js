@@ -258,7 +258,7 @@ const stmts = {
   getAgent: db.prepare("SELECT * FROM agents WHERE id = ?"),
   listAgents: db.prepare("SELECT * FROM agents ORDER BY started_at DESC LIMIT ? OFFSET ?"),
   listAgentsBySession: db.prepare(
-    "SELECT * FROM agents WHERE session_id = ? ORDER BY started_at ASC"
+    "SELECT * FROM agents WHERE session_id = ? ORDER BY started_at DESC"
   ),
   listAgentsByStatus: db.prepare(
     "SELECT * FROM agents WHERE status = ? ORDER BY started_at DESC LIMIT ? OFFSET ?"
