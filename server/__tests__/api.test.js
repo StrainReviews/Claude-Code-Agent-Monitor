@@ -920,6 +920,9 @@ describe("Hook Event Processing", () => {
     // Check token_usage was written
     const costRes = await fetch("/api/pricing/cost/hook-sess-transcript");
     assert.equal(costRes.status, 200);
+    assert.ok(Array.isArray(costRes.body.daily_costs));
+    assert.equal(costRes.body.daily_costs.length, 1);
+    assert.equal(costRes.body.daily_costs[0].cost, costRes.body.total_cost);
 
     const sonnet = costRes.body.breakdown.find((b) => b.model === "claude-sonnet-4-6");
     assert.ok(sonnet, "Should have sonnet token data");
@@ -963,6 +966,8 @@ describe("Hook Event Processing", () => {
 
     const midRes = await fetch("/api/pricing/cost/hook-sess-mid");
     assert.equal(midRes.status, 200);
+    assert.ok(Array.isArray(midRes.body.daily_costs));
+    assert.equal(midRes.body.daily_costs.length, 1);
     const midSonnet = midRes.body.breakdown.find((b) => b.model === "claude-sonnet-4-6");
     assert.ok(midSonnet, "Should have token data after PreToolUse");
     assert.equal(midSonnet.input_tokens, 100);
@@ -991,6 +996,9 @@ describe("Hook Event Processing", () => {
     });
 
     const updatedRes = await fetch("/api/pricing/cost/hook-sess-mid");
+    assert.ok(Array.isArray(updatedRes.body.daily_costs));
+    assert.equal(updatedRes.body.daily_costs.length, 1);
+    assert.equal(updatedRes.body.daily_costs[0].cost, updatedRes.body.total_cost);
     const updatedSonnet = updatedRes.body.breakdown.find((b) => b.model === "claude-sonnet-4-6");
     assert.ok(updatedSonnet, "Should have updated token data after PostToolUse");
     // replaceTokenUsage overwrites with totals from full transcript (100+200=300, 50+80=130)

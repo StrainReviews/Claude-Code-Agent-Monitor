@@ -52,6 +52,25 @@ function calculateCost(tokenRows, pricingRules) {
   return { total_cost: Math.round(totalCost * 10000) / 10000, breakdown };
 }
 
+function calculateDailyCosts(dailyTokenRows, pricingRules) {
+  const rowsByDate = new Map();
+  for (const row of dailyTokenRows) {
+    const rows = rowsByDate.get(row.date) || [];
+    rows.push({
+      model: row.model,
+      input_tokens: row.input_tokens,
+      output_tokens: row.output_tokens,
+      cache_read_tokens: row.cache_read_tokens,
+      cache_write_tokens: row.cache_write_tokens,
+    });
+    rowsByDate.set(row.date, rows);
+  }
+
+  return [...rowsByDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, rows]) => ({ date, cost: calculateCost(rows, pricingRules).total_cost }));
+}
+
 // GET /api/pricing - List all pricing rules
 router.get("/", (_req, res) => {
   const rules = stmts.listPricing.all();
@@ -104,12 +123,27 @@ router.delete("/:pattern", (req, res) => {
 router.get("/cost", (_req, res) => {
   const allTokens = db
     .prepare(
-      "SELECT model, SUM(input_tokens) as input_tokens, SUM(output_tokens) as output_tokens, SUM(cache_read_tokens) as cache_read_tokens, SUM(cache_write_tokens) as cache_write_tokens FROM token_usage GROUP BY model"
+      "SELECT model, SUM(input_tokens + baseline_input) as input_tokens, SUM(output_tokens + baseline_output) as output_tokens, SUM(cache_read_tokens + baseline_cache_read) as cache_read_tokens, SUM(cache_write_tokens + baseline_cache_write) as cache_write_tokens FROM token_usage GROUP BY model"
+    )
+    .all();
+  const dailyTokens = db
+    .prepare(
+      `SELECT
+        DATE(s.started_at) as date,
+        tu.model as model,
+        SUM(tu.input_tokens + tu.baseline_input) as input_tokens,
+        SUM(tu.output_tokens + tu.baseline_output) as output_tokens,
+        SUM(tu.cache_read_tokens + tu.baseline_cache_read) as cache_read_tokens,
+        SUM(tu.cache_write_tokens + tu.baseline_cache_write) as cache_write_tokens
+      FROM token_usage tu
+      JOIN sessions s ON s.id = tu.session_id
+      GROUP BY DATE(s.started_at), tu.model`
     )
     .all();
   const rules = stmts.listPricing.all();
   const result = calculateCost(allTokens, rules);
-  res.json(result);
+  const daily_costs = calculateDailyCosts(dailyTokens, rules);
+  res.json({ ...result, daily_costs });
 });
 
 // GET /api/pricing/cost/:sessionId - Get cost for a specific session
@@ -117,7 +151,11 @@ router.get("/cost/:sessionId", (req, res) => {
   const tokenRows = stmts.getTokensBySession.all(req.params.sessionId);
   const rules = stmts.listPricing.all();
   const result = calculateCost(tokenRows, rules);
-  res.json(result);
+  const started = db
+    .prepare("SELECT DATE(started_at) as date FROM sessions WHERE id = ?")
+    .get(req.params.sessionId);
+  const daily_costs = started ? [{ date: started.date, cost: result.total_cost }] : [];
+  res.json({ ...result, daily_costs });
 });
 
 module.exports = router;

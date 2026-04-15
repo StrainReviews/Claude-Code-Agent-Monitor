@@ -585,12 +585,21 @@ function createOpenApiSpec() {
             matched_rule: { type: "string", nullable: true },
           },
         },
+        DailyCostItem: {
+          type: "object",
+          required: ["date", "cost"],
+          properties: {
+            date: { type: "string", format: "date" },
+            cost: { type: "number" },
+          },
+        },
         CostResult: {
           type: "object",
-          required: ["total_cost", "breakdown"],
+          required: ["total_cost", "breakdown", "daily_costs"],
           properties: {
             total_cost: { type: "number" },
             breakdown: { type: "array", items: { $ref: "#/components/schemas/CostBreakdownItem" } },
+            daily_costs: { type: "array", items: { $ref: "#/components/schemas/DailyCostItem" } },
           },
         },
         DeleteOkResponse: {

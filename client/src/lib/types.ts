@@ -109,6 +109,7 @@ export interface CostBreakdown {
 export interface CostResult {
   total_cost: number;
   breakdown: CostBreakdown[];
+  daily_costs: Array<{ date: string; cost: number }>;
 }
 
 export interface WSMessage {
