@@ -850,10 +850,12 @@ export function Analytics() {
 
       {/* Activity heatmap + 30-day sparkline */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card p-5 lg:col-span-2 overflow-x-auto">
+        <div className="card p-5 lg:col-span-2">
           <h3 className="text-sm font-medium text-gray-300 mb-4">{t("eventActivity")}</h3>
-          <div className="overflow-x-auto flex justify-center">
-            <Heatmap weeks={weeks} />
+          <div className="overflow-x-auto">
+            <div className="min-w-max">
+              <Heatmap weeks={weeks} />
+            </div>
           </div>
         </div>
         <div className="card p-5">

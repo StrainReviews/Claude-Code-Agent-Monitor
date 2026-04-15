@@ -62,6 +62,8 @@ const PADDING_BOTTOM = 40;
 const MAX_SUBAGENT_NODES = 7;
 const MAX_EDGE_STROKE = 10;
 const MIN_EDGE_STROKE = 1.5;
+const BADGE_W = 28;
+const BADGE_H = 14;
 
 // Layer labels are now computed via i18n inside the component
 
@@ -667,10 +669,10 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
     // Count badge background
     nodeGroups
       .append("rect")
-      .attr("x", (d) => d.width - 36)
-      .attr("y", NODE_H / 2 - 1)
-      .attr("width", 28)
-      .attr("height", 14)
+      .attr("x", (d) => d.width - (BADGE_W + 8))
+      .attr("y", NODE_H / 2 - BADGE_H / 2)
+      .attr("width", BADGE_W)
+      .attr("height", BADGE_H)
       .attr("rx", 7)
       .attr("fill", (d) => badgeBgForKind(d.kind, d.meta?.status))
       .attr("opacity", 0.9);
@@ -678,8 +680,8 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
     // Count badge text
     nodeGroups
       .append("text")
-      .attr("x", (d) => d.width - 22)
-      .attr("y", NODE_H / 2 + 8)
+      .attr("x", (d) => d.width - (BADGE_W / 2 + 8))
+      .attr("y", NODE_H / 2 + 1)
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .attr("fill", (d) => {

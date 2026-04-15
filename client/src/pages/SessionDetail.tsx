@@ -39,6 +39,15 @@ export function SessionDetail() {
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => {
     return new Set<string>();
   });
+  const goBack = useCallback(() => {
+    const historyState =
+      typeof window !== "undefined" ? (window.history.state as { idx?: number } | null) : null;
+    if ((historyState?.idx ?? 0) > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate("/sessions");
+  }, [navigate]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -111,7 +120,7 @@ export function SessionDetail() {
     return (
       <div className="text-center py-20">
         <p className="text-red-400 mb-2">{error || t("detail.notFound")}</p>
-        <button onClick={() => navigate("/sessions")} className="btn-ghost mt-4">
+        <button onClick={goBack} className="btn-ghost mt-4">
           <ArrowLeft className="w-4 h-4" /> {t("detail.backToSessions")}
         </button>
       </div>
@@ -122,7 +131,7 @@ export function SessionDetail() {
     <div className="animate-fade-in space-y-8">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <button onClick={() => navigate("/sessions")} className="btn-ghost mt-1">
+        <button onClick={goBack} className="btn-ghost mt-1">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1">

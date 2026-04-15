@@ -100,6 +100,14 @@ graph LR
     style D fill:#10b981,stroke:#34d399,color:#fff
 ```
 
+<a href="https://www.star-history.com/?repos=hoangsonww%2FClaude-Code-Agent-Monitor&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=hoangsonww/Claude-Code-Agent-Monitor&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=hoangsonww/Claude-Code-Agent-Monitor&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=hoangsonww/Claude-Code-Agent-Monitor&type=date&legend=top-left" />
+ </picture>
+</a>
+
 ### 多语言支持（i18n）
 
 Dashboard 内置多语言界面，支持 `en`、`zh`、`vi` 三种语言，适用于跨语言协作和团队共享。
