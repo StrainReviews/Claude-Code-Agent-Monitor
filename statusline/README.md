@@ -4,9 +4,9 @@ A color-coded statusline for Claude Code showing model, user, working directory,
 
 ## Preview
 
-```
-Sonnet 4.6 | nguyens6 | ~/agent-dashboard/client | main | ████████░░ 79% | 3↑ 2↓ 156586c
-```
+<p align="center">
+  <img src="../images/statusline.png" alt="Claude Code statusline example" width="100%">
+</p>
 
 | Segment     | Color                | Example                                            |
 | ----------- | -------------------- | -------------------------------------------------- |

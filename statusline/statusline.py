@@ -1,3 +1,39 @@
+"""
+statusline.py — Claude Code custom statusline renderer.
+
+Reads a JSON event payload from stdin (emitted by Claude Code on every turn)
+and prints a single ANSI-colored status line to stdout. Renders the model
+display name, current user, working directory (with home collapsed to ``~``),
+active git branch, a color-coded context window usage bar (green / yellow /
+red thresholds), and token counts. Always exits 0 so it can never block
+Claude Code — missing fields are silently skipped.
+
+Intended to be referenced from Claude Code's ``statusLine`` setting (see
+``statusline-command.sh`` for the wrapper) or installed to
+``~/.claude/statusline.py``.
+
+:file: statusline/statusline.py
+:module: Claude-Code-Agent-Monitor.statusline
+:author: Son Nguyen <hoangson091104@gmail.com>
+:maintainer: Son Nguyen (a.k.a. David Nguyen, hoangsonww)
+:copyright: (c) 2026 Son Nguyen
+:license: MIT
+:repository: https://github.com/hoangsonww/Claude-Code-Agent-Monitor
+:requires: Python 3.6+
+:encoding: utf-8
+"""
+
+__file_name__ = "statusline.py"
+__module__ = "Claude-Code-Agent-Monitor.statusline"
+__author__ = "Son Nguyen"
+__email__ = "hoangson091104@gmail.com"
+__maintainer__ = "Son Nguyen"
+__copyright__ = "Copyright (c) 2026 Son Nguyen"
+__license__ = "MIT"
+__version__ = "1.0.0"
+__status__ = "Production"
+__repository__ = "https://github.com/hoangsonww/Claude-Code-Agent-Monitor"
+
 import sys
 import json
 import os

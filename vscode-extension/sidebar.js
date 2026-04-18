@@ -1,3 +1,10 @@
+/**
+ * @file Sidebar provider for Claude Code Agent Monitor VSCode extension
+ * Provides a dynamic, real-time status overview of the Claude Code Agent backend.
+ * Implements background polling to ensure the sidebar reflects the true online/offline status.
+ * @author Son Nguyen <hoangson091104@gmail.com>
+ */
+
 const vscode = require("vscode");
 const http = require("http");
 
