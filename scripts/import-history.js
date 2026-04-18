@@ -1118,13 +1118,254 @@ function findCompactionsInFile(filePath) {
   return compactions;
 }
 
+/**
+ * Recursively walk a directory and collect all `.jsonl` file paths.
+ * Symlinks are followed lazily; failures are silent (non-fatal).
+ */
+function collectJsonlFiles(rootDir) {
+  const out = [];
+  const stack = [rootDir];
+  const seen = new Set();
+  while (stack.length) {
+    const dir = stack.pop();
+    let real;
+    try {
+      real = fs.realpathSync(dir);
+    } catch {
+      continue;
+    }
+    if (seen.has(real)) continue;
+    seen.add(real);
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        stack.push(full);
+      } else if (ent.isFile() && ent.name.endsWith(".jsonl")) {
+        out.push(full);
+      } else if (ent.isSymbolicLink()) {
+        try {
+          const st = fs.statSync(full);
+          if (st.isDirectory()) stack.push(full);
+          else if (st.isFile() && full.endsWith(".jsonl")) out.push(full);
+        } catch {
+          /* dangling symlink */
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Classify a JSONL file as "session" or "subagent" based on its parent directory.
+ * Subagents live under a `subagents/` folder (either directly or as a sibling of
+ * a session-id folder). Anything else is treated as a top-level session.
+ */
+function classifyJsonl(filePath) {
+  const parent = path.basename(path.dirname(filePath));
+  if (parent === "subagents") return "subagent";
+  const grand = path.basename(path.dirname(path.dirname(filePath)));
+  if (grand === "subagents") return "subagent";
+  return "session";
+}
+
+/**
+ * Given a session JSONL path, return any subagent JSONLs that belong to it.
+ * Handles two common layouts:
+ *   1) <projectDir>/<sessionId>/subagents/*.jsonl   (Claude Code default)
+ *   2) <projectDir>/subagents/<sessionId>/*.jsonl   (alternative)
+ * Returns absolute paths.
+ */
+function findSessionSubagents(sessionJsonlPath) {
+  const dir = path.dirname(sessionJsonlPath);
+  const sessionId = path.basename(sessionJsonlPath, ".jsonl");
+  const candidates = [
+    path.join(dir, sessionId, "subagents"),
+    path.join(dir, "subagents", sessionId),
+  ];
+  const result = [];
+  for (const c of candidates) {
+    try {
+      if (!fs.existsSync(c)) continue;
+      const files = fs.readdirSync(c).filter((f) => f.endsWith(".jsonl"));
+      for (const f of files) result.push(path.join(c, f));
+    } catch {
+      /* non-fatal */
+    }
+  }
+  return result;
+}
+
+/**
+ * Generalized importer that accepts any root directory.
+ *
+ * Walks `rootDir` recursively, classifies every `.jsonl` as session or
+ * subagent, and runs the same `importSession` pipeline used by auto-import
+ * on server startup — so token sums, cost calculations, compactions,
+ * subagents, tool events, API errors, and turn durations match the live
+ * ingest path exactly.
+ *
+ * @param {object} dbModule - { db, stmts } from ../server/db
+ * @param {string} rootDir - any directory containing Claude Code JSONL files
+ * @param {object} [options]
+ * @param {(progress: {phase: string, processed: number, total: number, current?: string, counters?: object}) => void} [options.onProgress]
+ * @returns {Promise<{imported: number, skipped: number, backfilled: number, errors: number, sessionsSeen: number, filesScanned: number}>}
+ */
+async function importFromDirectory(dbModule, rootDir, options = {}) {
+  const onProgress = typeof options.onProgress === "function" ? options.onProgress : () => {};
+  const counters = {
+    imported: 0,
+    skipped: 0,
+    backfilled: 0,
+    errors: 0,
+    sessionsSeen: 0,
+    filesScanned: 0,
+  };
+
+  if (!fs.existsSync(rootDir)) return counters;
+  const st = fs.statSync(rootDir);
+  if (!st.isDirectory()) return counters;
+
+  onProgress({ phase: "scan", processed: 0, total: 0, counters });
+  const jsonlFiles = collectJsonlFiles(rootDir);
+  counters.filesScanned = jsonlFiles.length;
+  onProgress({ phase: "parse", processed: 0, total: jsonlFiles.length, counters });
+
+  const sessionFiles = [];
+  const standaloneSubagentFiles = [];
+  for (const f of jsonlFiles) {
+    if (classifyJsonl(f) === "subagent") standaloneSubagentFiles.push(f);
+    else sessionFiles.push(f);
+  }
+
+  const parsedSessions = [];
+  for (let i = 0; i < sessionFiles.length; i++) {
+    const f = sessionFiles[i];
+    try {
+      const session = await parseSessionFile(f);
+      if (!session) {
+        counters.skipped++;
+        onProgress({
+          phase: "parse",
+          processed: i + 1,
+          total: sessionFiles.length,
+          current: f,
+          counters,
+        });
+        continue;
+      }
+
+      // Attach subagents discovered next to this session JSONL.
+      const subPaths = findSessionSubagents(f);
+      if (subPaths.length > 0) {
+        session.parsedSubagents = [];
+        for (const sp of subPaths) {
+          try {
+            const subData = await parseSubagentFile(sp);
+            if (subData) session.parsedSubagents.push(subData);
+          } catch {
+            /* non-fatal */
+          }
+        }
+      }
+
+      parsedSessions.push(session);
+      counters.sessionsSeen++;
+    } catch {
+      counters.errors++;
+    }
+    if ((i + 1) % 5 === 0 || i === sessionFiles.length - 1) {
+      onProgress({
+        phase: "parse",
+        processed: i + 1,
+        total: sessionFiles.length,
+        current: f,
+        counters,
+      });
+    }
+  }
+
+  if (parsedSessions.length > 0) {
+    const importBatch = dbModule.db.transaction((sessions) => {
+      for (const session of sessions) {
+        try {
+          const result = importSession(dbModule, session);
+          if (result.skipped && !result.backfilled) counters.skipped++;
+          else if (result.backfilled) counters.backfilled++;
+          else counters.imported++;
+        } catch {
+          counters.errors++;
+        }
+      }
+    });
+    importBatch(parsedSessions);
+  }
+
+  // Orphan subagent JSONLs (parent session not present in DB or not among the
+  // session files we just imported) — try to attach them to whichever session
+  // already exists in the DB, if any. Claude Code uses two layouts in the
+  // wild: <projectDir>/<sessionId>/subagents/*.jsonl (parent == subagents'
+  // parent) and <projectDir>/subagents/<sessionId>/*.jsonl (parent == child
+  // of subagents). We probe both candidates and trust whichever one is a
+  // known session in the DB.
+  if (standaloneSubagentFiles.length > 0) {
+    for (const sf of standaloneSubagentFiles) {
+      try {
+        const subData = await parseSubagentFile(sf);
+        if (!subData) continue;
+        const parts = sf.split(path.sep);
+        const idx = parts.lastIndexOf("subagents");
+        if (idx < 0) continue;
+        const candidates = [];
+        if (idx - 1 >= 0) candidates.push(parts[idx - 1]);
+        if (idx + 1 < parts.length) candidates.push(parts[idx + 1]);
+        let sessionId = null;
+        for (const c of candidates) {
+          if (!c) continue;
+          if (dbModule.stmts.getSession.get(c)) {
+            sessionId = c;
+            break;
+          }
+        }
+        if (!sessionId) continue;
+        const mainAgentId = `${sessionId}-main`;
+        if (importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) > 0) {
+          counters.backfilled++;
+        }
+      } catch {
+        counters.errors++;
+      }
+    }
+  }
+
+  onProgress({
+    phase: "complete",
+    processed: sessionFiles.length,
+    total: sessionFiles.length,
+    counters,
+  });
+  return counters;
+}
+
 module.exports = {
   importAllSessions,
+  importFromDirectory,
   backfillCompactions,
   importCompactions,
   importSubagents,
   importApiErrors,
   importSubagentFromJsonl,
+  parseSessionFile,
   parseSubagentFile,
   findCompactionsInFile,
+  collectJsonlFiles,
+  classifyJsonl,
+  findSessionSubagents,
+  importSession,
 };

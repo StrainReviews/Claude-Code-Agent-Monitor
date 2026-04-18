@@ -764,6 +764,88 @@ Tài liệu OpenAPI được tạo từ `server/openapi.js` và giao diện ngư
 | `GET`  | `/api/settings/export`         | Xuất tất cả dữ liệu dưới dạng tải xuống JSON                 |
 | `POST` | `/api/settings/cleanup`        | Bỏ các phiên cũ, xóa dữ liệu cũ           |
 
+### Nhập lịch sử (Import History)
+
+Đưa các phiên Claude Code hiện có vào dashboard từ ba nguồn khác nhau,
+tất cả đều đi qua cùng một bộ phân tích mà máy chủ sử dụng để thu nhận
+thời gian thực — nhờ đó, số token, chi phí theo mô hình, compactions,
+subagents, lần dùng công cụ và thời lượng lượt được tính giống hệt với
+dữ liệu được bắt trực tiếp. Nhập lại là bất biến: phiên được khóa theo
+UUID và các cột `baseline_*` ở bảng `token_usage` giữ nguyên tổng token
+trước khi compact, nên chạy lại trình nhập không bao giờ nhân đôi token
+hay chi phí.
+
+```mermaid
+flowchart LR
+    subgraph Nguồn
+      A1["Thư mục mặc định<br/>~/.claude/projects"]
+      A2["Thư mục tùy chọn<br/>bất kỳ đường dẫn tuyệt đối"]
+      A3["Tệp tải lên<br/>.jsonl / .meta.json /<br/>.zip / .tar(.gz) / .gz"]
+    end
+
+    A1 -->|POST /api/import/rescan| R["server/routes/import.js"]
+    A2 -->|POST /api/import/scan-path| R
+    A3 -->|POST /api/import/upload<br/>multipart| R
+
+    R -->|giải nén + chặn<br/>path-traversal +<br/>giới hạn zip-bomb| X["server/lib/archive.js"]
+    R -->|duyệt đệ quy| I["importFromDirectory<br/>(scripts/import-history.js)"]
+    X --> I
+    I -->|cùng pipeline<br/>như hook trực tiếp| P["parseSessionFile +<br/>importSession"]
+    P -->|prepared statements,<br/>một transaction| D[("SQLite<br/>sessions / agents / events /<br/>token_usage")]
+    I -.->|import.progress<br/>đã điều tiết| W["WebSocket /ws"]
+    W -.-> U["Settings → Import History<br/>thanh tiến độ + tổng kết"]
+
+    style A1 fill:#6366f1,stroke:#818cf8,color:#fff
+    style A2 fill:#6366f1,stroke:#818cf8,color:#fff
+    style A3 fill:#6366f1,stroke:#818cf8,color:#fff
+    style R fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style X fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style I fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style P fill:#f59e0b,stroke:#fbbf24,color:#000
+    style D fill:#10b981,stroke:#34d399,color:#fff
+    style U fill:#a855f7,stroke:#c084fc,color:#fff
+```
+
+**Các tuyến API**
+
+| Phương pháp | Đường dẫn               | Mô tả                                                                            |
+| ----------- | ----------------------- | -------------------------------------------------------------------------------- |
+| `GET`       | `/api/import/guide`     | Đường dẫn theo hệ điều hành, lệnh tạo archive, phần mở rộng hỗ trợ, hướng dẫn    |
+| `POST`      | `/api/import/rescan`    | Quét lại thư mục mặc định `~/.claude/projects`                                   |
+| `POST`      | `/api/import/scan-path` | Quét một thư mục tuyệt đối bất kỳ (body `{ path }`); đi đệ quy                   |
+| `POST`      | `/api/import/upload`    | Tải lên đa phần `.jsonl`, `.meta.json`, `.zip`, `.tar(.gz)`, `.gz`               |
+
+**Đầu vào hỗ trợ.** Tệp JSONL rời (`.jsonl`), tệp phụ `.meta.json`, và
+các archive (`.zip`, `.tar`, `.tar.gz`/`.tgz`, `.gz`) chứa bất kỳ cấu
+trúc thư mục lồng nhau nào. Cả hai bố cục chuẩn của Claude Code đều
+được nhận diện tự động: `<project>/<sessionId>/subagents/agent-*.jsonl`
+(mặc định) và `<project>/subagents/<sessionId>/agent-*.jsonl` (thay
+thế).
+
+**Đảm bảo độ chính xác.** Phiên được dedup theo UUID; nhập lại luôn an
+toàn. Các cột compaction `baseline_input` / `baseline_output` /
+`baseline_cache_read` / `baseline_cache_write` giữ lại số token trước
+khi transcript được compact, nên nhập lại một JSONL sau compact không
+bao giờ xóa chi phí lịch sử.
+
+**An toàn.** Giải nén archive kiểm tra từng mục chống path-traversal
+(đường dẫn tuyệt đối và đoạn `..` bị từ chối). Giới hạn kích thước giải
+nén có thể cấu hình (`CCAM_IMPORT_MAX_EXTRACT_BYTES`, mặc định 4 GB)
+chặn các zip/tar/gzip-bomb. Kích thước tải lên bị giới hạn theo từng
+tệp (`CCAM_IMPORT_MAX_BYTES`, mặc định 1 GB) và theo yêu cầu
+(`CCAM_IMPORT_MAX_FILES`, mặc định 2000). Mỗi yêu cầu có thư mục tạm
+riêng và được dọn dẹp trong `finally`, kể cả khi multer từ chối toàn bộ
+tệp ngay từ đầu.
+
+**Tiến độ.** Hoạt động nhập được phát sóng qua WebSocket hiện có dưới
+dạng `import.progress` (`phase`: `start` / `scan` / `extract` / `parse`
+/ `complete` / `error`), đã điều tiết để không ngập kênh khi nhập lớn.
+
+**Giao diện.** Sử dụng bảng **Settings → Import History** trong giao
+diện để trải nghiệm nhập lịch sử có hướng dẫn từng bước, kéo-thả, tiến
+độ trực tiếp và thẻ tổng kết sau khi nhập (imported / enriched /
+skipped / errors).
+
 ### WebSocket
 
 Kết nối với `ws://localhost:4820/ws` để nhận tin nhắn đẩy theo thời gian thực:

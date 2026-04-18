@@ -112,9 +112,27 @@ export interface CostResult {
   daily_costs: Array<{ date: string; cost: number }>;
 }
 
+export interface ImportProgressMessage {
+  importId?: string;
+  phase: "start" | "scan" | "extract" | "parse" | "complete" | "error" | "extract_error";
+  source?: "default" | "path" | "upload";
+  processed?: number;
+  total?: number;
+  current?: string;
+  path?: string;
+  error?: string;
+  counters?: Record<string, number>;
+}
+
 export interface WSMessage {
-  type: "session_created" | "session_updated" | "agent_created" | "agent_updated" | "new_event";
-  data: Session | Agent | DashboardEvent;
+  type:
+    | "session_created"
+    | "session_updated"
+    | "agent_created"
+    | "agent_updated"
+    | "new_event"
+    | "import.progress";
+  data: Session | Agent | DashboardEvent | ImportProgressMessage;
   timestamp: string;
 }
 

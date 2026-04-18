@@ -50,6 +50,7 @@ import { eventBus } from "../lib/eventBus";
 import { fmt, fmtCost, getCurrentLocale } from "../lib/format";
 import { subscribeToPush, unsubscribeFromPush } from "../lib/push";
 import { Tip } from "../components/Tip";
+import { ImportHistory } from "../components/ImportHistory";
 import type { ModelPricing, WSMessage } from "../lib/types";
 
 // ─── Notification preferences ───
@@ -762,6 +763,9 @@ export function Settings() {
           )}
         </div>
       </section>
+
+      {/* ─── IMPORT HISTORY ─── */}
+      <ImportHistory />
 
       {/* ─── NOTIFICATIONS ─── */}
       <section>

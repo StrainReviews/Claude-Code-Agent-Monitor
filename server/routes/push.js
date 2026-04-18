@@ -1,3 +1,8 @@
+/**
+ * @file Express router for managing push notifications, providing endpoints to retrieve the VAPID public key, subscribe/unsubscribe to push notifications, and send push notifications to all subscribers. It interacts with the database to store subscription details and uses a push library to send notifications.
+ * @author Son Nguyen <hoangson091104@gmail.com>
+ */
+
 const { Router } = require("express");
 const { getPublicKey, sendPushToAll } = require("../lib/push");
 const { db } = require("../db");

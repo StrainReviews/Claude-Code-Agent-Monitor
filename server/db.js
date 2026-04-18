@@ -13,15 +13,15 @@ try {
     console.error(
       "\n" +
         "╔══════════════════════════════════════════════════════════════╗\n" +
-        "║  SQLite backend not available                               ║\n" +
-        "║                                                             ║\n" +
-        "║  better-sqlite3 could not be loaded (native module) and     ║\n" +
-        "║  node:sqlite is not available (requires Node.js >= 22).     ║\n" +
-        "║                                                             ║\n" +
-        "║  Fix options (pick one):                                    ║\n" +
-        "║    1. Upgrade to Node.js 22+ (recommended)                  ║\n" +
-        "║    2. Install Python 3 + C++ build tools, then              ║\n" +
-        "║       run: npm rebuild better-sqlite3                       ║\n" +
+        "║  SQLite backend not available                                ║\n" +
+        "║                                                              ║\n" +
+        "║  better-sqlite3 could not be loaded (native module) and      ║\n" +
+        "║  node:sqlite is not available (requires Node.js >= 22).      ║\n" +
+        "║                                                              ║\n" +
+        "║  Fix options (pick one):                                     ║\n" +
+        "║    1. Upgrade to Node.js 22+ (recommended)                   ║\n" +
+        "║    2. Install Python 3 + C++ build tools, then               ║\n" +
+        "║       run: npm rebuild better-sqlite3                        ║\n" +
         "╚══════════════════════════════════════════════════════════════╝\n"
     );
     process.exit(1);

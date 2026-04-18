@@ -801,6 +801,56 @@ function createOpenApiSpec() {
             errors: { type: "integer" },
           },
         },
+        ImportGuideResponse: {
+          type: "object",
+          properties: {
+            platform: { type: "string" },
+            default_projects_dir: { type: "string" },
+            default_projects_dir_display: { type: "string" },
+            default_projects_dir_exists: { type: "boolean" },
+            default_projects_dir_stats: {
+              type: "object",
+              properties: {
+                projects: { type: "integer" },
+                jsonl_files: { type: "integer" },
+              },
+            },
+            archive_command: { type: "string" },
+            supported_extensions: { type: "array", items: { type: "string" } },
+            max_upload_bytes: { type: "integer" },
+            max_upload_files: { type: "integer" },
+            steps: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  title: { type: "string" },
+                  body: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        ImportResultResponse: {
+          type: "object",
+          required: ["ok", "source", "imported", "skipped", "errors"],
+          properties: {
+            ok: { type: "boolean", enum: [true] },
+            source: { type: "string", enum: ["default", "path", "upload"] },
+            path: { type: "string", nullable: true },
+            imported: { type: "integer" },
+            backfilled: { type: "integer" },
+            skipped: { type: "integer" },
+            errors: { type: "integer" },
+            sessions_seen: { type: "integer" },
+            files_scanned: { type: "integer" },
+            files_received: { type: "integer" },
+            rejected_files: { type: "array", items: { type: "string" } },
+            entries_extracted: { type: "integer" },
+            entries_skipped: { type: "integer" },
+          },
+        },
         ReinstallHooksResponse: {
           type: "object",
           required: ["ok", "hooks"],
@@ -1535,6 +1585,146 @@ function createOpenApiSpec() {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/CleanupResponse" },
                 },
+              },
+            },
+          },
+        },
+      },
+      "/api/import/guide": {
+        get: {
+          tags: ["Import"],
+          summary: "Import guide with OS-aware defaults and step-by-step instructions",
+          operationId: "importGuide",
+          responses: {
+            200: {
+              description: "Guide payload",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ImportGuideResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/import/rescan": {
+        post: {
+          tags: ["Import"],
+          summary: "Rescan the default ~/.claude/projects directory",
+          operationId: "importRescan",
+          responses: {
+            200: {
+              description: "Import result",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ImportResultResponse" },
+                },
+              },
+            },
+            500: {
+              description: "Import failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/import/scan-path": {
+        post: {
+          tags: ["Import"],
+          summary: "Import transcripts from an arbitrary absolute directory",
+          operationId: "importScanPath",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["path"],
+                  properties: {
+                    path: {
+                      type: "string",
+                      description:
+                        "Absolute directory path. Tilde (~) is expanded. Walks subdirectories recursively.",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "Import result",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ImportResultResponse" },
+                },
+              },
+            },
+            400: {
+              description: "Path validation failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+            500: {
+              description: "Import failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/import/upload": {
+        post: {
+          tags: ["Import"],
+          summary: "Upload JSONL files or archives (.zip, .tar, .tar.gz, .tgz, .gz)",
+          operationId: "importUpload",
+          requestBody: {
+            required: true,
+            content: {
+              "multipart/form-data": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    files: {
+                      type: "array",
+                      items: { type: "string", format: "binary" },
+                      description:
+                        "Files to import. Supports .jsonl, .meta.json, .zip, .tar, .tar.gz, .tgz, .gz.",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "Import result",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ImportResultResponse" },
+                },
+              },
+            },
+            400: {
+              description: "No files or no JSONL content",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+            413: {
+              description: "Extraction limit exceeded (possible zip bomb)",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+            500: {
+              description: "Upload or import failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
               },
             },
           },

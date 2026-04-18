@@ -87,6 +87,60 @@ If nothing appears after 30 seconds, see [SETUP.md](./SETUP.md#troubleshooting).
 
 ---
 
+## Step 5 — (Optional) Import existing Claude Code history
+
+The server **automatically imports** every session under
+`~/.claude/projects/` on startup, so if you've used Claude Code on this
+machine before, your historical sessions, agents, events, token counts,
+and cost totals should already be visible in the Sessions list.
+
+To bring in history from another machine, a backup, or a `.tar.gz`
+archive a teammate sent you, use **Settings → Import History** in the
+UI. It supports three modes:
+
+```mermaid
+flowchart LR
+    UI["Settings →<br/>Import History"] --> M1["Rescan default folder<br/>~/.claude/projects"]
+    UI --> M2["Scan a folder<br/>any absolute path"]
+    UI --> M3["Upload files<br/>.jsonl / .zip / .tar.gz / .gz"]
+    M1 --> P["Same parser as live<br/>hook ingestion"]
+    M2 --> P
+    M3 --> P
+    P --> DB[("SQLite<br/>sessions + tokens + cost")]
+
+    style UI fill:#a855f7,stroke:#c084fc,color:#fff
+    style P fill:#f59e0b,stroke:#fbbf24,color:#000
+    style DB fill:#10b981,stroke:#34d399,color:#fff
+```
+
+Re-imports are idempotent: sessions are deduplicated by UUID and
+compaction baselines preserve pre-compaction token totals, so running
+the importer twice never double-counts tokens or cost.
+
+Verify it worked by opening the **Analytics** page and checking that
+per-model token totals and estimated cost look correct. Full walkthrough
+with per-OS archive commands in
+[SETUP.md → Importing existing Claude Code history](./SETUP.md#importing-existing-claude-code-history).
+
+### Optional: tune import limits
+
+If you regularly import very large archives, these environment variables
+can be raised (the defaults are generous for typical use):
+
+| Variable                          | Default | Purpose                                                     |
+| --------------------------------- | ------- | ----------------------------------------------------------- |
+| `CCAM_IMPORT_MAX_BYTES`           | 1 GB    | Maximum size per uploaded file                              |
+| `CCAM_IMPORT_MAX_FILES`           | 2000    | Maximum files per upload request                            |
+| `CCAM_IMPORT_MAX_EXTRACT_BYTES`   | 4 GB    | Ceiling on uncompressed bytes per archive (zip-bomb guard)  |
+
+Set them before `npm run dev` or `npm start`:
+
+```bash
+CCAM_IMPORT_MAX_EXTRACT_BYTES=17179869184 npm start   # allow 16 GB extraction
+```
+
+---
+
 ## Production mode
 
 To run as a single process serving the built client:

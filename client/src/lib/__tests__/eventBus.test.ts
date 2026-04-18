@@ -1,3 +1,9 @@
+/**
+ * @file eventBus.test.ts
+ * @description Unit tests for the eventBus module to ensure correct subscription, publishing, and unsubscription behavior in the agent dashboard application.
+ * @author Son Nguyen <hoangson091104@gmail.com>
+ */
+
 import { describe, it, expect, vi } from "vitest";
 import { eventBus } from "../eventBus";
 import type { WSMessage } from "../types";

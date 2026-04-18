@@ -64,6 +64,7 @@ Architectural overview and technical reference for the Agent Dashboard system, c
 - [Database Design](#database-design)
 - [WebSocket Protocol](#websocket-protocol)
 - [Hook Integration](#hook-integration)
+- [Import Pipeline](#import-pipeline)
 - [Agent Extension Layer](#agent-extension-layer)
 - [Plugin Marketplace](#plugin-marketplace)
 - [MCP Integration](#mcp-integration)
@@ -314,7 +315,9 @@ graph TD
 | `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data, reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
 | `routes/workflows.js`     | Aggregate workflow visualization data (agent orchestration graphs, tool transition flows, collaboration networks, workflow pattern detection, model delegation, error propagation, concurrency timelines, session complexity metrics, compaction impact). Accepts `?status=active\|completed` query parameter to filter all data by session status. Per-session drill-in endpoint with agent tree, tool timeline, and event details |
 | `lib/transcript-cache.js` | Stat-based JSONL transcript cache with incremental byte-offset reads. Shared between `hooks.js` (token extraction on every event) and the periodic compaction scanner (`index.js`). Extracts tokens, compaction entries, API errors (`isApiErrorMessage` + raw error responses), turn durations (`system` subtype `turn_duration`), thinking block counts, and usage extras (service_tier, speed, inference_geo). Uses `(path, mtime, size)` cache key — unchanged files return cached results instantly, grown files only parse new bytes, shrunk files (compaction) trigger full re-read. LRU eviction caps at 200 entries. Entries evicted on SessionEnd and abandoned session cleanup |
-| `scripts/import-history.js` | Batch history importer that parses main JSONL transcript files and subagent JSONL files (`{session}/subagents/agent-*.jsonl`). Extracts tokens, API errors, turn durations, thinking block counts, and usage extras from main transcripts. Parses per-subagent model, tokens, tools, and timing from subagent files. Creates `APIError`, `TurnDuration`, and `ToolError` event types during import |
+| `scripts/import-history.js` | Batch history importer used by (a) server startup auto-import, (b) the `/api/import/*` routes, and (c) the `import-history` CLI. Exposes `importAllSessions(dbModule)` for the default `~/.claude/projects` tree and the generalized `importFromDirectory(dbModule, rootDir, {onProgress})` which walks any directory recursively, classifies each `.jsonl` as session vs subagent (with `findSessionSubagents` probing both `<proj>/<sid>/subagents/*` and `<proj>/subagents/<sid>/*` layouts), and funnels everything through the shared `parseSessionFile` + `importSession` pipeline. Token totals, per-model cost, compactions, subagents, tool events, API errors, and turn durations are identical to live ingestion, and re-imports are idempotent (session-id dedup + `baseline_*` token preservation). Creates `APIError`, `TurnDuration`, and `ToolError` event types during import |
+| `server/routes/import.js`   | Express router for the Import History feature. Three endpoints funnel into the same pipeline: `POST /api/import/rescan` (default projects dir), `POST /api/import/scan-path` (arbitrary absolute dir with `~` expansion), `POST /api/import/upload` (multer multipart accepting `.jsonl`, `.meta.json`, `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.gz`). `GET /api/import/guide` returns OS-aware instructions + archive command + default-dir stats. Each request uses a per-request temp dir (`req._ccamUploadDir` for multer staging, a separate `workDir` for extraction) that is reclaimed in `finally`. Progress is broadcast as `import.progress` websocket messages throttled at ~150 ms. Limits configurable via `CCAM_IMPORT_MAX_BYTES` / `CCAM_IMPORT_MAX_FILES` |
+| `server/lib/archive.js`     | Safe archive extraction: `.zip` via `adm-zip`, `.tar`/`.tar.gz`/`.tgz` via `tar`, plain `.gz` via `zlib` in streaming mode. Every entry is validated through `safeJoin` which rejects absolute paths and `..` traversal before any bytes are written. Enforces a hard extraction cap (`MAX_EXTRACT_BYTES`, default 4 GB, tunable via `CCAM_IMPORT_MAX_EXTRACT_BYTES`) with `ExtractionLimitError` surfaced as HTTP 413 from the upload route — defense against zip/tar/gzip bombs. Also provides `detectKind` for filename-based dispatch and `mkTempDir`/`rmTempDir` helpers |
 
 ### API Documentation
 
@@ -816,6 +819,209 @@ flowchart TD
 ```
 
 **Preserves existing hooks** -- only adds or updates entries containing `hook-handler.js`.
+
+---
+
+## Import Pipeline
+
+The dashboard ships with a first-class **history importer** that backfills
+sessions, agents, events, tokens, and costs from Claude Code JSONL
+transcripts. Live hook ingestion and manual import share the exact same
+parser (`parseSessionFile` + `importSession` in `scripts/import-history.js`),
+which is the architectural contract that guarantees imported token and cost
+values are identical to those captured in real time.
+
+### Design goals
+
+- **Accuracy by construction** — any code path that creates a session goes
+  through a single `importSession` entry point. There is no "import math"
+  distinct from "live math."
+- **Idempotence** — re-importing the same source must never double-count.
+  Session IDs are the dedup key; compaction `baseline_*` columns preserve
+  pre-compaction token totals so re-ingesting a compacted transcript never
+  shrinks historical cost.
+- **Source flexibility** — users bring history from the default location,
+  any folder, or a drag-dropped archive. A single generalized walker feeds
+  the parser regardless of the source.
+- **Safety** — archive extraction enforces path containment and an extraction
+  size cap (zip/tar/gzip-bomb defense), and every request has its own
+  staging directory reclaimed on both success and error paths.
+
+### Component overview
+
+```mermaid
+flowchart TD
+    subgraph Clients
+      UI["Browser: Settings →<br/>Import History panel"]
+      CLI["CLI: npm run import-history"]
+      STARTUP["Server startup<br/>(auto-import)"]
+    end
+
+    UI -->|POST /api/import/guide<br/>POST /api/import/rescan<br/>POST /api/import/scan-path<br/>POST /api/import/upload| RT["server/routes/import.js"]
+    CLI --> IMP["scripts/import-history.js<br/>importAllSessions()"]
+    STARTUP --> IMP
+
+    RT -->|archives| AR["server/lib/archive.js<br/>extractZip / extractTar /<br/>extractGzSingle"]
+    RT -->|directory walk| FD["importFromDirectory()"]
+    AR -.->|temp workDir| FD
+    IMP --> FD
+
+    FD -->|per-session| PS["parseSessionFile()"]
+    FD -->|per-subagent| PSA["parseSubagentFile()"]
+    PS --> IS["importSession()"]
+    PSA --> IS
+
+    IS -->|prepared stmts<br/>single transaction| DB[("SQLite:<br/>sessions / agents / events /<br/>token_usage")]
+    IS -.->|progress throttled<br/>~150ms| WS["server/websocket.js<br/>broadcast('import.progress')"]
+    WS -.-> UI
+
+    style UI fill:#a855f7,stroke:#c084fc,color:#fff
+    style RT fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style AR fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style FD fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style IMP fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style IS fill:#f59e0b,stroke:#fbbf24,color:#000
+    style DB fill:#10b981,stroke:#34d399,color:#fff
+```
+
+### Upload request sequence
+
+The upload path is the most complex of the three — it must accept multipart
+data, extract archives safely, stage them on disk, then invoke the shared
+importer. The sequence below captures the complete request/response path
+including the failure modes explicitly guarded against.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as Settings UI
+    participant API as /api/import/upload
+    participant M as multer (disk)
+    participant AR as archive.js
+    participant IMP as importFromDirectory
+    participant DB as SQLite
+    participant WS as WebSocket /ws
+
+    UI->>API: POST multipart files[]
+    API->>M: route through uploadMiddleware
+    M->>M: mkTempDir('ccam-upload-*')<br/>stored on req._ccamUploadDir
+    M->>M: fileFilter: reject unsupported<br/>(tracked in req._ccamRejected)
+    alt All files rejected
+      API-->>UI: 400 NO_FILES<br/>+ rejected_files[]
+    else Files accepted
+      API->>AR: mkTempDir('ccam-import-work-*')
+      loop per uploaded file
+        API->>AR: extractInto(srcPath, workDir, name)
+        AR->>AR: safeJoin: reject absolute / ..
+        AR->>AR: enforce MAX_EXTRACT_BYTES
+        alt Extraction cap exceeded
+          AR-->>API: throw ExtractionLimitError
+          API-->>UI: 413 EXTRACTION_LIMIT_EXCEEDED
+          API-->>WS: import.progress{phase:error}
+          Note over API: break and cleanup
+        else OK
+          AR-->>API: {extracted, skipped}
+        end
+        API->>WS: import.progress{phase:extract}
+      end
+      API->>IMP: importFromDirectory(dbModule, workDir)
+      IMP->>IMP: collectJsonlFiles (recursive)
+      IMP->>IMP: parseSessionFile per JSONL
+      IMP->>IMP: findSessionSubagents (2 layouts)
+      IMP->>DB: importSession in one transaction
+      IMP-->>WS: import.progress{phase:parse,complete}
+      API-->>UI: 200 {imported, backfilled,<br/>skipped, errors, rejected_files}
+    end
+    API->>AR: rmTempDir(workDir)
+    API->>M: rmTempDir(req._ccamUploadDir)
+```
+
+### Idempotence and cost accuracy
+
+```mermaid
+flowchart LR
+    A[Parse session JSONL] --> B{Session ID<br/>already in DB?}
+    B -->|no| C[Insert session,<br/>main agent, events,<br/>token_usage]
+    B -->|yes| D{Any new fields,<br/>tools, compactions,<br/>turn durations?}
+    D -->|no| E[skipped = true]
+    D -->|yes| F[Backfill: insert<br/>missing events +<br/>enrich metadata]
+    F --> G[backfilled = true]
+
+    C --> H[replaceTokenUsage]
+    F --> H
+    H --> I{New input_tokens<br/>< existing?}
+    I -->|yes<br/>compaction occurred| J[Move existing into<br/>baseline_* columns<br/>add new on top]
+    I -->|no| K[Overwrite with new totals]
+
+    style J fill:#10b981,stroke:#34d399,color:#fff
+    style E fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style G fill:#f59e0b,stroke:#fbbf24,color:#000
+```
+
+The `baseline_*` columns are why cost is **monotonic** with respect to
+re-imports: the cost endpoint sums `input_tokens + baseline_input` (and
+the matching `output`, `cache_read`, `cache_write` pairs) from the
+`token_usage` table, so compacted sessions retain their pre-compaction
+usage for billing purposes.
+
+### Supported source layouts
+
+| Layout                                          | Example                                      | Handling                                                                |
+| ----------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| Default Claude Code                             | `<proj>/<sid>.jsonl`                         | Session transcript                                                      |
+| Default subagent                                | `<proj>/<sid>/subagents/agent-*.jsonl`       | Paired with parent on discovery                                         |
+| Alternative subagent                            | `<proj>/subagents/<sid>/agent-*.jsonl`       | Paired with parent on discovery                                         |
+| Orphan subagent (no parent JSONL in source)     | `<proj>/subagents/<sid>/agent-*.jsonl`       | `importFromDirectory` probes both candidates; attaches if `sid` exists  |
+| Flat JSONL drop                                 | `<root>/<sid>.jsonl`                         | Recognized as a loose session                                           |
+| Archives (`.zip`, `.tar`, `.tar.gz`, `.tgz`)    | any of the above nested inside               | Extracted into a per-request temp dir, then walked by the same importer |
+| Single-file gzip                                | `any.jsonl.gz`                               | Gunzipped in streaming mode with size cap                               |
+
+### Safety model
+
+| Threat                                      | Mitigation                                                                                           |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Path traversal via archive entries          | `archive.safeJoin` resolves under the extraction root; any `..` or absolute path returns `null`      |
+| Zip / tar / gzip bombs                      | `MAX_EXTRACT_BYTES` (default 4 GB) enforced by running byte counter; aborts with `ExtractionLimitError` |
+| Per-file upload size abuse                  | multer `limits.fileSize = MAX_UPLOAD_BYTES` (default 1 GB)                                           |
+| Too many files per request                  | multer `limits.files = MAX_UPLOAD_FILES` (default 2000)                                              |
+| Unsupported file types                      | `fileFilter` drops them early and reports them in `rejected_files[]`                                 |
+| Concurrent upload temp-dir collisions       | Per-request temp dir on `req._ccamUploadDir`; created in multer `destination`, cleaned in `finally`  |
+| Arbitrary absolute path on `scan-path`      | Validated: must be absolute (after `~` expansion), exist, and be a directory                         |
+| Relative / traversal paths on `scan-path`   | Rejected with `INVALID_INPUT`                                                                        |
+
+### Environment variables
+
+| Variable                          | Default     | Purpose                                                           |
+| --------------------------------- | ----------- | ----------------------------------------------------------------- |
+| `CCAM_IMPORT_MAX_BYTES`           | 1 GB        | Maximum size per uploaded file                                    |
+| `CCAM_IMPORT_MAX_FILES`           | 2000        | Maximum files per upload request                                  |
+| `CCAM_IMPORT_MAX_EXTRACT_BYTES`   | 4 GB        | Ceiling on total uncompressed bytes from any single archive       |
+
+### WebSocket progress events
+
+Every import emits `import.progress` messages on `/ws`. Messages are
+throttled to at most one every ~150 ms to avoid flooding the channel on
+multi-thousand-session imports; the terminal `complete` and `error` frames
+are never throttled.
+
+```json
+{
+  "type": "import.progress",
+  "timestamp": "2026-04-18T15:48:34.123Z",
+  "data": {
+    "importId": "upload-1729264114000",
+    "phase": "parse",
+    "source": "upload",
+    "processed": 184,
+    "total": 512,
+    "current": "/tmp/ccam-import-work-xyz/project/<uuid>.jsonl",
+    "counters": { "imported": 120, "backfilled": 40, "skipped": 20, "errors": 4 }
+  }
+}
+```
+
+Phases: `start` → `scan` → `extract` (upload only) → `parse` →
+`complete`, with `error` / `extract_error` replacing `complete` on failure.
 
 ---
 

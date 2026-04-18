@@ -135,4 +135,51 @@ export const api = {
     sessionCost: (sessionId: string) =>
       request<CostResult>(`/pricing/cost/${encodeURIComponent(sessionId)}`),
   },
+
+  import: {
+    guide: () =>
+      request<{
+        platform: string;
+        default_projects_dir: string;
+        default_projects_dir_display: string;
+        default_projects_dir_exists: boolean;
+        default_projects_dir_stats: { projects: number; jsonl_files: number };
+        archive_command: string;
+        supported_extensions: string[];
+        max_upload_bytes: number;
+        max_upload_files: number;
+        steps: { id: string; title: string; body: string }[];
+      }>("/import/guide"),
+    rescan: () => request<ImportResult>("/import/rescan", { method: "POST" }),
+    scanPath: (path: string) =>
+      request<ImportResult>("/import/scan-path", {
+        method: "POST",
+        body: JSON.stringify({ path }),
+      }),
+    upload: async (files: File[]): Promise<ImportResult> => {
+      const form = new FormData();
+      for (const f of files) form.append("files", f, f.name);
+      const res = await fetch(`${BASE}/import/upload`, { method: "POST", body: form });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error?.message || `HTTP ${res.status}`);
+      }
+      return res.json();
+    },
+  },
 };
+
+export interface ImportResult {
+  ok: boolean;
+  source: "default" | "path" | "upload";
+  path?: string;
+  imported: number;
+  skipped: number;
+  backfilled?: number;
+  errors: number;
+  sessions_seen?: number;
+  files_scanned?: number;
+  files_received?: number;
+  entries_extracted?: number;
+  entries_skipped?: number;
+}
