@@ -2,6 +2,17 @@
 # Claude Code Agent Monitor — Makefile
 # A collection of convenient commands for development, testing, and deployment.
 # Prerequisites: GNU Make, Node.js, npm
+# Author: Son Nguyen (hoangson091104@gmail.com)
+# Quickstart:
+#   make setup            # Install all dependencies
+#   make dev              # Start server + client in watch mode
+#   make build            # Build the React client for production
+#   make start            # Start the production server
+#   make test             # Run all tests
+#   make format           # Format all files with Prettier
+#   make mcp-dev          # Start MCP server in watch mode
+#   make seed             # Load deterministic demo data
+# For more commands, run `make help` to see descriptions, or see below.
 # ─────────────────────────────────────────────────────────────────────────────
 
 .DEFAULT_GOAL := help
