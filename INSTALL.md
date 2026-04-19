@@ -122,6 +122,10 @@ per-model token totals and estimated cost look correct. Full walkthrough
 with per-OS archive commands in
 [SETUP.md → Importing existing Claude Code history](./SETUP.md#importing-existing-claude-code-history).
 
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### Optional: tune import limits
 
 If you regularly import very large archives, these environment variables

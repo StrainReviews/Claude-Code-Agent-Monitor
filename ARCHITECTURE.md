@@ -831,6 +831,10 @@ parser (`parseSessionFile` + `importSession` in `scripts/import-history.js`),
 which is the architectural contract that guarantees imported token and cost
 values are identical to those captured in real time.
 
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### Design goals
 
 - **Accuracy by construction** — any code path that creates a session goes

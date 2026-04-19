@@ -585,13 +585,13 @@ export function Settings() {
                   : setConfirmAction("reset-pricing")
               }
               disabled={isEditing || actionLoading !== null}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 ${
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 inline-flex items-center gap-1.5 ${
                 confirmAction === "reset-pricing"
                   ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                   : "text-gray-400 hover:text-gray-300 hover:bg-surface-4"
               }`}
             >
-              <RotateCcw className="w-3 h-3 inline mr-1" />
+              <RotateCcw className="w-3 h-3" />
               {confirmAction === "reset-pricing"
                 ? t("pricing.resetConfirm")
                 : t("pricing.resetDefaults")}

@@ -846,6 +846,10 @@ diện để trải nghiệm nhập lịch sử có hướng dẫn từng bướ
 độ trực tiếp và thẻ tổng kết sau khi nhập (imported / enriched /
 skipped / errors).
 
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### WebSocket
 
 Kết nối với `ws://localhost:4820/ws` để nhận tin nhắn đẩy theo thời gian thực:

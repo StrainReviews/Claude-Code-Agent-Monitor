@@ -230,6 +230,10 @@ history from another machine, from a backup, or just force a rescan, use
 **Settings → Import History** in the UI — it's a guided, drag-and-drop
 experience with live progress.
 
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### Pick the right mode
 
 ```mermaid

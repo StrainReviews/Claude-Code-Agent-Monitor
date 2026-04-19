@@ -187,6 +187,50 @@
         font-size: 13px;
       }
 
+      /* Custom sidebar tooltip (floating, appended to body to escape
+         .sidebar overflow:hidden clipping). Only shown when collapsed. */
+      .ccam-side-tip {
+        position: fixed;
+        top: 0;
+        left: 0;
+        background: var(--bg-card, #1a1a2b);
+        color: var(--text, #e2e2f0);
+        border: 1px solid var(--border, #252538);
+        border-radius: 7px;
+        padding: 6px 10px;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 12.5px;
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+        letter-spacing: 0.2px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35),
+          0 0 0 1px rgba(99, 102, 241, 0.18);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-6px);
+        transition: opacity 0.15s ease, transform 0.15s ease;
+        z-index: 10000;
+      }
+
+      .ccam-side-tip.visible {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      .ccam-side-tip::before {
+        content: "";
+        position: absolute;
+        left: -6px;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-top: 6px solid transparent;
+        border-bottom: 6px solid transparent;
+        border-right: 6px solid var(--border, #252538);
+        transform: translateY(-50%);
+      }
+
       .sidebar-scrim {
         position: fixed;
         inset: 0;
@@ -2720,6 +2764,14 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
         <section id="import-pipeline">
           <div class="section-label">◈ Integrations</div>
           <h2>Import Pipeline</h2>
+
+          <div class="screenshot-gallery gallery-single">
+            <div class="screenshot-card">
+              <img src="images/import.png" alt="Settings page Import History section showing rescan default folder, scan custom path, and upload controls with progress output" loading="lazy" />
+              <div class="screenshot-caption"><span class="caption-icon">📥</span> Settings → Import History — rescan, custom path, and upload controls feeding the shared pipeline</div>
+            </div>
+          </div>
+
           <p>
             The dashboard ships with a first-class <b>history importer</b> that backfills
             sessions, agents, events, tokens, and costs from Claude Code JSONL transcripts.
@@ -4256,7 +4308,7 @@ npm run install-hooks</code></pre>
     </div>
     <!-- /.wiki-layout -->
 
-    <script src="wiki/script.js?v=2"></script>
+    <script src="wiki/script.js?v=3"></script>
     <script>
       /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {

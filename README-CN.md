@@ -838,6 +838,10 @@ flowchart LR
 分步指引、实时进度，以及导入完成后的结果卡片（imported / enriched /
 skipped / errors 计数）。
 
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### WebSocket
 
 连接 `ws://localhost:4820/ws` 接收实时推送消息：

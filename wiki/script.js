@@ -76,6 +76,88 @@ mermaid.initialize({
   logLevel: "error",
 });
 
+/* ─── Sidebar tooltips (collapsed state) ────────────────────────────────── */
+(function () {
+  const links = document.querySelectorAll(".sidebar .nav-link");
+  if (!links.length) return;
+
+  // Populate data-tooltip from link text (minus the nav-icon glyph)
+  links.forEach(function (link) {
+    if (link.hasAttribute("data-tooltip")) return;
+    const icon = link.querySelector(".nav-icon");
+    const label = (link.textContent || "")
+      .replace(icon ? icon.textContent : "", "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (label) link.setAttribute("data-tooltip", label);
+  });
+
+  // Single floating tooltip appended to <body> so it's not clipped by
+  // the sidebar's overflow:hidden.
+  const tip = document.createElement("div");
+  tip.className = "ccam-side-tip";
+  tip.setAttribute("role", "tooltip");
+  document.body.appendChild(tip);
+
+  let currentTarget = null;
+
+  function isCollapsed() {
+    return document.body.classList.contains("sidebar-collapsed");
+  }
+
+  function showFor(el) {
+    if (!isCollapsed()) return;
+    const label = el.getAttribute("data-tooltip");
+    if (!label) return;
+    currentTarget = el;
+    tip.textContent = label;
+    const rect = el.getBoundingClientRect();
+    // Position: 10px to the right of the nav-link, vertically centered
+    const top = rect.top + rect.height / 2 - tip.offsetHeight / 2;
+    const left = rect.right + 10;
+    tip.style.top = Math.max(4, Math.round(top)) + "px";
+    tip.style.left = Math.round(left) + "px";
+    tip.classList.add("visible");
+  }
+
+  function hide() {
+    currentTarget = null;
+    tip.classList.remove("visible");
+  }
+
+  links.forEach(function (link) {
+    link.addEventListener("mouseenter", function () {
+      showFor(link);
+    });
+    link.addEventListener("mouseleave", hide);
+    link.addEventListener("focus", function () {
+      showFor(link);
+    });
+    link.addEventListener("blur", hide);
+  });
+
+  // Reposition or hide on scroll/resize/state change
+  window.addEventListener(
+    "scroll",
+    function () {
+      if (currentTarget) showFor(currentTarget);
+    },
+    true
+  );
+  window.addEventListener("resize", function () {
+    if (currentTarget) showFor(currentTarget);
+  });
+
+  // Hide when sidebar gets expanded while tooltip is open
+  const bodyObserver = new MutationObserver(function () {
+    if (!isCollapsed()) hide();
+  });
+  bodyObserver.observe(document.body, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+})();
+
 /* ─── Active nav link on scroll ─────────────────────────────────────────── */
 (function () {
   const sections = document.querySelectorAll("section[id]");

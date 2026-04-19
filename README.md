@@ -845,6 +845,10 @@ drag-and-drop experience with step-by-step instructions, live progress,
 and a post-import summary showing imported / enriched / skipped /
 error counts.
 
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### WebSocket
 
 Connect to `ws://localhost:4820/ws` to receive real-time push messages:
