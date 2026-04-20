@@ -115,10 +115,20 @@ in_tok  = usage.get('input_tokens')
 out_tok = usage.get('output_tokens')
 cache   = usage.get('cache_read_input_tokens')
 if in_tok is not None and out_tok is not None:
-    tok_str = f"{in_tok}↑ {out_tok}↓"
+    tok_parts = [f"{GREEN}{in_tok}↑{RESET}", f"{CYAN}{out_tok}↓{RESET}"]
     if cache:
-        tok_str += f" {cache}c"
-    parts.append(f"{DIM}{tok_str}{RESET}")
+        tok_parts.append(f"{DIM}{cache}c{RESET}")
+    parts.append(' '.join(tok_parts))
+
+# Session cost (USD) — shown on both API and subscription plans
+cost = (data.get('cost') or {}).get('total_cost_usd')
+if cost is not None:
+    try:
+        cost_f = float(cost)
+        cost_color = RED if cost_f >= 20 else YELLOW if cost_f >= 5 else GREEN
+        parts.append(f"{cost_color}${cost_f:.4f}{RESET}")
+    except (TypeError, ValueError):
+        pass
 
 sep = f"{DIM} | {RESET}"
 print(sep.join(parts))
