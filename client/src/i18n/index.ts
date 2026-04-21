@@ -1,3 +1,9 @@
+/**
+ * @file index.ts
+ * @description Initializes the i18n internationalization framework for the agent dashboard application, setting up language resources for English, Chinese, and Vietnamese locales. It configures language detection, fallback options, and namespaces for organized translation keys. This module allows the application to support multiple languages and provides a seamless experience for users across different regions.
+ * @author Son Nguyen <hoangson091104@gmail.com>
+ */
+
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";

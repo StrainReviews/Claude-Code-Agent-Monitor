@@ -1,3 +1,9 @@
+/**
+ * @file SessionDetail.nestedAgents.test.tsx
+ * @description Tests for SessionDetail page focusing on correct rendering of nested agent hierarchies, including edge cases like orphaned subagents and multiple main agents. Validates expand/collapse behavior and descendant counts in the UI.
+ * @author Son Nguyen <hoangson091104@gmail.com>
+ */
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";

@@ -13,7 +13,7 @@
       name="keywords"
       content="Claude Code, Codex, MCP, Model Context Protocol, Claude Code Agent Monitor, AI monitoring, real-time dashboard, WebSocket, SQLite, React, TypeScript, developer tools, session tracking, agent skills"
     />
-    <meta name="author" content="Son Nguyen Hoang" />
+    <meta name="author" content="Son Nguyen" />
     <meta name="robots" content="index, follow" />
     <meta name="theme-color" content="#6366f1" />
 
@@ -60,7 +60,7 @@
         "license": "https://opensource.org/licenses/MIT",
         "author": {
           "@type": "Person",
-          "name": "Son Nguyen Hoang",
+          "name": "Son Nguyen",
           "url": "https://sonnguyenhoang.com"
         },
         "codeRepository": "https://github.com/hoangsonww/Claude-Code-Agent-Monitor",
@@ -185,6 +185,50 @@
       body.sidebar-collapsed .sidebar .nav-link .nav-icon {
         width: auto;
         font-size: 13px;
+      }
+
+      /* Custom sidebar tooltip (floating, appended to body to escape
+         .sidebar overflow:hidden clipping). Only shown when collapsed. */
+      .ccam-side-tip {
+        position: fixed;
+        top: 0;
+        left: 0;
+        background: var(--bg-card, #1a1a2b);
+        color: var(--text, #e2e2f0);
+        border: 1px solid var(--border, #252538);
+        border-radius: 7px;
+        padding: 6px 10px;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 12.5px;
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+        letter-spacing: 0.2px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35),
+          0 0 0 1px rgba(99, 102, 241, 0.18);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-6px);
+        transition: opacity 0.15s ease, transform 0.15s ease;
+        z-index: 10000;
+      }
+
+      .ccam-side-tip.visible {
+        opacity: 1;
+        transform: translateX(0);
+      }
+
+      .ccam-side-tip::before {
+        content: "";
+        position: absolute;
+        left: -6px;
+        top: 50%;
+        width: 0;
+        height: 0;
+        border-top: 6px solid transparent;
+        border-bottom: 6px solid transparent;
+        border-right: 6px solid var(--border, #252538);
+        transform: translateY(-50%);
       }
 
       .sidebar-scrim {
@@ -518,7 +562,9 @@
 
           <div class="nav-section">Integrations</div>
           <a href="#hooks" class="nav-link"><span class="nav-icon">◈</span>Hook Integration</a>
-          <a href="#vscode-ext" class="nav-link"><span class="nav-icon">◈</span>VS Code Extension</a>
+          <a href="#import-pipeline" class="nav-link"
+            ><span class="nav-icon">◈</span>Import Pipeline</a
+          >
           <a href="#mcp-agent-extensions" class="nav-link"
             ><span class="nav-icon">◈</span>MCP &amp; Agent Extensions</a>
           <a href="#plugin-marketplace" class="nav-link"
@@ -527,6 +573,7 @@
           <a href="#statusline" class="nav-link"
             ><span class="nav-icon">◈</span>Statusline Utility</a
           >
+          <a href="#vscode-ext" class="nav-link"><span class="nav-icon">◈</span>VS Code Extension</a>
           <a href="#settings-page" class="nav-link"><span class="nav-icon">◈</span>Settings Page</a>
 
           <div class="nav-section">Ops & Reference</div>
@@ -856,19 +903,25 @@
                   <p>
                     Standalone CLI statusline for Claude Code showing model name, user, working
                     directory, git branch, a color-coded context window usage bar (green/yellow/red),
-                    and token counts. ANSI-colored output that updates on every turn. Python-based
-                    with a shell wrapper for easy integration.
+                    per-direction token counts (green ↑ in, cyan ↓ out, dim cache), and session cost
+                    in USD (green/yellow/red by threshold). ANSI-colored output that updates on every
+                    turn. Python-based with a shell wrapper for easy integration.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-emerald">🔄</div>
                   <h3>History Import</h3>
                   <p>
-                    Automatically imports sessions from <code>~/.claude/</code> on startup with
-                    correct timestamps. Deep JSONL extraction captures API errors, per-turn
-                    durations, thinking blocks, usage extras, and parses subagent JSONL files for
-                    per-subagent model, token, and tool breakdowns. Recently-modified sessions
-                    are imported as active so the dashboard reflects real state immediately.
+                    Bring existing Claude Code sessions in from three sources — rescan the default
+                    <code>~/.claude/projects</code> folder, scan any absolute path on disk, or
+                    drag-drop <code>.jsonl</code> / <code>.meta.json</code> files and
+                    <code>.zip</code> / <code>.tar(.gz)</code> / <code>.gz</code> archives
+                    through <b>Settings → Import History</b>. All three paths funnel into the
+                    same <code>parseSessionFile</code> + <code>importSession</code> pipeline the
+                    server uses for live hook ingestion, so imported tokens and per-model cost
+                    match real-time capture bit-for-bit. Re-imports are idempotent (session-ID
+                    dedup + compaction <code>baseline_*</code> preservation). Archive extraction
+                    is guarded against path traversal and zip-bomb expansion.
                   </p>
                 </div>
                 <div class="feature-card">
@@ -2518,6 +2571,47 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
             </div>
           </div>
 
+          <h3>Import History</h3>
+          <div class="route-list">
+            <div class="route-item">
+              <span class="method method-get">GET</span>
+              <span class="route-path">/api/import/guide</span>
+              <span class="route-desc"
+                >OS-aware paths, archive command, supported extensions, step-by-step
+                instructions; includes live stats for the default
+                <code>~/.claude/projects</code> folder</span
+              >
+            </div>
+            <div class="route-item">
+              <span class="method method-post">POST</span>
+              <span class="route-path">/api/import/rescan</span>
+              <span class="route-desc"
+                >Re-scan the default <code>~/.claude/projects</code> directory; safe to re-run
+                (idempotent via session-ID dedup)</span
+              >
+            </div>
+            <div class="route-item">
+              <span class="method method-post">POST</span>
+              <span class="route-path">/api/import/scan-path</span>
+              <span class="route-desc"
+                >Scan any absolute directory (body <code>{ path }</code>); tilde
+                (<code>~</code>) is expanded; walks subdirectories recursively and imports every
+                <code>.jsonl</code> found</span
+              >
+            </div>
+            <div class="route-item">
+              <span class="method method-post">POST</span>
+              <span class="route-path">/api/import/upload</span>
+              <span class="route-desc"
+                >Multipart upload of <code>.jsonl</code>, <code>.meta.json</code>,
+                <code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code>, <code>.tgz</code>,
+                <code>.gz</code>. Per-request staging dir, path-traversal and extraction-size
+                guards. Returns 413 <code>EXTRACTION_LIMIT_EXCEEDED</code> on suspected
+                bomb archives</span
+              >
+            </div>
+          </div>
+
           <h3>Workflows</h3>
           <div class="route-list">
             <div class="route-item">
@@ -2665,6 +2759,273 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
               Hook installation is idempotent — safe to run multiple times
             </p>
           </div>
+        </section>
+
+        <!-- ─── Import Pipeline ──────────────────────────────────────────── -->
+        <section id="import-pipeline">
+          <div class="section-label">◈ Integrations</div>
+          <h2>Import Pipeline</h2>
+
+          <div class="screenshot-gallery gallery-single">
+            <div class="screenshot-card">
+              <img src="images/import.png" alt="Settings page Import History section showing rescan default folder, scan custom path, and upload controls with progress output" loading="lazy" />
+              <div class="screenshot-caption"><span class="caption-icon">📥</span> Settings → Import History — rescan, custom path, and upload controls feeding the shared pipeline</div>
+            </div>
+          </div>
+
+          <p>
+            The dashboard ships with a first-class <b>history importer</b> that backfills
+            sessions, agents, events, tokens, and costs from Claude Code JSONL transcripts.
+            Live hook ingestion and manual import share the exact same parser —
+            <code>parseSessionFile</code> + <code>importSession</code> in
+            <code>scripts/import-history.js</code> — which is the architectural contract that
+            guarantees imported token totals and cost values are identical to those captured in
+            real time. Re-imports are idempotent: session IDs are the dedup key and compaction
+            <code>baseline_*</code> columns preserve pre-compaction token totals.
+          </p>
+
+          <h3>Three Modes, One Pipeline</h3>
+          <div class="diagram-wrap">
+            <!-- prettier-ignore -->
+            <div class="mermaid">
+              flowchart LR
+                A1["Default folder\n~/.claude/projects"] -->|POST /api/import/rescan| R["server/routes/import.js"]
+                A2["Custom folder\nany absolute path"] -->|POST /api/import/scan-path| R
+                A3["Uploaded files\n.jsonl / .meta.json /\n.zip / .tar(.gz) / .gz"] -->|POST /api/import/upload\nmultipart| R
+                R -->|archive extract\n+ path-traversal guard\n+ zip-bomb cap| X["server/lib/archive.js"]
+                R -->|walks recursively| I["importFromDirectory\n(scripts/import-history.js)"]
+                X --> I
+                I -->|same pipeline\nas live hook ingestion| P["parseSessionFile +\nimportSession"]
+                P -->|prepared statements,\none transaction| D[("SQLite\nsessions / agents / events /\ntoken_usage")]
+                I -.->|import.progress\nthrottled ~150ms| W["WebSocket /ws"]
+                W -.-> U["Settings → Import History\nprogress + result card"]
+            </div>
+            <p class="diagram-label">
+              All three modes funnel into the same parser and DB transaction — imported numbers
+              match live capture bit-for-bit
+            </p>
+          </div>
+
+          <h3>Upload Request Sequence</h3>
+          <div class="diagram-wrap">
+            <!-- prettier-ignore -->
+            <div class="mermaid">
+              sequenceDiagram
+                autonumber
+                participant UI as Settings UI
+                participant API as /api/import/upload
+                participant M as multer (disk)
+                participant AR as archive.js
+                participant IMP as importFromDirectory
+                participant DB as SQLite
+                participant WS as WebSocket
+
+                UI->>API: POST multipart files[]
+                API->>M: uploadMiddleware
+                M->>M: mkTempDir per-request\nstored on req._ccamUploadDir
+                M->>M: fileFilter rejects unsupported\n(tracked in req._ccamRejected)
+                API->>AR: mkTempDir workDir
+                loop per uploaded file
+                  API->>AR: extractInto(src, workDir, name)
+                  AR->>AR: safeJoin rejects absolute / ..
+                  AR->>AR: enforce MAX_EXTRACT_BYTES
+                  alt bomb / oversized
+                    AR-->>API: ExtractionLimitError
+                    API-->>UI: 413 EXTRACTION_LIMIT_EXCEEDED
+                    API-->>WS: import.progress {phase: error}
+                  else ok
+                    AR-->>API: {extracted, skipped}
+                  end
+                  API->>WS: import.progress {phase: extract}
+                end
+                API->>IMP: importFromDirectory(workDir)
+                IMP->>IMP: collectJsonlFiles recursive
+                IMP->>IMP: parseSessionFile per JSONL
+                IMP->>DB: importSession in one transaction
+                IMP-->>WS: import.progress {phase: parse, complete}
+                API-->>UI: 200 {imported, backfilled, skipped,\nerrors, rejected_files}
+                API->>AR: rmTempDir workDir + req._ccamUploadDir
+            </div>
+            <p class="diagram-label">
+              Upload path: multipart → safe extract → walk → parse → import — every temp dir
+              reclaimed in <code>finally</code>
+            </p>
+          </div>
+
+          <h3>Idempotence &amp; Cost Accuracy</h3>
+          <div class="diagram-wrap">
+            <!-- prettier-ignore -->
+            <div class="mermaid">
+              flowchart LR
+                A[Parse session JSONL] --> B{Session ID\nalready in DB?}
+                B -->|no| C[Insert session,\nmain agent, events,\ntoken_usage]
+                B -->|yes| D{Any new fields,\ntools, compactions,\nturn durations?}
+                D -->|no| E[skipped = true]
+                D -->|yes| F[Backfill: insert\nmissing events +\nenrich metadata]
+                F --> G[backfilled = true]
+                C --> H[replaceTokenUsage]
+                F --> H
+                H --> I{New input_tokens\n&lt; existing?}
+                I -->|yes\ncompaction occurred| J[Move existing into\nbaseline_* columns\nadd new on top]
+                I -->|no| K[Overwrite with new totals]
+            </div>
+            <p class="diagram-label">
+              The <code>baseline_*</code> columns make cost monotonic under re-imports —
+              compacted sessions retain pre-compaction usage for billing
+            </p>
+          </div>
+
+          <h3>Supported Source Layouts</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Layout</th>
+                  <th>Example</th>
+                  <th>Handling</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Default Claude Code</td>
+                  <td><code>&lt;proj&gt;/&lt;sid&gt;.jsonl</code></td>
+                  <td>Session transcript — extracts tokens, compactions, tool uses, turn durations</td>
+                </tr>
+                <tr>
+                  <td>Default subagent</td>
+                  <td><code>&lt;proj&gt;/&lt;sid&gt;/subagents/agent-*.jsonl</code></td>
+                  <td>Paired with parent on discovery via <code>findSessionSubagents</code></td>
+                </tr>
+                <tr>
+                  <td>Alternative subagent</td>
+                  <td><code>&lt;proj&gt;/subagents/&lt;sid&gt;/agent-*.jsonl</code></td>
+                  <td>Paired with parent on discovery (second layout probed automatically)</td>
+                </tr>
+                <tr>
+                  <td>Orphan subagent</td>
+                  <td>No parent JSONL in source, but <code>sid</code> exists in DB</td>
+                  <td><code>importFromDirectory</code> probes both layouts; attaches if the parent is found</td>
+                </tr>
+                <tr>
+                  <td>Flat JSONL drop</td>
+                  <td><code>&lt;root&gt;/&lt;sid&gt;.jsonl</code></td>
+                  <td>Recognized as a loose session transcript</td>
+                </tr>
+                <tr>
+                  <td>Archives</td>
+                  <td><code>.zip</code>, <code>.tar</code>, <code>.tar.gz</code>, <code>.tgz</code></td>
+                  <td>Extracted into a per-request temp dir, then walked by the same importer</td>
+                </tr>
+                <tr>
+                  <td>Single-file gzip</td>
+                  <td><code>any.jsonl.gz</code></td>
+                  <td>Gunzipped in streaming mode with running byte-counter size cap</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Safety Model</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Threat</th>
+                  <th>Mitigation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Path traversal via archive entries</td>
+                  <td><code>archive.safeJoin</code> resolves under the extraction root; any <code>..</code> or absolute path returns <code>null</code></td>
+                </tr>
+                <tr>
+                  <td>Zip / tar / gzip bombs</td>
+                  <td><code>MAX_EXTRACT_BYTES</code> (default 4 GB) enforced by running byte counter; aborts with <code>ExtractionLimitError</code> → HTTP 413</td>
+                </tr>
+                <tr>
+                  <td>Per-file upload size abuse</td>
+                  <td>multer <code>limits.fileSize = MAX_UPLOAD_BYTES</code> (default 1 GB)</td>
+                </tr>
+                <tr>
+                  <td>Too many files per request</td>
+                  <td>multer <code>limits.files = MAX_UPLOAD_FILES</code> (default 2000)</td>
+                </tr>
+                <tr>
+                  <td>Unsupported file types</td>
+                  <td><code>fileFilter</code> drops them early and reports them in <code>rejected_files[]</code></td>
+                </tr>
+                <tr>
+                  <td>Concurrent upload temp-dir collisions</td>
+                  <td>Per-request temp dir on <code>req._ccamUploadDir</code>; created in multer <code>destination</code>, reclaimed in <code>finally</code></td>
+                </tr>
+                <tr>
+                  <td>Arbitrary absolute path on <code>scan-path</code></td>
+                  <td>Validated: must be absolute (after <code>~</code> expansion), exist, and be a directory</td>
+                </tr>
+                <tr>
+                  <td>Relative / traversal paths on <code>scan-path</code></td>
+                  <td>Rejected with <code>INVALID_INPUT</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Environment Variables</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Default</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>CCAM_IMPORT_MAX_BYTES</code></td>
+                  <td>1 GB</td>
+                  <td>Maximum size per uploaded file on <code>/api/import/upload</code></td>
+                </tr>
+                <tr>
+                  <td><code>CCAM_IMPORT_MAX_FILES</code></td>
+                  <td>2000</td>
+                  <td>Maximum files per upload request</td>
+                </tr>
+                <tr>
+                  <td><code>CCAM_IMPORT_MAX_EXTRACT_BYTES</code></td>
+                  <td>4 GB</td>
+                  <td>Ceiling on total uncompressed bytes from any single archive (zip-bomb defense)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>WebSocket Progress Events</h3>
+          <p>
+            Every import emits <code>import.progress</code> messages on <code>/ws</code>. Messages
+            are throttled to at most one every ~150 ms to avoid flooding the channel on
+            multi-thousand-session imports; the terminal <code>complete</code> and
+            <code>error</code> frames are never throttled.
+          </p>
+          <pre><code>{
+  "type": "import.progress",
+  "timestamp": "2026-04-18T15:48:34.123Z",
+  "data": {
+    "importId": "upload-1729264114000",
+    "phase": "parse",
+    "source": "upload",
+    "processed": 184,
+    "total": 512,
+    "current": "/tmp/ccam-import-work-xyz/project/&lt;uuid&gt;.jsonl",
+    "counters": { "imported": 120, "backfilled": 40, "skipped": 20, "errors": 4 }
+  }
+}</code></pre>
+          <p>
+            Phases: <code>start</code> → <code>scan</code> → <code>extract</code> (upload only)
+            → <code>parse</code> → <code>complete</code>, with <code>error</code> /
+            <code>extract_error</code> replacing <code>complete</code> on failure.
+          </p>
         </section>
 
         <!-- ─── MCP + Agent Extensions ─────────────────────────────────────── -->
@@ -2840,7 +3201,15 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                 </tr>
                 <tr>
                   <td><code>scripts/import-history.js</code></td>
-                  <td>Imports historical session data into local database with deep JSONL extraction (API errors, turn durations, thinking blocks, usage extras, subagent breakdowns)</td>
+                  <td>Batch history importer used by server startup auto-import, the <code>/api/import/*</code> routes, and the <code>import-history</code> CLI. Exposes <code>importAllSessions()</code> for the default projects dir and the generalized <code>importFromDirectory(dbModule, rootDir, {onProgress})</code> which walks any directory recursively, classifies session vs subagent JSONLs (probes both <code>&lt;proj&gt;/&lt;sid&gt;/subagents/*</code> and <code>&lt;proj&gt;/subagents/&lt;sid&gt;/*</code> layouts), and funnels everything through the shared <code>parseSessionFile</code> + <code>importSession</code> pipeline — identical to live ingest. Re-imports are idempotent (session-ID dedup + <code>baseline_*</code> preservation). Extracts tokens, API errors, turn durations, thinking blocks, usage extras, and per-subagent breakdowns</td>
+                </tr>
+                <tr>
+                  <td><code>server/routes/import.js</code></td>
+                  <td>Express router for Import History. Four endpoints: <code>GET /api/import/guide</code> (OS-aware instructions + default-dir stats), <code>POST /api/import/rescan</code> (default <code>~/.claude/projects</code>), <code>POST /api/import/scan-path</code> (arbitrary absolute dir with <code>~</code> expansion), <code>POST /api/import/upload</code> (multer multipart). Each request uses a per-request temp dir reclaimed in <code>finally</code>. Progress broadcast as throttled <code>import.progress</code> WebSocket messages. Limits tunable via <code>CCAM_IMPORT_MAX_BYTES</code>, <code>CCAM_IMPORT_MAX_FILES</code>, <code>CCAM_IMPORT_MAX_EXTRACT_BYTES</code></td>
+                </tr>
+                <tr>
+                  <td><code>server/lib/archive.js</code></td>
+                  <td>Safe archive extraction: <code>.zip</code> via <code>adm-zip</code>, <code>.tar</code>/<code>.tar.gz</code>/<code>.tgz</code> via <code>tar</code>, plain <code>.gz</code> streaming via <code>zlib</code>. Every entry validated through <code>safeJoin</code> which rejects absolute paths and <code>..</code> traversal before any bytes are written. Enforces a hard <code>MAX_EXTRACT_BYTES</code> cap (default 4 GB) with <code>ExtractionLimitError</code> surfaced as HTTP 413 — defense against zip/tar/gzip bombs</td>
                 </tr>
                 <tr>
                   <td><code>scripts/seed.js</code></td>
@@ -3049,12 +3418,12 @@ ccam-export all --output backup.json</code></pre>
           <p>
             The <code>statusline/</code> directory contains a standalone CLI statusline for Claude
             Code — completely independent of the web dashboard. It renders a color-coded bar at the
-            bottom of the Claude Code terminal showing context window usage, token counts, and git
-            branch.
+            bottom of the Claude Code terminal showing context window usage, per-direction token
+            counts, session cost in USD, and git branch.
           </p>
 
           <div class="code-header"><span class="code-lang">terminal output</span></div>
-          <pre><code>Sonnet 4.6 | nguyens6 | ~/agent-dashboard/client | main | ████████░░ 79% | 3↑ 2↓ 156586c</code></pre>
+          <pre><code>nguyens6@host ~/agent-dashboard/client | Sonnet 4.6 | main | ████████░░ 79% | 3↑ 2↓ 156586c | $0.4231</code></pre>
 
           <div class="table-wrap">
             <table>
@@ -3095,8 +3464,13 @@ ccam-export all --output backup.json</code></pre>
                   <td>Token Counts</td>
                   <td><code>data.context_window.current_usage</code></td>
                   <td>
-                    Dim — <code>↑</code> input, <code>↓</code> output, <code>c</code> cache reads
+                    Green <code>↑</code> input, cyan <code>↓</code> output, dim <code>c</code> cache reads
                   </td>
+                </tr>
+                <tr>
+                  <td>Session Cost</td>
+                  <td><code>data.cost.total_cost_usd</code></td>
+                  <td>Green &lt; $5, Yellow $5–$20, Red ≥ $20 (shown on API and subscription plans)</td>
                 </tr>
               </tbody>
             </table>
@@ -3113,10 +3487,10 @@ ccam-export all --output backup.json</code></pre>
 
                 CC->>SH: stdin (JSON payload)
                 SH->>PY: Pipe stdin through (PYTHONUTF8=1)
-                PY->>PY: Parse JSON (model, cwd, context_window)
+                PY->>PY: Parse JSON (model, cwd, context_window, cost)
                 PY->>GIT: git symbolic-ref --short HEAD
                 GIT-->>PY: Branch name
-                PY->>PY: Build ANSI-colored segments
+                PY->>PY: Build ANSI-colored segments (incl. tokens by direction, cost)
                 PY-->>CC: stdout (formatted statusline)
             </div>
             <p class="diagram-label">
@@ -3940,7 +4314,7 @@ npm run install-hooks</code></pre>
     </div>
     <!-- /.wiki-layout -->
 
-    <script src="wiki/script.js?v=2"></script>
+    <script src="wiki/script.js?v=3"></script>
     <script>
       /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {

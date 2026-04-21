@@ -463,6 +463,132 @@ Request body shape:
 | `GET`  | `/api/settings/export`         | Export all data as JSON attachment               |
 | `POST` | `/api/settings/cleanup`        | Abandon stale sessions and purge old data        |
 
+### Import History
+
+Bring existing Claude Code sessions into the dashboard. All four entry
+points share the same JSONL parser (`parseSessionFile` +
+`importSession`) used by live ingestion, so imported tokens and cost
+calculations match real-time captured sessions exactly. Re-imports are
+idempotent (dedupe by session ID; compaction `baseline_*` columns
+prevent token double-counting).
+
+| Method | Path                      | Description                                                              |
+| ------ | ------------------------- | ------------------------------------------------------------------------ |
+| `GET`  | `/api/import/guide`       | OS-aware paths, archive command, supported extensions, step instructions |
+| `POST` | `/api/import/rescan`      | Rescan the default `~/.claude/projects` directory                        |
+| `POST` | `/api/import/scan-path`   | Scan any absolute directory path (body: `{ path }`); walks recursively   |
+| `POST` | `/api/import/upload`      | Multipart upload of `.jsonl`, `.meta.json`, `.zip`, `.tar(.gz)`, `.gz`   |
+
+**Source files**
+
+| File                           | Role                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `server/routes/import.js`      | Express router, request validation, temp-dir lifecycle, progress broadcasts                            |
+| `server/lib/archive.js`        | Safe archive extractors (`.zip` / `.tar(.gz)` / `.gz`) with path-traversal and size-cap enforcement    |
+| `scripts/import-history.js`    | Generalized directory walker (`importFromDirectory`) + shared `parseSessionFile` / `importSession`     |
+
+**Request flow (upload)**
+
+```mermaid
+sequenceDiagram
+    participant UI
+    participant R as /api/import/upload
+    participant M as multer
+    participant A as archive.js
+    participant I as importFromDirectory
+    participant DB as SQLite
+    participant WS as ws /import.progress
+
+    UI->>R: POST multipart files[]
+    R->>M: uploadMiddleware
+    M->>M: mkTempDir (per-request)<br/>fileFilter rejects unsupported
+    R->>A: extractInto(file, workDir)
+    A->>A: safeJoin (path-traversal guard)
+    A->>A: enforce MAX_EXTRACT_BYTES
+    alt bomb / traversal / oversize
+      A-->>R: ExtractionLimitError
+      R-->>UI: 413 EXTRACTION_LIMIT_EXCEEDED
+      R->>WS: import.progress{phase:error}
+    else ok
+      A-->>R: {extracted, skipped}
+    end
+    R->>I: importFromDirectory(workDir)
+    I->>I: collectJsonlFiles (recursive)
+    I->>DB: importSession in one tx
+    I->>WS: import.progress{phase:parse, complete}
+    R-->>UI: 200 {imported, backfilled, skipped,<br/>errors, rejected_files}
+    R->>A: rmTempDir(workDir + req._ccamUploadDir)
+```
+
+**Supported source layouts.** Both canonical Claude Code JSONL layouts
+are recognised automatically — `<proj>/<sid>/subagents/agent-*.jsonl`
+(default) and `<proj>/subagents/<sid>/agent-*.jsonl` (alternative) —
+and orphan subagent files (parent JSONL missing from the upload) are
+attached to an existing DB session whenever the inferred session ID
+matches one probed from either layout candidate.
+
+**Environment variables**
+
+| Variable                          | Default     | Purpose                                                           |
+| --------------------------------- | ----------- | ----------------------------------------------------------------- |
+| `CCAM_IMPORT_MAX_BYTES`           | `1073741824` | Maximum size per uploaded file                                   |
+| `CCAM_IMPORT_MAX_FILES`           | `2000`      | Maximum files per upload request                                 |
+| `CCAM_IMPORT_MAX_EXTRACT_BYTES`   | `4294967296` | Total uncompressed bytes allowed per archive (zip-bomb guard)   |
+
+**WebSocket event schema.** Progress is broadcast on `/ws` with type
+`import.progress`. Messages are throttled at ~150 ms; the terminal
+`complete` and `error` frames are always delivered.
+
+```json
+{
+  "type": "import.progress",
+  "timestamp": "2026-04-18T15:48:34.123Z",
+  "data": {
+    "importId": "upload-1729264114000",
+    "phase": "parse",
+    "source": "upload",
+    "processed": 184,
+    "total": 512,
+    "current": "/tmp/ccam-import-work-xyz/project/<uuid>.jsonl",
+    "counters": { "imported": 120, "backfilled": 40, "skipped": 20, "errors": 4 }
+  }
+}
+```
+
+Phases: `start` → `scan` → `extract` (upload only) → `parse` →
+`complete`, with `error` / `extract_error` replacing `complete` on
+failure.
+
+**Response envelopes**
+
+```jsonc
+// 200 — import completed
+{
+  "ok": true,
+  "source": "upload",            // "default" | "path" | "upload"
+  "path": "/abs/path",           // only for source=path
+  "imported": 120,
+  "backfilled": 40,
+  "skipped": 20,
+  "errors": 4,
+  "sessions_seen": 180,
+  "files_scanned": 512,
+  "files_received": 8,           // upload only
+  "rejected_files": [],          // upload only; unsupported extensions
+  "entries_extracted": 180,      // upload only
+  "entries_skipped": 0           // upload only
+}
+
+// 400 — validation failure
+{ "error": { "code": "PATH_NOT_FOUND", "message": "..." } }
+
+// 413 — extraction cap exceeded (zip-bomb defense)
+{
+  "error": { "code": "EXTRACTION_LIMIT_EXCEEDED", "message": "..." },
+  "offending_file": "suspicious.tar.gz"
+}
+```
+
 ---
 
 ## WebSocket Protocol

@@ -195,7 +195,7 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 | **Responsive Design**              | Mobile-friendly layouts with stacking grids, scrollable tables, and collapsible sidebar                                                                                                                                                                                      |
 | **UI Localization**                | Built-in language switching with translated UI copy and accessibility labels for English (`en`), Chinese (`zh`), and Vietnamese (`vi`)                                                                                                                                       |
 | **Seed Data**                      | Built-in seed script for demos and development                                                                                                                                                                                                                               |
-| **Statusline**                     | Color-coded CLI statusline showing model, context usage, git branch, tokens                                                                                                                                                                                                  |
+| **Statusline**                     | Color-coded CLI statusline showing model, context usage, git branch, per-direction tokens, and session cost (USD)                                                                                                                                                            |
 | **Plugin Marketplace**             | Official Claude Code plugin marketplace with 5 plugins (ccam-analytics, ccam-productivity, ccam-devtools, ccam-insights, ccam-dashboard). 18 skills, 4 agents, 3 CLI tools, 2 hook configs. All grounded in actual data model — token baselines, pricing engine, workflow intelligence (11 datasets), session metadata. Install via `claude plugin marketplace add` |
 
 ---
@@ -763,6 +763,92 @@ The OpenAPI document is generated from `server/openapi.js`, and Swagger UI is se
 | `GET`  | `/api/settings/export`         | Export all data as JSON download                 |
 | `POST` | `/api/settings/cleanup`        | Abandon stale sessions, purge old data           |
 
+### Import History
+
+Bring existing Claude Code sessions into the dashboard from three
+different sources, all funneled through the same parser the server uses
+for live ingestion so imported tokens, per-model cost, compactions,
+subagents, tool use, and turn durations match real-time capture
+bit-for-bit. Re-imports are idempotent: sessions are keyed by ID and
+compaction baselines preserve pre-compaction token totals, so running
+the importer twice never double-counts usage or cost.
+
+```mermaid
+flowchart LR
+    subgraph Sources
+      A1["Default folder<br/>~/.claude/projects"]
+      A2["Custom folder<br/>any absolute path"]
+      A3["Uploaded files<br/>.jsonl / .meta.json /<br/>.zip / .tar(.gz) / .gz"]
+    end
+
+    A1 -->|POST /api/import/rescan| R["server/routes/import.js"]
+    A2 -->|POST /api/import/scan-path| R
+    A3 -->|POST /api/import/upload<br/>multipart| R
+
+    R -->|archive extract<br/>+ path-traversal guard<br/>+ zip-bomb cap| X["server/lib/archive.js"]
+    R -->|walks recursively| I["importFromDirectory<br/>(scripts/import-history.js)"]
+    X --> I
+    I -->|same pipeline as live<br/>hook ingestion| P["parseSessionFile +<br/>importSession"]
+    P -->|prepared statements,<br/>in one transaction| D[("SQLite<br/>sessions / agents / events /<br/>token_usage")]
+    I -.->|import.progress<br/>throttled| W["WebSocket /ws"]
+    W -.-> U["Settings → Import History<br/>progress bar + result card"]
+
+    style A1 fill:#6366f1,stroke:#818cf8,color:#fff
+    style A2 fill:#6366f1,stroke:#818cf8,color:#fff
+    style A3 fill:#6366f1,stroke:#818cf8,color:#fff
+    style R fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style X fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style I fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
+    style P fill:#f59e0b,stroke:#fbbf24,color:#000
+    style D fill:#10b981,stroke:#34d399,color:#fff
+    style U fill:#a855f7,stroke:#c084fc,color:#fff
+```
+
+**Routes**
+
+| Method | Path                    | Description                                                              |
+| ------ | ----------------------- | ------------------------------------------------------------------------ |
+| `GET`  | `/api/import/guide`     | OS-aware paths, archive command, supported extensions, step instructions |
+| `POST` | `/api/import/rescan`    | Rescan the default `~/.claude/projects` directory                        |
+| `POST` | `/api/import/scan-path` | Scan an absolute directory (body `{ path }`); walks recursively          |
+| `POST` | `/api/import/upload`    | Multipart upload of `.jsonl`, `.meta.json`, `.zip`, `.tar(.gz)`, `.gz`   |
+
+**Supported inputs.** Loose JSONL (`.jsonl`) session transcripts, their
+companion `.meta.json` sidecars, and archives (`.zip`, `.tar`,
+`.tar.gz`/`.tgz`, plain `.gz`) containing any nested directory layout.
+Both canonical Claude Code layouts are recognized automatically:
+`<project>/<sessionId>/subagents/agent-*.jsonl` (default) and
+`<project>/subagents/<sessionId>/agent-*.jsonl` (alternative).
+
+**Accuracy guarantees.** Sessions are deduplicated by UUID; re-running
+the importer is always safe. The compaction `baseline_input` /
+`baseline_output` / `baseline_cache_read` / `baseline_cache_write`
+columns preserve token counts from before a transcript was compacted,
+so re-ingesting a post-compaction JSONL never erases historical cost.
+
+**Safety.** Archive extraction validates every entry against path
+traversal (absolute paths and `..` segments are rejected). A
+configurable extraction cap (`CCAM_IMPORT_MAX_EXTRACT_BYTES`, default
+4 GB) stops zip/tar/gzip bombs. Upload size is capped per file
+(`CCAM_IMPORT_MAX_BYTES`, default 1 GB) and per request
+(`CCAM_IMPORT_MAX_FILES`, default 2000). All staging directories are
+per-request and reclaimed in `finally`, including when multer rejects
+all files up front.
+
+**Progress.** Import activity is broadcast over the existing WebSocket
+as `import.progress` messages (`phase`: `start` / `scan` / `extract` /
+`parse` / `complete` / `error`), throttled to avoid flooding the
+channel on large imports.
+
+**UI.** Use the **Settings → Import History** panel for a guided,
+drag-and-drop experience with step-by-step instructions, live progress,
+and a post-import summary showing imported / enriched / skipped /
+error counts.
+
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
 ### WebSocket
 
 Connect to `ws://localhost:4820/ws` to receive real-time push messages:
@@ -977,25 +1063,28 @@ claude plugin marketplace add hoangsonww/Claude-Code-Agent-Monitor
 
 ## Statusline
 
-A standalone CLI statusline utility for Claude Code that displays model name, user, working directory, git branch, context window usage bar, and token counts -- all color-coded with ANSI escape sequences.
+A standalone CLI statusline utility for Claude Code that displays model name, user, working directory, git branch, context window usage bar, per-direction token counts, and session cost -- all color-coded with ANSI escape sequences.
 
 ```
-Sonnet 4.6 | nguyens6 | ~/agent-dashboard/client | main | ████████░░ 79% | 3↑ 2↓ 156586c
+nguyens6@host ~/agent-dashboard/client | Sonnet 4.6 | main | ████████░░ 79% | 3↑ 2↓ 156586c | $0.4231
 ```
 
-| Segment     | Color                | Example             |
-| ----------- | -------------------- | ------------------- |
-| Model       | Cyan                 | `Sonnet 4.6`        |
-| User        | Green                | `nguyens6`          |
-| CWD         | Yellow               | `~/agent-dashboard` |
-| Git branch  | Magenta              | `main`              |
-| Context bar | Green / Yellow / Red | `████████░░ 79%`    |
-| Tokens      | Dim                  | `3↑ 2↓ 156586c`     |
+| Segment     | Color                | Example                                                        |
+| ----------- | -------------------- | -------------------------------------------------------------- |
+| Model       | Cyan                 | `Sonnet 4.6`                                                   |
+| User        | Green                | `nguyens6`                                                     |
+| CWD         | Yellow               | `~/agent-dashboard`                                            |
+| Git branch  | Magenta              | `main`                                                         |
+| Context bar | Green / Yellow / Red | `████████░░ 79%`                                               |
+| Tokens      | Green / Cyan / Dim   | `3↑ 2↓ 156586c` (green `↑` in, cyan `↓` out, dim `c` cache)    |
+| Cost (USD)  | Green / Yellow / Red | `$0.4231` (session total — shown on API and subscription plans)|
+
+Cost color thresholds: green under $5, yellow $5–$20, red $20+.
 
 See [`statusline/README.md`](statusline/README.md) for installation instructions.
 
 <p align="center">
-  <img src="images/statusline.png" alt="Statusline Demo" width="600">
+  <img src="images/statusline.png" alt="Statusline Demo" width="100%">
 </p>
 
 ---

@@ -43,6 +43,10 @@ const EXPECTED_API_PATHS = [
   "/api/settings/reset-pricing",
   "/api/settings/export",
   "/api/settings/cleanup",
+  "/api/import/guide",
+  "/api/import/rescan",
+  "/api/import/scan-path",
+  "/api/import/upload",
   "/api/openapi.json",
 ];
 

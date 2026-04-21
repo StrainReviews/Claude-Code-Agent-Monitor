@@ -91,6 +91,9 @@ Container-specific behavior:
 | `CLAUDE_DASHBOARD_PORT` | `4820` | Port the hook handler uses when posting events to the dashboard |
 | `DASHBOARD_DB_PATH` | `data/dashboard.db` | Path to the SQLite database file |
 | `NODE_ENV` | `development` | Set to `production` to serve built client |
+| `CCAM_IMPORT_MAX_BYTES` | `1073741824` (1 GB) | Maximum size per uploaded file on `/api/import/upload` |
+| `CCAM_IMPORT_MAX_FILES` | `2000` | Maximum number of files per upload request |
+| `CCAM_IMPORT_MAX_EXTRACT_BYTES` | `4294967296` (4 GB) | Maximum uncompressed bytes any single archive is allowed to expand to (zip-bomb defense) |
 | `MCP_DASHBOARD_BASE_URL` | `http://127.0.0.1:4820` | Base URL used by the local MCP server to call dashboard APIs |
 | `MCP_DASHBOARD_ALLOW_MUTATIONS` | `false` | Enables mutating MCP tools |
 | `MCP_DASHBOARD_ALLOW_DESTRUCTIVE` | `false` | Enables destructive MCP tools (in addition to mutations) |
@@ -214,6 +217,106 @@ To populate the dashboard with sample sessions, agents, and events for UI explor
 
 ```bash
 npm run seed
+```
+
+---
+
+## Importing existing Claude Code history
+
+The dashboard automatically imports sessions from `~/.claude/projects/` on
+**every startup**, so if Claude Code has been used on this machine, you'll
+see history immediately after the first launch. If you need to bring in
+history from another machine, from a backup, or just force a rescan, use
+**Settings → Import History** in the UI — it's a guided, drag-and-drop
+experience with live progress.
+
+<p align="center">
+  <img src="images/import.png" alt="Import History UI" width="100%">
+</p>
+
+### Pick the right mode
+
+```mermaid
+flowchart TD
+    Q["Where is the history?"] --> Q1{Is it on this machine<br/>under ~/.claude/projects?}
+    Q1 -->|yes, and I just want<br/>to re-scan| M1["Mode: Rescan default folder<br/>one click"]
+    Q1 -->|yes, but in another folder<br/>on this machine| M2["Mode: Scan a folder<br/>paste the absolute path"]
+    Q1 -->|no — it's on another machine<br/>or in an archive file| M3["Mode: Upload files<br/>drag-drop JSONL or archive"]
+
+    M3 --> PREP["Archive source:<br/>tar -czf claude-history.tar.gz<br/>-C ~/.claude projects"]
+
+    style M1 fill:#10b981,stroke:#34d399,color:#fff
+    style M2 fill:#f59e0b,stroke:#fbbf24,color:#000
+    style M3 fill:#a855f7,stroke:#c084fc,color:#fff
+```
+
+### Step-by-step: moving history from one machine to another
+
+**On the source machine**, bundle the projects folder:
+
+```bash
+# macOS / Linux
+tar -czf claude-history.tar.gz -C ~/.claude projects
+
+# Windows (PowerShell, via built-in tar)
+tar -czf claude-history.tar.gz -C "$env:USERPROFILE\.claude" projects
+```
+
+Transfer the resulting `claude-history.tar.gz` to the destination machine
+however you like — AirDrop, `scp`, USB, cloud storage.
+
+**On the destination machine**, in the dashboard:
+
+1. Open **Settings → Import History**.
+2. Pick **Upload files** (the third tab).
+3. Drag the archive onto the drop zone.
+4. Click **Upload & Import** and watch the progress.
+5. When the green result card appears, open **Analytics → Cost** to confirm
+   per-model token totals and estimated cost.
+
+### Supported inputs
+
+Any of the following can be dropped onto the upload zone or found inside a
+folder given to **Scan a folder**:
+
+- `.jsonl` — session transcripts
+- `.meta.json` — subagent metadata sidecars
+- `.zip` — extracted with path-traversal protection
+- `.tar`, `.tar.gz`, `.tgz` — extracted via the `tar` package
+- `.gz` — single gzipped JSONL (streaming-decompressed)
+
+### Accuracy guarantees
+
+- **Idempotent** — re-importing never double-counts. Sessions are
+  deduplicated by UUID.
+- **Cost-preserving** — the `token_usage` table uses `baseline_*` columns
+  to preserve pre-compaction token totals, so re-ingesting a compacted
+  transcript never erases historical cost.
+- **Same parser as live** — `parseSessionFile` + `importSession` is the
+  single source of truth for both hook-driven ingestion and manual
+  import, so imported numbers match captured numbers exactly.
+
+### Safety
+
+Archive extraction is hardened against path traversal and archive bombs.
+The defaults are generous for real-world transcripts but tight enough to
+stop obvious attacks; see the env vars table above for
+`CCAM_IMPORT_MAX_BYTES`, `CCAM_IMPORT_MAX_FILES`, and
+`CCAM_IMPORT_MAX_EXTRACT_BYTES`.
+
+### CLI alternative
+
+For scripts and automation, the same logic runs from the terminal:
+
+```bash
+# Import (or re-import) everything under ~/.claude/projects
+npm run import-history
+
+# Dry run — show what would be imported without writing
+node scripts/import-history.js --dry-run
+
+# Scope to a single project dir
+node scripts/import-history.js --project my-project
 ```
 
 ---

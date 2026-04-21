@@ -1,3 +1,39 @@
+"""
+statusline.py — Claude Code custom statusline renderer.
+
+Reads a JSON event payload from stdin (emitted by Claude Code on every turn)
+and prints a single ANSI-colored status line to stdout. Renders the model
+display name, current user, working directory (with home collapsed to ``~``),
+active git branch, a color-coded context window usage bar (green / yellow /
+red thresholds), and token counts. Always exits 0 so it can never block
+Claude Code — missing fields are silently skipped.
+
+Intended to be referenced from Claude Code's ``statusLine`` setting (see
+``statusline-command.sh`` for the wrapper) or installed to
+``~/.claude/statusline.py``.
+
+:file: statusline/statusline.py
+:module: Claude-Code-Agent-Monitor.statusline
+:author: Son Nguyen <hoangson091104@gmail.com>
+:maintainer: Son Nguyen (a.k.a. David Nguyen, hoangsonww)
+:copyright: (c) 2026 Son Nguyen
+:license: MIT
+:repository: https://github.com/hoangsonww/Claude-Code-Agent-Monitor
+:requires: Python 3.6+
+:encoding: utf-8
+"""
+
+__file_name__ = "statusline.py"
+__module__ = "Claude-Code-Agent-Monitor.statusline"
+__author__ = "Son Nguyen"
+__email__ = "hoangson091104@gmail.com"
+__maintainer__ = "Son Nguyen"
+__copyright__ = "Copyright (c) 2026 Son Nguyen"
+__license__ = "MIT"
+__version__ = "1.0.0"
+__status__ = "Production"
+__repository__ = "https://github.com/hoangsonww/Claude-Code-Agent-Monitor"
+
 import sys
 import json
 import os
@@ -79,10 +115,20 @@ in_tok  = usage.get('input_tokens')
 out_tok = usage.get('output_tokens')
 cache   = usage.get('cache_read_input_tokens')
 if in_tok is not None and out_tok is not None:
-    tok_str = f"{in_tok}↑ {out_tok}↓"
+    tok_parts = [f"{GREEN}{in_tok}↑{RESET}", f"{CYAN}{out_tok}↓{RESET}"]
     if cache:
-        tok_str += f" {cache}c"
-    parts.append(f"{DIM}{tok_str}{RESET}")
+        tok_parts.append(f"{DIM}{cache}c{RESET}")
+    parts.append(' '.join(tok_parts))
+
+# Session cost (USD) — shown on both API and subscription plans
+cost = (data.get('cost') or {}).get('total_cost_usd')
+if cost is not None:
+    try:
+        cost_f = float(cost)
+        cost_color = RED if cost_f >= 20 else YELLOW if cost_f >= 5 else GREEN
+        parts.append(f"{cost_color}${cost_f:.4f}{RESET}")
+    except (TypeError, ValueError):
+        pass
 
 sep = f"{DIM} | {RESET}"
 print(sep.join(parts))
