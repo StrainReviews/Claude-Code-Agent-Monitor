@@ -5,6 +5,8 @@
 
 const { Router } = require("express");
 const { v4: uuidv4 } = require("uuid");
+const fs = require("fs");
+const path = require("path");
 const { stmts, db } = require("../db");
 const { broadcast } = require("../websocket");
 const TranscriptCache = require("../lib/transcript-cache");
@@ -13,6 +15,73 @@ const router = Router();
 
 // Shared cache instance — reused by periodic compaction scanner via router.transcriptCache
 const transcriptCache = new TranscriptCache();
+
+// Scan the nested subagents/ directory next to the main transcript and fill
+// in model + token usage for any subagent row that is still "working" and
+// has no model yet. Subagents write their own JSONL live while they run, so
+// we can discover the model long before SubagentStop fires — this is what
+// makes the dashboard badge appear on an in-flight subagent.
+//
+// Matching: agents.name is the description prefix (truncated at 57 chars, "..."
+// appended). meta.json next to each JSONL carries the full description.
+function backfillWorkingSubagents(sessionId, mainTranscriptPath) {
+  if (!mainTranscriptPath) return;
+  const subDir = mainTranscriptPath.replace(/\.jsonl$/i, "") + path.sep + "subagents";
+  let files;
+  try {
+    files = fs.readdirSync(subDir);
+  } catch {
+    return;
+  }
+
+  const working = db
+    .prepare(
+      "SELECT * FROM agents WHERE session_id = ? AND type = 'subagent' AND model IS NULL AND status != 'error'"
+    )
+    .all(sessionId);
+  if (working.length === 0) return;
+
+  // Build description → jsonl path index from meta files
+  const index = [];
+  for (const f of files) {
+    if (!f.endsWith(".meta.json")) continue;
+    try {
+      const meta = JSON.parse(fs.readFileSync(path.join(subDir, f), "utf8"));
+      if (!meta.description) continue;
+      const jsonl = path.join(subDir, f.replace(/\.meta\.json$/, ".jsonl"));
+      index.push({ description: meta.description, jsonl });
+    } catch {
+      // ignore unreadable meta
+    }
+  }
+  if (index.length === 0) return;
+
+  for (const sub of working) {
+    // agent.name is the (possibly truncated) description; strip trailing "..."
+    const bare = sub.name.endsWith("...") ? sub.name.slice(0, -3) : sub.name;
+    const match =
+      index.find((e) => sub.name.startsWith(e.description.slice(0, 57))) ||
+      index.find((e) => e.description === bare);
+    if (!match) continue;
+
+    const summary = transcriptCache.extractSubagentSummary(match.jsonl);
+    if (!summary) continue;
+
+    stmts.updateAgentModel.run(summary.primaryModel, sub.id);
+    for (const [model, tokens] of Object.entries(summary.tokensByModel)) {
+      stmts.replaceSubagentTokens.run(
+        sub.id,
+        sessionId,
+        model,
+        tokens.input,
+        tokens.output,
+        tokens.cacheRead,
+        tokens.cacheWrite
+      );
+    }
+    broadcast("agent_updated", stmts.getAgent.get(sub.id));
+  }
+}
 
 function ensureSession(sessionId, data) {
   let session = stmts.getSession.get(sessionId);
@@ -252,6 +321,36 @@ const processEvent = db.transaction((hookType, data) => {
           null,
           matchingSub.id
         );
+
+        // Extract the subagent's model + per-model tokens from its OWN
+        // transcript (agent_transcript_path, added in Claude Code 2.0.42).
+        // The main session transcript (transcript_path) only contains
+        // main-agent messages — subagent API calls live in a separate JSONL
+        // under subagents/. Without this read the dashboard would continue to
+        // show every subagent as running on the main session's model.
+        //
+        // Main-session token_usage and subagent_token_usage are disjoint
+        // record sets (different source files, different API calls on
+        // Anthropic's side) so additive summation in getTokensBySession is
+        // correct — no subtraction needed to "pull Haiku out of Opus".
+        if (data.agent_transcript_path) {
+          const summaryResult = transcriptCache.extractSubagentSummary(data.agent_transcript_path);
+          if (summaryResult) {
+            stmts.updateAgentModel.run(summaryResult.primaryModel, matchingSub.id);
+            for (const [model, tokens] of Object.entries(summaryResult.tokensByModel)) {
+              stmts.replaceSubagentTokens.run(
+                matchingSub.id,
+                sessionId,
+                model,
+                tokens.input,
+                tokens.output,
+                tokens.cacheRead,
+                tokens.cacheWrite
+              );
+            }
+          }
+        }
+
         broadcast("agent_updated", stmts.getAgent.get(matchingSub.id));
         agentId = matchingSub.id;
         summary = `Subagent completed: ${matchingSub.name}`;
@@ -401,7 +500,28 @@ const processEvent = db.transaction((hookType, data) => {
             tokens.cacheWrite
           );
         }
+
+        // Mirror the session's primary model onto the main agent so the
+        // dashboard can render a model badge next to it (same way subagents
+        // get theirs from agent_transcript_path on SubagentStop).
+        const mainModelEntries = Object.entries(tokensByModel);
+        if (mainModelEntries.length > 0 && mainAgentId) {
+          const [primaryMain] = mainModelEntries.reduce((best, cur) =>
+            cur[1].output > best[1].output ? cur : best
+          );
+          const currentMain = stmts.getAgent.get(mainAgentId);
+          if (currentMain && currentMain.model !== primaryMain) {
+            stmts.updateAgentModel.run(primaryMain, mainAgentId);
+          }
+        }
       }
+
+      // Discover models for in-flight subagents by scanning the nested
+      // subagents/ directory next to the main transcript. This fires on every
+      // tick of the main agent's event stream, so a running subagent gets a
+      // model badge as soon as its first JSONL line is written — no need to
+      // wait for SubagentStop.
+      backfillWorkingSubagents(sessionId, data.transcript_path);
 
       // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)
       if (result.errors) {

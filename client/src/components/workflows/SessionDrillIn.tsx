@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { X, GitFork, Wrench, List, Search, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
-import { formatDateTime, formatMs } from "../../lib/format";
+import { formatDateTime, formatMs, formatModelLabel } from "../../lib/format";
 import type {
   SessionDrillIn as SessionDrillInData,
   DashboardEvent,
@@ -146,6 +146,17 @@ function TreeNode({ node, depth }: TreeNodeProps) {
         {node.subagent_type && (
           <span className="text-xs text-gray-500 truncate flex-shrink-0">
             [{node.subagent_type}]
+          </span>
+        )}
+
+        {/* Model badge — from subagent_token_usage extraction on SubagentStop.
+            Main agents inherit the session model (not rendered here). */}
+        {node.model && (
+          <span
+            className="flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border text-amber-300 bg-amber-500/10 border-amber-500/20"
+            title={node.model}
+          >
+            {formatModelLabel(node.model)}
           </span>
         )}
 

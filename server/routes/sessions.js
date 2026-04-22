@@ -23,16 +23,30 @@ router.get("/", (req, res) => {
   if (rows.length > 0) {
     const ids = rows.map((r) => r.id);
     const placeholders = ids.map(() => "?").join(",");
+    // Combine main-session tokens (token_usage, baselines applied) with
+    // per-subagent tokens (subagent_token_usage). Subagent transcripts are
+    // disjoint from the main transcript so additive summation is correct.
     const allTokens = db
       .prepare(
         `SELECT session_id, model,
-          input_tokens + baseline_input as input_tokens,
-          output_tokens + baseline_output as output_tokens,
-          cache_read_tokens + baseline_cache_read as cache_read_tokens,
-          cache_write_tokens + baseline_cache_write as cache_write_tokens
-        FROM token_usage WHERE session_id IN (${placeholders})`
+          SUM(input_tokens)       as input_tokens,
+          SUM(output_tokens)      as output_tokens,
+          SUM(cache_read_tokens)  as cache_read_tokens,
+          SUM(cache_write_tokens) as cache_write_tokens
+        FROM (
+          SELECT session_id, model,
+            input_tokens + baseline_input       as input_tokens,
+            output_tokens + baseline_output     as output_tokens,
+            cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+            cache_write_tokens + baseline_cache_write as cache_write_tokens
+          FROM token_usage WHERE session_id IN (${placeholders})
+          UNION ALL
+          SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+          FROM subagent_token_usage WHERE session_id IN (${placeholders})
+        )
+        GROUP BY session_id, model`
       )
-      .all(...ids);
+      .all(...ids, ...ids);
 
     const rules = stmts.listPricing.all();
     const tokensBySession = {};

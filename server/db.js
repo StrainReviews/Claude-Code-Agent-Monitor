@@ -94,6 +94,20 @@ db.exec(`
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS subagent_token_usage (
+    agent_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    model TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    PRIMARY KEY (agent_id, model),
+    FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS model_pricing (
     model_pattern TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
@@ -113,6 +127,8 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_agents_session ON agents(session_id);
   CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+  CREATE INDEX IF NOT EXISTS idx_subagent_tokens_session ON subagent_token_usage(session_id);
+  CREATE INDEX IF NOT EXISTS idx_subagent_tokens_model ON subagent_token_usage(model);
   CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
   CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
   CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at DESC);
@@ -212,6 +228,16 @@ try {
   db.prepare("UPDATE agents SET updated_at = COALESCE(ended_at, started_at)").run();
 }
 
+// Migrate: add model column to agents for per-subagent model tracking.
+// Subagents can run on a different model than the main session (e.g. Haiku for
+// quick exploration, Sonnet for mid-tier work, Opus for reasoning). The model
+// is extracted from the subagent transcript on SubagentStop.
+try {
+  db.prepare("SELECT model FROM agents LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE agents ADD COLUMN model TEXT").run();
+}
+
 // Migrate: add compaction baseline columns to token_usage.
 // When conversation compaction rewrites the JSONL, pre-compaction token counts
 // are lost from the transcript. Baselines preserve those counts so the effective
@@ -298,6 +324,12 @@ const stmts = {
   reactivateAgent: db.prepare(
     "UPDATE agents SET status = 'connected', ended_at = NULL, current_tool = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
+  // Set or update the model for an agent. Only overwrites when the new value
+  // is non-null. Safe to call repeatedly — later extractions can refine the
+  // primary model (e.g. once more Subagent JSONL lines are written).
+  updateAgentModel: db.prepare(
+    "UPDATE agents SET model = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
   // Find the deepest currently-working subagent in a session using a recursive CTE.
   // Used to infer which agent is spawning a new subagent when hook events don't
   // carry an explicit agent ID. Returns the most recently created deepest agent.
@@ -380,21 +412,73 @@ const stmts = {
       cache_read_tokens = excluded.cache_read_tokens,
       cache_write_tokens = excluded.cache_write_tokens
   `),
+  // Totals across all sessions, summed across main-session token_usage AND
+  // per-subagent subagent_token_usage. Subagent transcripts are disjoint from
+  // the main session transcript (different JSONL files, separate API calls),
+  // so additive summation is correct — no double counting.
   getTokenTotals: db.prepare(`
     SELECT
-      COALESCE(SUM(input_tokens + baseline_input), 0) as total_input,
-      COALESCE(SUM(output_tokens + baseline_output), 0) as total_output,
-      COALESCE(SUM(cache_read_tokens + baseline_cache_read), 0) as total_cache_read,
-      COALESCE(SUM(cache_write_tokens + baseline_cache_write), 0) as total_cache_write
-    FROM token_usage
+      COALESCE(SUM(total_input), 0)       as total_input,
+      COALESCE(SUM(total_output), 0)      as total_output,
+      COALESCE(SUM(total_cache_read), 0)  as total_cache_read,
+      COALESCE(SUM(total_cache_write), 0) as total_cache_write
+    FROM (
+      SELECT
+        input_tokens + baseline_input       as total_input,
+        output_tokens + baseline_output     as total_output,
+        cache_read_tokens + baseline_cache_read  as total_cache_read,
+        cache_write_tokens + baseline_cache_write as total_cache_write
+      FROM token_usage
+      UNION ALL
+      SELECT input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+      FROM subagent_token_usage
+    )
   `),
-  getTokensBySession: db.prepare(
-    `SELECT model,
-      input_tokens + baseline_input as input_tokens,
-      output_tokens + baseline_output as output_tokens,
-      cache_read_tokens + baseline_cache_read as cache_read_tokens,
-      cache_write_tokens + baseline_cache_write as cache_write_tokens
-    FROM token_usage WHERE session_id = ?`
+  // Per-session token rows grouped by model — combines main-session tokens
+  // (from token_usage, with baselines applied) and per-subagent tokens (from
+  // subagent_token_usage). Subagents running the same model as main add on top.
+  //
+  // Exposed as an object with `.all(sessionId)` to stay source-compatible with
+  // existing callers that expected a prepared statement single-arg signature.
+  getTokensBySession: (() => {
+    const stmt = db.prepare(`
+      SELECT model,
+        SUM(input_tokens)       as input_tokens,
+        SUM(output_tokens)      as output_tokens,
+        SUM(cache_read_tokens)  as cache_read_tokens,
+        SUM(cache_write_tokens) as cache_write_tokens
+      FROM (
+        SELECT model,
+          input_tokens + baseline_input       as input_tokens,
+          output_tokens + baseline_output     as output_tokens,
+          cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+          cache_write_tokens + baseline_cache_write as cache_write_tokens
+        FROM token_usage WHERE session_id = ?
+        UNION ALL
+        SELECT model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+        FROM subagent_token_usage WHERE session_id = ?
+      )
+      GROUP BY model
+    `);
+    return { all: (sessionId) => stmt.all(sessionId, sessionId) };
+  })(),
+  // Upsert one (agent_id, model) row — REPLACE semantics so re-extracting the
+  // same subagent transcript is idempotent. The subagent JSONL grows until
+  // SubagentStop fires; after that it's frozen, so the final extraction is
+  // authoritative.
+  replaceSubagentTokens: db.prepare(`
+    INSERT INTO subagent_token_usage (agent_id, session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    ON CONFLICT(agent_id, model) DO UPDATE SET
+      input_tokens = excluded.input_tokens,
+      output_tokens = excluded.output_tokens,
+      cache_read_tokens = excluded.cache_read_tokens,
+      cache_write_tokens = excluded.cache_write_tokens,
+      updated_at = excluded.updated_at
+  `),
+  getSubagentTokensByAgent: db.prepare("SELECT * FROM subagent_token_usage WHERE agent_id = ?"),
+  listSubagentTokensBySession: db.prepare(
+    "SELECT * FROM subagent_token_usage WHERE session_id = ? ORDER BY model ASC"
   ),
 
   // Model pricing

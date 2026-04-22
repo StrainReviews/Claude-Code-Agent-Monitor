@@ -23,9 +23,32 @@ router.get("/", (_req, res) => {
   const eventTypes = stmts.eventTypeCounts.all();
   const avgEvents = stmts.avgEventsPerSession.get();
 
-  // Calculate total cost across all sessions
+  // Calculate total cost across all sessions. Combine main-session token_usage
+  // (with compaction baselines) and per-subagent subagent_token_usage — the
+  // two source sets are disjoint (different JSONL files), so additive
+  // summation per (session, model) yields correct costs without subtraction.
   const pricingRules = stmts.listPricing.all();
-  const allTokenUsage = db.prepare("SELECT * FROM token_usage").all();
+  const allTokenUsage = db
+    .prepare(
+      `SELECT model,
+         SUM(input_tokens)       as input_tokens,
+         SUM(output_tokens)      as output_tokens,
+         SUM(cache_read_tokens)  as cache_read_tokens,
+         SUM(cache_write_tokens) as cache_write_tokens
+       FROM (
+         SELECT model,
+           input_tokens + baseline_input       as input_tokens,
+           output_tokens + baseline_output     as output_tokens,
+           cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+           cache_write_tokens + baseline_cache_write as cache_write_tokens
+         FROM token_usage
+         UNION ALL
+         SELECT model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+         FROM subagent_token_usage
+       )
+       GROUP BY model`
+    )
+    .all();
 
   let totalCost = 0;
   for (const usage of allTokenUsage) {
