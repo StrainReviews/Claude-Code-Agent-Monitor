@@ -163,6 +163,43 @@ if (require.main === module) {
     2 * 60 * 1000
   );
 
+  // Periodic subagent reconciliation: re-bind Agent <-> JSONL from first-line
+  // timestamps and repair any token rows the hook race may have swapped.
+  // Runs independently from the 2-min maintenance sweep because it's more
+  // expensive (reads JSONL headers) and only needs to run every 5 min.
+  const { reconcileAll } = require("./lib/subagent-reconciler");
+  const RECONCILER_INTERVAL_MS = parseInt(
+    process.env.RECONCILER_INTERVAL_MS || `${5 * 60 * 1000}`,
+    10
+  );
+  const RECONCILER_ENABLED = process.env.RECONCILER_ENABLED !== "false";
+  function runReconciler(label) {
+    if (!RECONCILER_ENABLED) return;
+    try {
+      const r = reconcileAll({
+        db: cleanupDb.db,
+        stmts: cleanupDb.stmts,
+        transcriptCache,
+      });
+      if (r.sessionsChanged > 0) {
+        console.log(
+          `[reconciler:${label}] scanned=${r.sessionsScanned} changed=${r.sessionsChanged} model_fix=${r.totalModelUpdates} token_fix=${r.totalTokenUpdates}`
+        );
+        for (const res of r.results) {
+          if ((res.modelUpdates || 0) + (res.tokenUpdates || 0) === 0) continue;
+          const sess = cleanupDb.stmts.getSession.get(res.sessionId);
+          if (sess) broadcast("session_updated", sess);
+        }
+      }
+    } catch (e) {
+      console.error(`[reconciler:${label}] failed:`, e.message);
+    }
+  }
+  // Run once at startup (after a short delay so import-history can settle)
+  setTimeout(() => runReconciler("startup"), 10 * 1000);
+  // Then periodically
+  setInterval(() => runReconciler("periodic"), RECONCILER_INTERVAL_MS);
+
   // Auto-import legacy sessions and backfill compaction tracking on startup
   const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
   const dbModule = require("./db");

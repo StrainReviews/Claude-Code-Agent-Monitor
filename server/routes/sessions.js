@@ -7,6 +7,8 @@ const { Router } = require("express");
 const { stmts, db } = require("../db");
 const { broadcast } = require("../websocket");
 const { calculateCost } = require("./pricing");
+const { reconcileSession, reconcileAll } = require("../lib/subagent-reconciler");
+const { transcriptCache } = require("./hooks");
 
 const router = Router();
 
@@ -120,6 +122,55 @@ router.patch("/:id", (req, res) => {
   const session = stmts.getSession.get(req.params.id);
   broadcast("session_updated", session);
   res.json({ session });
+});
+
+// On-demand subagent reconciliation. Re-derives the correct Agent <-> JSONL
+// binding from first-line timestamps and repairs any drift in
+// `subagent_token_usage` / `agents.model`. Safe to call repeatedly.
+// Query `dry_run=1` returns the would-be changes without writing.
+router.post("/:id/reconcile", (req, res) => {
+  const session = stmts.getSession.get(req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: { code: "NOT_FOUND", message: "Session not found" } });
+  }
+  const dryRun = req.query.dry_run === "1" || req.query.dry_run === "true";
+  try {
+    const result = reconcileSession({
+      db,
+      stmts,
+      transcriptCache,
+      session,
+      projectsRoot:
+        process.env.CLAUDE_PROJECTS_ROOT ||
+        require("path").join(require("os").homedir(), ".claude", "projects"),
+      dryRun,
+    });
+    if (!dryRun && (result.modelUpdates > 0 || result.tokenUpdates > 0)) {
+      broadcast("session_updated", stmts.getSession.get(req.params.id));
+    }
+    res.json({ ok: true, dry_run: dryRun, result });
+  } catch (e) {
+    res.status(500).json({ error: { code: "RECONCILE_FAILED", message: e.message } });
+  }
+});
+
+// Run the reconciler across every recent/active session in one call.
+router.post("/reconcile-all", (req, res) => {
+  const dryRun = req.query.dry_run === "1" || req.query.dry_run === "true";
+  try {
+    const result = reconcileAll({
+      db,
+      stmts,
+      transcriptCache,
+      projectsRoot:
+        process.env.CLAUDE_PROJECTS_ROOT ||
+        require("path").join(require("os").homedir(), ".claude", "projects"),
+      dryRun,
+    });
+    res.json({ ok: true, dry_run: dryRun, result });
+  } catch (e) {
+    res.status(500).json({ error: { code: "RECONCILE_FAILED", message: e.message } });
+  }
 });
 
 module.exports = router;
