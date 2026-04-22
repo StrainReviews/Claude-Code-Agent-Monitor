@@ -8,7 +8,7 @@ import { Bot, GitBranch, Clock, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AgentStatusBadge } from "./StatusBadge";
 import type { Agent } from "../lib/types";
-import { formatDuration, timeAgo } from "../lib/format";
+import { formatDuration, timeAgo, formatModelLabel } from "../lib/format";
 
 interface AgentCardProps {
   agent: Agent;
@@ -57,7 +57,17 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
             )}
           </div>
         </div>
-        <AgentStatusBadge status={agent.status} />
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {agent.model && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border text-amber-300 bg-amber-500/10 border-amber-500/20"
+              title={agent.model}
+            >
+              {formatModelLabel(agent.model)}
+            </span>
+          )}
+          <AgentStatusBadge status={agent.status} />
+        </div>
       </div>
 
       {agent.task && (

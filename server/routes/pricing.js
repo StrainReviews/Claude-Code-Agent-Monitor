@@ -121,23 +121,53 @@ router.delete("/:pattern", (req, res) => {
 
 // GET /api/pricing/cost - Get total cost across all sessions
 router.get("/cost", (_req, res) => {
+  // Combined totals: main-session tokens + per-subagent tokens, grouped by
+  // model. Subagent JSONL files are disjoint from the main transcript so
+  // additive summation is correct — a Haiku subagent spawned inside an Opus
+  // session yields one row per model, not a subtracted one.
   const allTokens = db
     .prepare(
-      "SELECT model, SUM(input_tokens + baseline_input) as input_tokens, SUM(output_tokens + baseline_output) as output_tokens, SUM(cache_read_tokens + baseline_cache_read) as cache_read_tokens, SUM(cache_write_tokens + baseline_cache_write) as cache_write_tokens FROM token_usage GROUP BY model"
+      `SELECT model,
+        SUM(input_tokens)       as input_tokens,
+        SUM(output_tokens)      as output_tokens,
+        SUM(cache_read_tokens)  as cache_read_tokens,
+        SUM(cache_write_tokens) as cache_write_tokens
+      FROM (
+        SELECT model,
+          input_tokens + baseline_input       as input_tokens,
+          output_tokens + baseline_output     as output_tokens,
+          cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+          cache_write_tokens + baseline_cache_write as cache_write_tokens
+        FROM token_usage
+        UNION ALL
+        SELECT model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+        FROM subagent_token_usage
+      )
+      GROUP BY model`
     )
     .all();
   const dailyTokens = db
     .prepare(
-      `SELECT
-        DATE(s.started_at) as date,
-        tu.model as model,
-        SUM(tu.input_tokens + tu.baseline_input) as input_tokens,
-        SUM(tu.output_tokens + tu.baseline_output) as output_tokens,
-        SUM(tu.cache_read_tokens + tu.baseline_cache_read) as cache_read_tokens,
-        SUM(tu.cache_write_tokens + tu.baseline_cache_write) as cache_write_tokens
-      FROM token_usage tu
-      JOIN sessions s ON s.id = tu.session_id
-      GROUP BY DATE(s.started_at), tu.model`
+      `SELECT date, model,
+        SUM(input_tokens)       as input_tokens,
+        SUM(output_tokens)      as output_tokens,
+        SUM(cache_read_tokens)  as cache_read_tokens,
+        SUM(cache_write_tokens) as cache_write_tokens
+      FROM (
+        SELECT DATE(s.started_at) as date, tu.model as model,
+          tu.input_tokens + tu.baseline_input       as input_tokens,
+          tu.output_tokens + tu.baseline_output     as output_tokens,
+          tu.cache_read_tokens + tu.baseline_cache_read  as cache_read_tokens,
+          tu.cache_write_tokens + tu.baseline_cache_write as cache_write_tokens
+        FROM token_usage tu
+        JOIN sessions s ON s.id = tu.session_id
+        UNION ALL
+        SELECT DATE(s.started_at) as date, st.model as model,
+          st.input_tokens, st.output_tokens, st.cache_read_tokens, st.cache_write_tokens
+        FROM subagent_token_usage st
+        JOIN sessions s ON s.id = st.session_id
+      )
+      GROUP BY date, model`
     )
     .all();
   const rules = stmts.listPricing.all();

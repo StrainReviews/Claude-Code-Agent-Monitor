@@ -27,6 +27,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     updated_at: "2026-03-05T10:00:00.000Z",
     parent_agent_id: null,
     metadata: null,
+    model: null,
     ...overrides,
   };
 }

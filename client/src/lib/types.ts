@@ -36,6 +36,10 @@ export interface Agent {
   updated_at: string;
   parent_agent_id: string | null;
   metadata: string | null;
+  /** Populated from the subagent's own transcript on SubagentStop. Null for
+   *  main agents (session.model covers that) and for in-flight subagents whose
+   *  transcript has not been scanned yet. */
+  model: string | null;
 }
 
 export interface DashboardEvent {
@@ -276,6 +280,7 @@ export interface SessionDrillIn {
     task: string | null;
     started_at: string;
     ended_at: string | null;
+    model: string | null;
     children: SessionDrillIn["tree"];
   }>;
   toolTimeline: Array<{

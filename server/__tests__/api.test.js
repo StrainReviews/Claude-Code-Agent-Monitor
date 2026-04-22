@@ -487,6 +487,146 @@ describe("Hook Event Processing", () => {
     assert.ok(completed[0].ended_at);
   });
 
+  it("should extract subagent model + tokens from agent_transcript_path", async () => {
+    // Spawn a Haiku subagent on a fresh session
+    const sid = "hook-sess-haiku";
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: {
+        session_id: sid,
+        tool_name: "Agent",
+        tool_input: {
+          description: "Quick lookup task",
+          subagent_type: "Explore",
+          prompt: "Find all foo files",
+        },
+      },
+    });
+
+    // Write a temp subagent transcript containing Haiku usage
+    const agentJsonl = path.join(os.tmpdir(), `sub-haiku-${Date.now()}.jsonl`);
+    const lines = [
+      {
+        type: "assistant",
+        message: {
+          model: "claude-haiku-4-5-20251001",
+          usage: {
+            input_tokens: 10,
+            output_tokens: 200,
+            cache_read_input_tokens: 5000,
+            cache_creation_input_tokens: 120,
+          },
+          content: [{ type: "text", text: "ok" }],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          model: "claude-haiku-4-5-20251001",
+          usage: {
+            input_tokens: 15,
+            output_tokens: 350,
+            cache_read_input_tokens: 6000,
+            cache_creation_input_tokens: 80,
+          },
+          content: [{ type: "text", text: "done" }],
+        },
+      },
+    ];
+    fs.writeFileSync(agentJsonl, lines.map((l) => JSON.stringify(l)).join("\n"));
+
+    // Fire SubagentStop with agent_transcript_path pointing at our fixture
+    const res = await post("/api/hooks/event", {
+      hook_type: "SubagentStop",
+      data: {
+        session_id: sid,
+        agent_id: "abc123",
+        agent_type: "Explore",
+        description: "Quick lookup task",
+        agent_transcript_path: agentJsonl,
+      },
+    });
+    assert.equal(res.status, 200);
+
+    const agentsRes = await fetch(`/api/agents?session_id=${sid}`);
+    const sub = agentsRes.body.agents.find((a) => a.type === "subagent");
+    assert.ok(sub, "subagent row should exist");
+    assert.equal(
+      sub.model,
+      "claude-haiku-4-5-20251001",
+      "agent.model must be populated from transcript"
+    );
+    assert.equal(sub.status, "completed");
+
+    // Verify subagent tokens landed in their own table, per model
+    const subTokens = stmts.getSubagentTokensByAgent.all(sub.id);
+    assert.equal(subTokens.length, 1, "one model bucket expected");
+    assert.equal(subTokens[0].model, "claude-haiku-4-5-20251001");
+    assert.equal(subTokens[0].input_tokens, 25);
+    assert.equal(subTokens[0].output_tokens, 550);
+
+    // Verify the combined per-session query aggregates correctly — Haiku must
+    // appear as its own row, NOT folded into a main-session model.
+    const combined = stmts.getTokensBySession.all(sid);
+    const haiku = combined.find((r) => r.model === "claude-haiku-4-5-20251001");
+    assert.ok(haiku, "Haiku row must appear independently in combined totals");
+    assert.equal(haiku.input_tokens, 25);
+    assert.equal(haiku.output_tokens, 550);
+    assert.equal(haiku.cache_read_tokens, 11000);
+    assert.equal(haiku.cache_write_tokens, 200);
+
+    // Cleanup fixture
+    fs.unlinkSync(agentJsonl);
+  });
+
+  it("should keep subagent model updates idempotent across repeated SubagentStop", async () => {
+    // Re-fire the same SubagentStop with an unchanged transcript — the row
+    // must NOT double-count because replaceSubagentTokens has ON CONFLICT
+    // DO UPDATE semantics.
+    const sid = "hook-sess-haiku";
+    const agentJsonl = path.join(os.tmpdir(), `sub-haiku-idem-${Date.now()}.jsonl`);
+    fs.writeFileSync(
+      agentJsonl,
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          model: "claude-haiku-4-5-20251001",
+          usage: {
+            input_tokens: 25,
+            output_tokens: 550,
+            cache_read_input_tokens: 11000,
+            cache_creation_input_tokens: 200,
+          },
+          content: [{ type: "text", text: "ok" }],
+        },
+      })
+    );
+
+    // Find the existing subagent and re-stop with its transcript twice
+    const before = await fetch(`/api/agents?session_id=${sid}`);
+    const sub = before.body.agents.find((a) => a.type === "subagent");
+    assert.ok(sub);
+
+    for (let i = 0; i < 2; i++) {
+      await post("/api/hooks/event", {
+        hook_type: "SubagentStop",
+        data: {
+          session_id: sid,
+          description: sub.name,
+          agent_type: sub.subagent_type,
+          agent_transcript_path: agentJsonl,
+        },
+      });
+    }
+
+    const subTokens = stmts.getSubagentTokensByAgent.all(sub.id);
+    assert.equal(subTokens.length, 1, "still exactly one row per (agent, model)");
+    assert.equal(subTokens[0].input_tokens, 25, "no double-counting on repeat");
+    assert.equal(subTokens[0].output_tokens, 550);
+
+    fs.unlinkSync(agentJsonl);
+  });
+
   it("should handle Notification events", async () => {
     const res = await post("/api/hooks/event", {
       hook_type: "Notification",
