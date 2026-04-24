@@ -8,8 +8,9 @@
  */
 
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, ExternalLink } from "lucide-react";
 import { AgentStatusBadge } from "./StatusBadge";
 import { EventDetail } from "./EventDetail";
 import { formatTime, timeAgo } from "../lib/format";
@@ -45,6 +46,7 @@ export function EventGroupRow({
   agentInfoById,
 }: EventGroupRowProps) {
   const { t } = useTranslation("common");
+  const { t: ta } = useTranslation("activity");
   const [expanded, setExpanded] = useState(false);
   const [expandedInner, setExpandedInner] = useState<Set<number>>(() => new Set());
 
@@ -150,6 +152,18 @@ export function EventGroupRow({
             {timeAgo(group.firstAt)}
           </span>
         </div>
+
+        {group.events[0]?.session_id && (
+          <Link
+            to={`/sessions/${group.events[0].session_id}`}
+            onClick={(e) => e.stopPropagation()}
+            title={ta("viewSession")}
+            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-surface-2 text-gray-400 hover:text-accent hover:bg-accent/10 border border-border hover:border-accent/30 transition-colors flex-shrink-0 font-medium"
+          >
+            {ta("viewSession")}
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        )}
       </div>
 
       {expanded && isSingleEvent && group.events[0] && <EventDetail event={group.events[0]} />}
