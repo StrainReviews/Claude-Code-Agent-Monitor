@@ -138,8 +138,6 @@ async function getUpdatesStatus(gitRoot = DEFAULT_ROOT, options = {}) {
   if (process.env.NODE_ENV === "production") {
     manualParts.push("npm run build");
   }
-  const startCmd = process.env.DASHBOARD_RESTART_COMMAND || "npm start";
-  manualParts.push(startCmd);
   const manualCommand = manualParts.join(" && ");
 
   return {
@@ -151,7 +149,6 @@ async function getUpdatesStatus(gitRoot = DEFAULT_ROOT, options = {}) {
     remote_sha: remoteSha,
     commits_behind: commitsBehind,
     manual_command: manualCommand,
-    restart_hint: startCmd,
     message: updateAvailable
       ? `${commitsBehind} commit(s) on ${remoteRef} not in your checkout.`
       : "Your checkout includes the tip of the tracked upstream branch.",

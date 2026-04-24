@@ -78,8 +78,6 @@ function startServer(app, port) {
 
   return new Promise((resolve) => {
     server.listen(port, () => {
-      const { setServer } = require("./httpServerRef");
-      setServer(server);
       const mode = isProduction ? "production" : "development";
       console.log(`Agent Dashboard server running on http://localhost:${port} (${mode})`);
       if (!isProduction) {

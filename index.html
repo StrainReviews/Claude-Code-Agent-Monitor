@@ -491,6 +491,13 @@
           padding: 20px;
         }
       }
+
+      /* Keep long inline code from overflowing card containers. */
+      #update-notifier .feature-card code,
+      #update-notifier .api-table code {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+      }
     </style>
     <!-- Mermaid -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
@@ -575,6 +582,7 @@
           >
           <a href="#vscode-ext" class="nav-link"><span class="nav-icon">◈</span>VS Code Extension</a>
           <a href="#settings-page" class="nav-link"><span class="nav-icon">◈</span>Settings Page</a>
+          <a href="#update-notifier" class="nav-link"><span class="nav-icon">◈</span>Update Notifier</a>
 
           <div class="nav-section">Ops & Reference</div>
           <a href="#deployment" class="nav-link"><span class="nav-icon">◈</span>Deployment Modes</a>
@@ -764,7 +772,7 @@
 
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
-              <img src="images/analytics.png" alt="Claude Code Agent Monitor dashboard showing live agent cards, stats, and recent activity feed" loading="lazy" />
+              <img src="images/analytics.png" alt="Claude Code Agent Monitor dashboard showing live agent cards, stats, and recent activity feed" />
               <div class="screenshot-caption"><span class="caption-icon">📡</span> Live dashboard — real-time agent cards, stats, and activity feed</div>
             </div>
           </div>
@@ -1096,27 +1104,27 @@
           <h3>Screenshots</h3>
           <div class="screenshot-gallery">
             <div class="screenshot-card">
-              <img src="images/sessions.png" alt="Sessions table with search, filters, status badges, and pagination" loading="lazy" />
+              <img src="images/sessions.png" alt="Sessions table with search, filters, status badges, and pagination" />
               <div class="screenshot-caption"><span class="caption-icon">📋</span> Sessions table — searchable, filterable, paginated</div>
             </div>
             <div class="screenshot-card">
-              <img src="images/session.png" alt="Session detail view with agent hierarchy tree and event timeline" loading="lazy" />
+              <img src="images/session.png" alt="Session detail view with agent hierarchy tree and event timeline" />
               <div class="screenshot-caption"><span class="caption-icon">🔬</span> Session detail — agent tree and event timeline</div>
             </div>
             <div class="screenshot-card">
-              <img src="images/board.png" alt="Kanban board showing agents in Idle, Connected, Working, Completed, and Error columns" loading="lazy" />
+              <img src="images/board.png" alt="Kanban board showing agents in Idle, Connected, Working, Completed, and Error columns" />
               <div class="screenshot-caption"><span class="caption-icon">📂</span> Kanban board — 5-column agent status view</div>
             </div>
             <div class="screenshot-card">
-              <img src="images/feed.png" alt="Real-time activity feed with streaming events, expandable payload rows, and session navigation button" loading="lazy" />
+              <img src="images/feed.png" alt="Real-time activity feed with streaming events, expandable payload rows, and session navigation button" />
               <div class="screenshot-caption"><span class="caption-icon">📰</span> Activity feed — click a row to expand payload; "Session →" button opens session details</div>
             </div>
             <div class="screenshot-card">
-              <img src="images/analytics.png" alt="Analytics dashboard with token usage charts, tool frequency, and session trends" loading="lazy" />
+              <img src="images/analytics.png" alt="Analytics dashboard with token usage charts, tool frequency, and session trends" />
               <div class="screenshot-caption"><span class="caption-icon">📊</span> Analytics — token usage, tool frequency, and trends</div>
             </div>
             <div class="screenshot-card">
-              <img src="images/workflows.png" alt="Workflow graphs showing agent orchestration DAGs and tool execution Sankey diagrams" loading="lazy" />
+              <img src="images/workflows.png" alt="Workflow graphs showing agent orchestration DAGs and tool execution Sankey diagrams" />
               <div class="screenshot-caption"><span class="caption-icon">🔀</span> Workflows — agent DAGs and tool Sankey diagrams</div>
             </div>
           </div>
@@ -1147,7 +1155,7 @@
                   <img
                     alt="GitHub star history chart for Claude Code Agent Monitor"
                     src="https://api.star-history.com/chart?repos=hoangsonww/Claude-Code-Agent-Monitor&type=date&legend=top-left"
-                    loading="lazy"
+                   
                     width="1140"
                     height="560"
                   />
@@ -2771,7 +2779,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
 
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
-              <img src="images/import.png" alt="Settings page Import History section showing rescan default folder, scan custom path, and upload controls with progress output" loading="lazy" />
+              <img src="images/import.png" alt="Settings page Import History section showing rescan default folder, scan custom path, and upload controls with progress output" />
               <div class="screenshot-caption"><span class="caption-icon">📥</span> Settings → Import History — rescan, custom path, and upload controls feeding the shared pipeline</div>
             </div>
           </div>
@@ -3045,7 +3053,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
 
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
-              <img src="images/mcp.png" alt="MCP Server interactive REPL showing the MCP Tools banner, server info, and tool listing with colored output" loading="lazy" />
+              <img src="images/mcp.png" alt="MCP Server interactive REPL showing the MCP Tools banner, server info, and tool listing with colored output" />
               <div class="screenshot-caption"><span class="caption-icon">🔧</span> MCP Server REPL — interactive tool invocation with colored output</div>
             </div>
           </div>
@@ -3413,7 +3421,7 @@ ccam-export all --output backup.json</code></pre>
 
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
-              <img src="images/statusline.png" alt="CLI statusline showing model, user, git branch, context window bar, and token counts" loading="lazy" />
+              <img src="images/statusline.png" alt="CLI statusline showing model, user, git branch, context window bar, and token counts" />
               <div class="screenshot-caption"><span class="caption-icon">🖥️</span> Statusline — context window, tokens, git branch at a glance</div>
             </div>
           </div>
@@ -3531,7 +3539,7 @@ ccam-export all --output backup.json</code></pre>
 
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card" style="border-radius: 20px; overflow: hidden; border: 1px solid var(--border);">
-              <img src="vscode-extension/vscode.png" alt="VS Code Extension sidebar showing live health, analytics, and navigation" loading="lazy" />
+              <img src="vscode-extension/vscode.png" alt="VS Code Extension sidebar showing live health, analytics, and navigation" />
               <div class="screenshot-caption" style="background: rgba(99, 102, 241, 0.08); border-top: 1px solid var(--border);"><span class="caption-icon">🔌</span> Sidebar — live health, analytics, and deep navigation links</div>
             </div>
           </div>
@@ -3616,7 +3624,7 @@ ccam-export all --output backup.json</code></pre>
 
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
-              <img src="images/settings.png" alt="Settings page with model pricing editor, hook status, data management, and system info" loading="lazy" />
+              <img src="images/settings.png" alt="Settings page with model pricing editor, hook status, data management, and system info" />
               <div class="screenshot-caption"><span class="caption-icon">⚙️</span> Settings — pricing, hooks, data management, and system info</div>
             </div>
           </div>
@@ -3691,6 +3699,148 @@ ccam-export all --output backup.json</code></pre>
                 Each Claude model variant (e.g., Opus 4.6 vs Opus 4.1) has its own explicit pricing
                 pattern because different model versions have different rates. The cost engine uses
                 specificity sorting — longer patterns match before shorter ones.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ─── Update Notifier ────────────────────────────────────────────── -->
+        <section id="update-notifier">
+          <div class="section-label">◈ Integrations</div>
+          <h2>Update Notifier</h2>
+
+          <div class="screenshot-gallery gallery-single">
+            <div class="screenshot-card">
+              <img src="images/update.png" alt="Update modal showing commits-behind count and copy-to-clipboard command" />
+              <div class="screenshot-caption"><span class="caption-icon">⬆</span> Update Notifier — copy-the-command modal, no self-restart</div>
+            </div>
+          </div>
+
+          <p>
+            A detection-only subsystem that tells the user when the dashboard's git checkout is behind
+            its tracked upstream (<code>origin/master</code> / <code>origin/main</code> /
+            <code>origin/HEAD</code>). The server <strong>never</strong> pulls or restarts itself —
+            the user runs the printed command in a terminal — so the mechanism cannot break dev
+            sessions, pm2/systemd/launchd/Docker supervision, or leave orphaned processes.
+          </p>
+
+          <div class="diagram-wrap">
+            <!-- prettier-ignore -->
+            <div class="mermaid">
+              flowchart LR
+                S["Server start"]:::mid --> SCHED["Scheduler\nevery 5 min"]:::mid
+                SCHED --> FETCH["git fetch\n120s timeout"]:::mid
+                FETCH --> CMP["Compare HEAD\nvs upstream"]:::mid
+                CMP -->|"behind"| CHANGED["Fingerprint\ncompared"]:::mid
+                CMP -->|"current"| IDLE["Idle"]:::mid
+                CHANGED -->|"changed"| WS["Broadcast\nupdate_status"]:::accent
+                CHANGED -->|"same"| IDLE
+                WS --> UI["Modal and\nSidebar badge"]:::ui
+                CHECK["POST check"]:::mid --> FETCH
+                STATUS["GET status"]:::mid --> CMP
+
+                classDef mid fill:#1a1a2b,stroke:#2e2e48,color:#e2e2f0
+                classDef accent fill:#6366f1,stroke:#818cf8,color:#fff
+                classDef ui fill:#10b981,stroke:#34d399,color:#fff
+            </div>
+            <p class="diagram-label">Detection pipeline from scheduler to UI</p>
+          </div>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <div class="feature-icon ic-emerald">🛰</div>
+              <h3>Non-Blocking Detection</h3>
+              <p>
+                A shell-less <code>git fetch</code> with a 120-second timeout, followed by a
+                <code>rev-list</code> against the tracked upstream. Each call runs from
+                <code>server/lib/update-check.js</code> and returns a structured payload —
+                never throws — so a flaky remote can&apos;t stall the dashboard.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-violet">⏱</div>
+              <h3>5-min Scheduler</h3>
+              <p>
+                <code>update-scheduler.js</code> polls every five minutes with <code>.unref()</code>
+                timers so it never blocks shutdown, de-duplicates with a fingerprint over the
+                status payload, and announces up-to-date → behind transitions in a framed stdout
+                block. Disable entirely with <code>DASHBOARD_UPDATE_CHECK=0</code>.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-cyan">📋</div>
+              <h3>Copy-Pastable Command</h3>
+              <p>
+                Each status payload carries a ready-to-run <code>manual_command</code> — the
+                exact sequence to pull, reinstall, and (in production) rebuild. The modal&apos;s
+                primary button copies it to the clipboard; the user pastes it into a terminal
+                and restarts the server however they started it.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-amber">🎯</div>
+              <h3>Two UI Surfaces</h3>
+              <p>
+                A modal opens automatically when upstream is ahead; ESC or a backdrop click
+                dismisses it. A persistent sidebar button stays in the footer — emerald when
+                behind, amber when the last check errored — so users can always trigger a fresh
+                check on demand.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-pink">🛡</div>
+              <h3>Soft Failure Semantics</h3>
+              <p>
+                Non-git installs, a missing <code>origin</code>, offline fetches, and an
+                unresolvable upstream ref all return tagged payloads instead of throwing. The
+                sidebar badge turns amber on fetch errors and the modal stays suppressed until
+                a successful check arrives — no spinners, no stuck state.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-blue">🧠</div>
+              <h3>Dismissal Memory</h3>
+              <p>
+                Dismissal is keyed by the upstream SHA in <code>localStorage</code>, so closing
+                the modal silences it only for <em>that</em> commit — a newer upstream commit
+                re-opens it automatically. Clicking the sidebar button is an explicit intent
+                signal and clears the stored dismissal before firing a fresh check.
+              </p>
+            </div>
+          </div>
+
+          <h3>API Surface</h3>
+          <div class="api-table-wrap">
+            <table class="api-table">
+              <thead>
+                <tr>
+                  <th>Endpoint</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>GET /api/updates/status</code></td>
+                  <td>Read-only check — runs <code>git fetch</code>, compares, returns the payload.</td>
+                </tr>
+                <tr>
+                  <td><code>POST /api/updates/check</code></td>
+                  <td>Same check, and broadcasts <code>update_status</code> over WebSocket so every connected client re-syncs at once.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="callout callout-info">
+            <div class="callout-icon">ℹ</div>
+            <div class="callout-body">
+              <strong>There is no <code>POST /api/updates/apply</code></strong>
+              <p>
+                A self-restart route existed briefly during development but was removed: a process
+                cannot reliably replace itself without an external supervisor. Every environment
+                (dev vs prod, pm2/systemd/Docker, macOS/Linux/Windows) surfaced a different
+                failure mode. Shipping detection-only keeps the mechanism portable and the
+                server lifecycle owned by whatever started it.
               </p>
             </div>
           </div>
@@ -4317,7 +4467,7 @@ npm run install-hooks</code></pre>
     </div>
     <!-- /.wiki-layout -->
 
-    <script src="wiki/script.js?v=3"></script>
+    <script src="wiki/script.js?v=6"></script>
     <script>
       /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {

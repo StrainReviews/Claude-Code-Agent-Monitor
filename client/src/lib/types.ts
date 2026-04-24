@@ -134,7 +134,6 @@ export interface UpdateStatusPayload {
   remote_sha?: string | null;
   commits_behind?: number;
   manual_command?: string | null;
-  restart_hint?: string | null;
   message?: string | null;
   fetch_error?: string;
 }

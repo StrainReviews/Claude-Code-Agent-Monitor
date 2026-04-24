@@ -39,11 +39,6 @@ export const api = {
         method: "POST",
         body: JSON.stringify({}),
       }),
-    apply: () =>
-      request<{ ok: boolean; message: string }>("/updates/apply", {
-        method: "POST",
-        body: JSON.stringify({}),
-      }),
   },
 
   stats: {

@@ -74,6 +74,7 @@
 - [API 参考](#api-参考)
 - [Hook 事件](#hook-事件)
 - [浏览器通知](#浏览器通知)
+- [更新提醒](#更新提醒)
 - [VS Code 扩展](#vs-code-扩展)
 - [数据存储](#数据存储)
 - [状态栏](#状态栏)
@@ -189,6 +190,7 @@ Dashboard 提供全面的功能来监控和分析你的 Claude Code 会话和 Ag
 | **成本追踪** | 按模型估算成本，支持可配置定价规则和按会话明细。压缩感知的 Token 核算在上下文压缩过程中保留总量。Transcript 读取通过增量字节偏移更新缓存，实现高效 Token 提取 |
 | **Transcript 缓存** | 从 JSONL Transcript 实时提取：Token、压缩、API 错误（`isApiErrorMessage` 条目存储为 `APIError` 事件）、回合耗时（存储为 `TurnDuration` 事件）、思考块计数和用量附加信息（service_tier、speed、inference_geo）。会话元数据实时丰富这些字段 |
 | **通知** | 基于 Web Push (VAPID) 的持久化浏览器通知。即使 Dashboard 标签页未聚焦或浏览器已关闭也能送达。特别针对 macOS 音效支持进行了配置。支持按事件配置开关及订阅管理 |
+| **更新提醒** | 服务端定期以非阻塞方式执行 `git fetch`，将本地检出与 `origin/master` / `origin/main` / `origin/HEAD` 对比。当上游有新提交时，UI 弹出模态框并给出完整的 `git pull && npm run setup` 命令及一键 **复制** 按钮；侧边栏还有常驻的"检查更新"按钮及状态徽标。Dashboard **不会**自行拉取或重启——用户在终端中手动执行命令——因此该机制不会破坏开发会话、pm2/systemd/Docker 进程管理，也不会留下孤立进程 |
 | **设置** | 系统信息、Hook 状态、模型定价管理、通知偏好、数据导出、会话清理 |
 | **MCP 服务器（本地）** | 位于 `mcp/` 的企业级本地 MCP 服务器，支持三种传输模式（stdio、HTTP+SSE、交互式 REPL），6 个域共 25 个类型化工具，严格输入 Schema、重试/退避、仅限本地 API 强制执行，以及分层变更/破坏性安全门控。HTTP 模式在可配置端口上提供 Streamable HTTP（2025-11-25）和传统 SSE（2024-11-05）。REPL 模式提供带 Tab 补全和彩色输出的交互式工具调用 |
 | **工作流** | 基于 D3.js 的可视化页面，包含 11 个交互式模块：Agent 编排 DAG、工具执行 Sankey 图、协作网络、子 Agent 有效性（含丰富提示的按周图表）、检测到的流程模式、模型委派流、错误传播图（带比率徽章的水平条形图、Agent 类型分解、API/会话错误卡片）、并发时间线、会话复杂度散点图、压缩影响分析和按会话下钻。状态筛选标签（仅活跃 / 已完成 / 全部）可筛选全部 11 个模块。支持交叉筛选、JSON 导出和 3 秒防抖的实时 WebSocket 自动刷新 |
@@ -915,6 +917,79 @@ Dashboard 支持通过 Web Push (VAPID) 实现持久化浏览器通知。即使 
 - **订阅：** 浏览器特定的端点存储在 SQLite 的 `push_subscriptions` 表中。
 - **持久性：** 由于 Service Worker 在后台运行，即使浏览器已关闭，通知仍能送达。
 - **测试通知：** 设置页面中的按钮可让你验证 VAPID 管道和音效播放。
+
+---
+
+## 更新提醒
+
+Dashboard 会监视自身的 git 检出，每当上游所追踪的分支（`origin/master` / `origin/main` / `origin/HEAD`）出现新提交时，就会弹出一个模态框。用户得到的是要在终端里执行的确切命令——服务端**永远不会**自动拉取或重启自己，这样机制在开发会话、pm2/systemd/launchd/Docker 等进程管理以及远程部署中都保持可移植性。
+
+<p align="center">
+  <img src="images/update.png" alt="带有一键复制命令的 Dashboard 更新模态框" width="100%">
+</p>
+
+### 工作原理
+
+```mermaid
+flowchart LR
+    S["服务器启动"] --> SCHED["更新调度器<br/>（每 5 分钟）"]
+    SCHED -->|"git fetch origin --prune<br/>(execFile，120 秒超时)"| GIT[(origin 远程)]
+    GIT --> CMP["rev-list --count<br/>HEAD..origin/master"]
+    CMP -->|落后 > 0| FP{"指纹<br/>变化?"}
+    FP -->|是| WS["广播<br/>update_status"]
+    FP -->|否| IDLE["跳过广播"]
+    WS --> CLIENT["UpdateNotifier<br/>+ 侧边栏徽标"]
+
+    CHECK["POST /api/updates/check<br/>（侧边栏/模态框按钮）"] --> SCHED
+    STATUS["GET /api/updates/status"] -.->|直接读取| CMP
+
+    style WS fill:#6366f1,stroke:#818cf8,color:#fff
+    style CLIENT fill:#10b981,stroke:#34d399,color:#fff
+```
+
+单次检查开销很小（针对 `origin` 的 `git fetch origin --prune`），使用 `execFile`（不经 shell）封装并设有 120 秒超时。各种失败场景——离线、非 git 安装、缺失 `origin`、无法解析上游引用——都会返回**软失败载荷**（例如 `fetch_error: "..."`）而非抛错，因此不稳定的远程永远不会阻塞 Dashboard。
+
+### UI 入口
+
+| 位置 | 行为 |
+| --- | --- |
+| **模态框** (`client/src/components/UpdateNotifier.tsx`) | 当 `update_available === true` 且用户尚未针对当前 `remote_sha` 关闭过时出现。显示落后的提交数、所追踪的引用、可复制的命令，以及三个按钮：**复制命令**（主按钮）、**立即检查**、**关闭**。ESC 与点击背景也可关闭。基于 `remote_sha` 在 `localStorage` 中持久化，上游出现更新提交时会自动重新弹出。 |
+| **侧边栏按钮** (`client/src/components/Sidebar.tsx`) | 常驻在底部的"检查更新"按钮。落后时显示翠绿边框与绿色徽标点，最近一次检查失败时为琥珀色。点击会清除之前的"关闭"状态，并触发 `POST /api/updates/check`。 |
+| **服务器终端** | 当调度器状态从"最新"变为"落后"时，会向 stdout 打印一段带框的命令块，便于无头运行的用户也能看到。 |
+
+### API 端点
+
+| 端点 | 作用 |
+| --- | --- |
+| `GET /api/updates/status` | 只读检查：运行 `git fetch`，比较 HEAD 与所追踪的上游，返回载荷。 |
+| `POST /api/updates/check` | 相同的检查，但会同时通过 WebSocket 广播 `update_status`，让所有连接的客户端同步更新。 |
+
+两个端点返回相同的载荷结构：
+
+```json
+{
+  "git_repo": true,
+  "update_available": true,
+  "repo_root": "/Users/you/Claude-Code-Agent-Monitor",
+  "remote_ref": "origin/master",
+  "local_sha": "abc1234…",
+  "remote_sha": "def5678…",
+  "commits_behind": 3,
+  "manual_command": "cd \"/…\" && git pull --ff-only && npm run setup",
+  "message": "3 commit(s) on origin/master not in your checkout."
+}
+```
+
+### 为何**没有**自动更新
+
+这里没有 `POST /api/updates/apply`，也没有自重启脚本。该路由曾在开发中短暂存在过，但在没有外部进程管理的情况下让进程自我替换并不可靠——dev/prod、pm2/systemd/Docker、macOS/Linux/Windows，每种环境都暴露出不同的失败模式。只做检测不做自更新能让行为保持可预测，同时仍然解决"什么时候需要拉取？"的信息缺口。
+
+### 配置
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DASHBOARD_UPDATE_CHECK` | 启用 | 设为 `0` / `false` / `off` 可完全禁用调度器。 |
+| `DASHBOARD_UPDATE_CHECK_INTERVAL_MS` | `300000`（5 分钟） | 两次自动检查的间隔。下限为 60 000 毫秒——低于此值会被钳制。 |
 
 ---
 

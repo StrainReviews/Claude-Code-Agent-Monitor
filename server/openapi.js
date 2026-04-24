@@ -67,7 +67,7 @@ function createOpenApiSpec() {
       {
         name: "Updates",
         description:
-          "Detect upstream git changes and optionally self-update (local dashboard installs)",
+          "Detect upstream git changes so users can pull and restart manually (local dashboard installs)",
       },
       { name: "Documentation", description: "OpenAPI/Swagger endpoints" },
     ],
@@ -1859,48 +1859,6 @@ function createOpenApiSpec() {
             },
             500: {
               description: "Update check failed",
-              content: {
-                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
-              },
-            },
-          },
-        },
-      },
-      "/api/updates/apply": {
-        post: {
-          tags: ["Updates"],
-          summary:
-            "Pull latest commits, run npm run setup, and restart (loopback only unless DASHBOARD_SELF_UPDATE=1)",
-          operationId: "applySelfUpdate",
-          responses: {
-            200: {
-              description: "Self-update sequence started; server process will exit",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      ok: { type: "boolean" },
-                      message: { type: "string" },
-                    },
-                  },
-                },
-              },
-            },
-            400: {
-              description: "Not a git repo or already up to date",
-              content: {
-                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
-              },
-            },
-            403: {
-              description: "Self-update disabled for this client",
-              content: {
-                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
-              },
-            },
-            500: {
-              description: "Preflight check failed",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
               },

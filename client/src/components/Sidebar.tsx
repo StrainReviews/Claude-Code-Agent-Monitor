@@ -89,6 +89,14 @@ export function Sidebar({ wsConnected, collapsed, onToggle }: SidebarProps) {
     if (checking) return;
     setChecking(true);
     setCheckError(false);
+    // Explicit user intent — clear any prior dismissal so the modal can
+    // re-open if this check still reports an update.
+    try {
+      localStorage.removeItem("agent-monitor-update-dismissed-sha");
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new Event("dashboard:reset-update-dismissal"));
     try {
       const fresh = await api.updates.check();
       setUpdateStatus(fresh);

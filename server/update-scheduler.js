@@ -48,9 +48,9 @@ function startUpdateScheduler({ broadcast }) {
         console.log("  Agent Dashboard: upstream update available");
         console.log(`  ${status.message || ""}`);
         if (status.manual_command) {
-          console.log(`  Manual: ${status.manual_command}`);
+          console.log(`  Run: ${status.manual_command}`);
+          console.log("  Then restart the dashboard the same way you started it.");
         }
-        console.log('  Or use "Update & restart" in the web UI (from this machine).');
         console.log(`${line}\n`);
       }
     } catch {

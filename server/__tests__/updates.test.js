@@ -90,17 +90,12 @@ describe("POST /api/updates/check", () => {
   });
 });
 
-describe("POST /api/updates/apply", () => {
-  it("returns 403 when DASHBOARD_SELF_UPDATE disables self-update", async () => {
-    const prev = process.env.DASHBOARD_SELF_UPDATE;
-    process.env.DASHBOARD_SELF_UPDATE = "0";
+describe("removed POST /api/updates/apply", () => {
+  it("returns 404 because self-update has been removed", async () => {
     const res = await httpFetch("/api/updates/apply", {
       method: "POST",
       body: "{}",
     });
-    assert.equal(res.status, 403);
-    assert.equal(res.body?.error?.code, "SELF_UPDATE_FORBIDDEN");
-    if (prev === undefined) delete process.env.DASHBOARD_SELF_UPDATE;
-    else process.env.DASHBOARD_SELF_UPDATE = prev;
+    assert.equal(res.status, 404);
   });
 });
