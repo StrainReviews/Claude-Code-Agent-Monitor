@@ -27,6 +27,7 @@ const EXPECTED_API_PATHS = [
   "/api/agents",
   "/api/agents/{id}",
   "/api/events",
+  "/api/events/facets",
   "/api/stats",
   "/api/analytics",
   "/api/hooks/event",
@@ -350,6 +351,149 @@ describe("Events API", () => {
     const res = await fetch("/api/events?limit=5");
     assert.equal(res.status, 200);
     assert.ok(res.body.events.length <= 5);
+  });
+
+  it("should return a total count matching the filter", async () => {
+    const res = await fetch("/api/events?limit=1");
+    assert.equal(res.status, 200);
+    assert.equal(typeof res.body.total, "number");
+  });
+
+  it("should cap limit at 500", async () => {
+    const res = await fetch("/api/events?limit=999999");
+    assert.equal(res.status, 200);
+    assert.equal(res.body.limit, 500);
+  });
+});
+
+// ============================================================
+// Events filtering
+// ============================================================
+describe("Events API — filters", () => {
+  // Seed events across two sessions, two agents, two tools, two event types.
+  const SESSION_A = "filter-sess-a";
+  const SESSION_B = "filter-sess-b";
+  const AGENT_A = `${SESSION_A}-main`;
+  const AGENT_B = `${SESSION_B}-main`;
+
+  before(async () => {
+    // Bootstrap the sessions/agents via hook events so agent rows exist.
+    await post("/api/hooks/event", {
+      hook_type: "SessionStart",
+      data: { session_id: SESSION_A, cwd: "/a" },
+    });
+    await post("/api/hooks/event", {
+      hook_type: "SessionStart",
+      data: { session_id: SESSION_B, cwd: "/b" },
+    });
+
+    const now = Date.now();
+    const mk = (offsetSec, session, agent, type, tool, summary, data) => {
+      stmts.insertEvent.run(
+        session,
+        agent,
+        type,
+        tool,
+        summary,
+        JSON.stringify(data || { session_id: session })
+      );
+      // Backdate created_at deterministically so date-range filters work.
+      const ts = new Date(now - offsetSec * 1000).toISOString().replace("Z", "000Z");
+      db.prepare(
+        "UPDATE events SET created_at = ? WHERE id = (SELECT MAX(id) FROM events WHERE session_id = ?)"
+      ).run(ts, session);
+    };
+
+    mk(100, SESSION_A, AGENT_A, "PreToolUse", "Bash", "run curl", { command: "curl https://x" });
+    mk(80, SESSION_A, AGENT_A, "PostToolUse", "Bash", "ran curl", { stdout: "ok" });
+    mk(60, SESSION_A, AGENT_A, "PreToolUse", "Edit", "edit file", { file_path: "/x.ts" });
+    mk(40, SESSION_B, AGENT_B, "PreToolUse", "Read", "read file", { file_path: "/y.ts" });
+    mk(20, SESSION_B, AGENT_B, "Stop", null, "session stopped", null);
+  });
+
+  it("filters by single event_type", async () => {
+    const res = await fetch("/api/events?event_type=Stop&session_id=filter-sess-b");
+    assert.equal(res.status, 200);
+    assert.ok(res.body.events.every((e) => e.event_type === "Stop"));
+    assert.ok(res.body.total >= 1);
+  });
+
+  it("filters by csv event_type (multi-select)", async () => {
+    const res = await fetch(
+      `/api/events?event_type=PreToolUse,PostToolUse&session_id=${SESSION_A}`
+    );
+    assert.equal(res.status, 200);
+    assert.ok(
+      res.body.events.every((e) => e.event_type === "PreToolUse" || e.event_type === "PostToolUse")
+    );
+  });
+
+  it("filters by tool_name", async () => {
+    const res = await fetch(`/api/events?tool_name=Bash&session_id=${SESSION_A}`);
+    assert.equal(res.status, 200);
+    assert.ok(res.body.events.every((e) => e.tool_name === "Bash"));
+  });
+
+  it("filters by session_id csv", async () => {
+    const res = await fetch(`/api/events?session_id=${SESSION_A},${SESSION_B}`);
+    assert.equal(res.status, 200);
+    assert.ok(
+      res.body.events.every((e) => e.session_id === SESSION_A || e.session_id === SESSION_B)
+    );
+  });
+
+  it("filters by agent_id", async () => {
+    const res = await fetch(`/api/events?agent_id=${AGENT_A}`);
+    assert.equal(res.status, 200);
+    assert.ok(res.body.events.every((e) => e.agent_id === AGENT_A));
+  });
+
+  it("filters by text search (q) across summary and data", async () => {
+    const res = await fetch(`/api/events?q=curl&session_id=${SESSION_A}`);
+    assert.equal(res.status, 200);
+    assert.ok(res.body.events.length >= 1);
+    assert.ok(
+      res.body.events.every(
+        (e) =>
+          (e.summary && e.summary.includes("curl")) ||
+          (e.data && e.data.includes("curl")) ||
+          (e.tool_name && e.tool_name.includes("curl"))
+      )
+    );
+  });
+
+  it("filters by date range (from / to)", async () => {
+    const from = new Date(Date.now() - 50 * 1000).toISOString();
+    const res = await fetch(`/api/events?from=${encodeURIComponent(from)}&session_id=${SESSION_B}`);
+    assert.equal(res.status, 200);
+    for (const e of res.body.events) {
+      assert.ok(e.created_at >= from, `event ${e.id} older than from bound`);
+    }
+  });
+
+  it("combines multiple filters with AND semantics", async () => {
+    const res = await fetch(
+      `/api/events?event_type=PreToolUse&tool_name=Bash&session_id=${SESSION_A}`
+    );
+    assert.equal(res.status, 200);
+    assert.ok(
+      res.body.events.every((e) => e.event_type === "PreToolUse" && e.tool_name === "Bash")
+    );
+  });
+
+  it("ignores malformed date values rather than rejecting the request", async () => {
+    const res = await fetch("/api/events?from=not-a-date&limit=1");
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body.events));
+  });
+
+  it("returns distinct event_types and tool_names from /facets", async () => {
+    const res = await fetch("/api/events/facets");
+    assert.equal(res.status, 200);
+    assert.ok(Array.isArray(res.body.event_types));
+    assert.ok(Array.isArray(res.body.tool_names));
+    assert.ok(res.body.event_types.includes("PreToolUse"));
+    assert.ok(res.body.tool_names.includes("Bash"));
   });
 });
 

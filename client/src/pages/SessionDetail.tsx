@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -24,8 +24,32 @@ import { eventBus } from "../lib/eventBus";
 import { AgentCard } from "../components/AgentCard";
 import { SessionStatusBadge, AgentStatusBadge } from "../components/StatusBadge";
 import { EventDetail } from "../components/EventDetail";
+import {
+  EventFilters,
+  EMPTY_FILTERS,
+  isEmptyFilters,
+  expandStatusToEventTypes,
+} from "../components/EventFilters";
+import type { EventFiltersValue } from "../components/EventFilters";
+import { EventFiltersInfo } from "../components/EventFiltersInfo";
+import { EventGroupRow } from "../components/EventGroupRow";
+import {
+  agentOriginLabel,
+  buildEventTitle,
+  buildOriginLabel,
+  groupEvents,
+  projectFromEvent,
+  statusFromEventType,
+} from "../lib/event-grouping";
+import type { AgentInfo } from "../lib/event-grouping";
 import { formatDateTime, formatDuration, fmtCostFull, timeAgo } from "../lib/format";
 import type { Session, Agent, DashboardEvent, SessionStatus, CostResult } from "../lib/types";
+
+const EVENTS_INITIAL_BATCH = 50;
+const EVENTS_MORE_BATCH = 500;
+// Live-refresh bounds — see ActivityFeed for rationale.
+const EVENTS_MAX_REFRESH = 500;
+const EVENTS_REFRESH_DEBOUNCE_MS = 500;
 
 export function SessionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +58,10 @@ export function SessionDetail() {
   const [session, setSession] = useState<Session | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [events, setEvents] = useState<DashboardEvent[]>([]);
+  const [eventsTotal, setEventsTotal] = useState(0);
+  const [eventsLoadingMore, setEventsLoadingMore] = useState(false);
+  const [filters, setFilters] = useState<EventFiltersValue>(EMPTY_FILTERS);
+  const [grouped, setGrouped] = useState(true);
   const [cost, setCost] = useState<CostResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +78,12 @@ export function SessionDetail() {
       return next;
     });
   }
+
+  // Refs let the websocket handler access latest state without re-subscribing.
+  const eventApiParamsRef = useRef<Record<string, unknown> | null>(null);
+  const eventsLoadedCountRef = useRef(0);
+  const eventsRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  eventsLoadedCountRef.current = events.length;
   const goBack = useCallback(() => {
     const historyState =
       typeof window !== "undefined" ? (window.history.state as { idx?: number } | null) : null;
@@ -69,7 +103,6 @@ export function SessionDetail() {
       ]);
       setSession(data.session);
       setAgents(data.agents);
-      setEvents(data.events);
       setCost(costData);
       setError(null);
     } catch (err) {
@@ -82,6 +115,83 @@ export function SessionDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Event list is fetched separately from the session metadata so it can
+  // respect the user's filters and use the server-driven pagination. Status
+  // presets expand into event_type values and merge with any explicit
+  // event_type selection.
+  const eventApiParams = useMemo(() => {
+    if (!id) return null;
+    const statusExpanded = expandStatusToEventTypes(filters.status);
+    const eventTypeMerged = Array.from(new Set<string>([...filters.event_type, ...statusExpanded]));
+    return {
+      session_id: [id],
+      event_type: eventTypeMerged.length > 0 ? eventTypeMerged : undefined,
+      tool_name: filters.tool_name.length > 0 ? filters.tool_name : undefined,
+      agent_id: filters.agent_id.length > 0 ? filters.agent_id : undefined,
+      q: filters.q || undefined,
+      from: filters.from ? new Date(filters.from).toISOString() : undefined,
+      to: filters.to ? new Date(filters.to).toISOString() : undefined,
+    };
+  }, [id, filters]);
+
+  eventApiParamsRef.current = eventApiParams;
+
+  const eventGroups = useMemo(() => groupEvents(events), [events]);
+
+  // Build an AgentInfo map from the already-fetched agents list so rows can
+  // render the subagent pill (subagent_type) without an extra fetch.
+  const agentInfoById = useMemo(() => {
+    const map = new Map<string, AgentInfo>();
+    for (const a of agents) {
+      map.set(a.id, { type: a.type, subagent_type: a.subagent_type, name: a.name });
+    }
+    return map;
+  }, [agents]);
+
+  // Precompute project per event so flat-row rendering doesn't re-parse JSON.
+  const projectByEventId = useMemo(() => {
+    const map = new Map<number, string | null>();
+    for (const e of events) map.set(e.id, projectFromEvent(e));
+    return map;
+  }, [events]);
+
+  const loadEvents = useCallback(async () => {
+    if (!eventApiParams) return;
+    try {
+      const { events: data, total } = await api.events.list({
+        ...eventApiParams,
+        limit: EVENTS_INITIAL_BATCH,
+        offset: 0,
+      });
+      setEvents(data);
+      setEventsTotal(total);
+    } catch (err) {
+      console.error("Failed to load session events:", err);
+    }
+  }, [eventApiParams]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  const loadMoreEvents = useCallback(async () => {
+    if (!eventApiParams) return;
+    setEventsLoadingMore(true);
+    try {
+      const { events: data, total } = await api.events.list({
+        ...eventApiParams,
+        limit: EVENTS_MORE_BATCH,
+        offset: events.length,
+      });
+      setEvents((prev) => [...prev, ...data]);
+      setEventsTotal(total);
+    } catch (err) {
+      console.error("Failed to load more session events:", err);
+    } finally {
+      setEventsLoadingMore(false);
+    }
+  }, [eventApiParams, events.length]);
 
   // Auto-expand agents that have working subagents (at any depth)
   useEffect(() => {
@@ -106,18 +216,55 @@ export function SessionDetail() {
     }
   }, [agents]);
 
+  // Pagination-preserving filtered refresh, mirrors ActivityFeed's behavior.
+  const refreshEventsWithPagination = useCallback(async () => {
+    const params = eventApiParamsRef.current;
+    if (!params) return;
+    const target = Math.max(
+      eventsLoadedCountRef.current || EVENTS_INITIAL_BATCH,
+      EVENTS_INITIAL_BATCH
+    );
+    const size = Math.min(target, EVENTS_MAX_REFRESH);
+    try {
+      const { events: data, total } = await api.events.list({
+        ...params,
+        limit: size,
+        offset: 0,
+      });
+      setEvents(data);
+      setEventsTotal(total);
+    } catch (err) {
+      console.error("Failed to refresh session events:", err);
+    }
+  }, []);
+
   useEffect(() => {
-    return eventBus.subscribe((msg) => {
+    const unsubscribe = eventBus.subscribe((msg) => {
       if (
         msg.type === "agent_created" ||
         msg.type === "agent_updated" ||
-        msg.type === "session_updated" ||
-        msg.type === "new_event"
+        msg.type === "session_updated"
       ) {
         load();
       }
+      if (msg.type === "new_event") {
+        // Debounce bursts into one filter-aware refetch that preserves the
+        // current "Load more" pagination size.
+        if (eventsRefreshTimerRef.current) clearTimeout(eventsRefreshTimerRef.current);
+        eventsRefreshTimerRef.current = setTimeout(() => {
+          eventsRefreshTimerRef.current = null;
+          refreshEventsWithPagination();
+        }, EVENTS_REFRESH_DEBOUNCE_MS);
+      }
     });
-  }, [load]);
+    return () => {
+      unsubscribe();
+      if (eventsRefreshTimerRef.current) {
+        clearTimeout(eventsRefreshTimerRef.current);
+        eventsRefreshTimerRef.current = null;
+      }
+    };
+  }, [load, refreshEventsWithPagination]);
 
   if (loading) {
     return (
@@ -376,61 +523,143 @@ export function SessionDetail() {
       {/* Event Timeline */}
       <div>
         <h3 className="text-sm font-medium text-gray-300 mb-4">
-          {t("detail.eventTimeline")} ({events.length})
+          {t("detail.eventTimeline")} ({events.length}/{eventsTotal})
         </h3>
+        <div className="mb-3">
+          <EventFiltersInfo />
+        </div>
+        <div className="mb-3">
+          <EventFilters
+            value={filters}
+            onChange={setFilters}
+            hideSessionFilter
+            agentOptions={agents.map((a) => ({ id: a.id, label: a.name || a.id }))}
+          />
+        </div>
+        <div className="flex items-center gap-2 mb-3 px-1">
+          <div
+            role="group"
+            aria-label="view mode"
+            className="inline-flex rounded-md border border-border overflow-hidden"
+          >
+            <button
+              type="button"
+              onClick={() => setGrouped(true)}
+              aria-pressed={grouped}
+              className={`text-[11px] px-3 py-1 cursor-pointer ${
+                grouped
+                  ? "bg-accent/20 text-accent"
+                  : "bg-surface-2 text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {t("common:eventFilters.grouped")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setGrouped(false)}
+              aria-pressed={!grouped}
+              className={`text-[11px] px-3 py-1 border-l border-border cursor-pointer ${
+                !grouped
+                  ? "bg-accent/20 text-accent"
+                  : "bg-surface-2 text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {t("common:eventFilters.flat")}
+            </button>
+          </div>
+        </div>
         {events.length === 0 ? (
-          <p className="text-sm text-gray-500">{t("detail.noEvents")}</p>
+          <p className="text-sm text-gray-500">
+            {isEmptyFilters(filters) ? t("detail.noEvents") : t("common:eventFilters.noResults")}
+          </p>
         ) : (
           <div className="card overflow-hidden">
             <div className="divide-y divide-border max-h-[600px] overflow-y-auto overflow-x-auto">
-              {events.map((event, i) => {
-                const key = event.id ?? i;
-                const isOpen = event.id != null && expandedEvents.has(event.id);
-                return (
-                  <div key={key}>
-                    <button
-                      type="button"
-                      onClick={() => event.id != null && toggleEvent(event.id)}
-                      aria-expanded={isOpen}
-                      aria-label={
-                        isOpen ? t("common:eventDetail.collapse") : t("common:eventDetail.expand")
-                      }
-                      className="w-full text-left px-5 py-3 flex items-center gap-4 hover:bg-surface-4 transition-colors min-w-0 cursor-pointer"
-                    >
-                      <span
-                        className={`text-gray-500 text-[10px] w-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-                        aria-hidden="true"
-                      >
-                        ▶
-                      </span>
-                      <div className="w-16 text-[11px] text-gray-600 font-mono flex-shrink-0">
-                        {timeAgo(event.created_at)}
+              {grouped
+                ? eventGroups.map((group) => (
+                    <EventGroupRow key={group.key} group={group} agentInfoById={agentInfoById} />
+                  ))
+                : events.map((event, i) => {
+                    const key = event.id ?? i;
+                    const isOpen = event.id != null && expandedEvents.has(event.id);
+                    return (
+                      <div key={key}>
+                        <button
+                          type="button"
+                          onClick={() => event.id != null && toggleEvent(event.id)}
+                          aria-expanded={isOpen}
+                          aria-label={
+                            isOpen
+                              ? t("common:eventDetail.collapse")
+                              : t("common:eventDetail.expand")
+                          }
+                          className="w-full text-left px-5 py-3 flex items-center gap-4 hover:bg-surface-4 transition-colors min-w-0 cursor-pointer"
+                        >
+                          <span
+                            className={`text-gray-500 text-[10px] w-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                            aria-hidden="true"
+                          >
+                            ▶
+                          </span>
+                          <div className="w-16 text-[11px] text-gray-600 font-mono flex-shrink-0">
+                            {timeAgo(event.created_at)}
+                          </div>
+                          <AgentStatusBadge status={statusFromEventType(event.event_type)} />
+                          {(() => {
+                            const info = event.agent_id
+                              ? agentInfoById.get(event.agent_id)
+                              : undefined;
+                            // Session is implicit on this page — project is
+                            // still shown so the row identifies the working
+                            // directory when you share / search.
+                            const project = projectByEventId.get(event.id) ?? null;
+                            const origin = buildOriginLabel(
+                              project,
+                              null,
+                              agentOriginLabel(event.agent_id, info)
+                            );
+                            return (
+                              <span className="text-sm text-gray-300 flex-1 truncate">
+                                {origin && (
+                                  <span
+                                    className="text-gray-500 mr-1"
+                                    title={event.agent_id ?? undefined}
+                                  >
+                                    {origin} ·
+                                  </span>
+                                )}
+                                {buildEventTitle(event)}
+                              </span>
+                            );
+                          })()}
+                          {event.tool_name && (
+                            <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono">
+                              {event.tool_name}
+                            </span>
+                          )}
+                        </button>
+                        {isOpen && <EventDetail event={event} />}
                       </div>
-                      <AgentStatusBadge
-                        status={
-                          event.event_type === "Stop" || event.event_type === "Compaction"
-                            ? "completed"
-                            : event.event_type === "PreToolUse"
-                              ? "working"
-                              : event.event_type === "error"
-                                ? "error"
-                                : "connected"
-                        }
-                      />
-                      <span className="text-sm text-gray-300 flex-1 truncate">
-                        {event.summary || event.event_type}
-                      </span>
-                      {event.tool_name && (
-                        <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono">
-                          {event.tool_name}
-                        </span>
-                      )}
-                    </button>
-                    {isOpen && <EventDetail event={event} />}
-                  </div>
-                );
-              })}
+                    );
+                  })}
             </div>
+          </div>
+        )}
+        {events.length < eventsTotal && (
+          <div className="flex items-center justify-between mt-3 px-1">
+            <span className="text-xs text-gray-500">
+              {t("common:eventFilters.showing", { shown: events.length, total: eventsTotal })}
+            </span>
+            <button
+              type="button"
+              onClick={loadMoreEvents}
+              disabled={eventsLoadingMore}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {eventsLoadingMore
+                ? t("common:eventFilters.loading")
+                : t("common:eventFilters.loadMore")}
+            </button>
           </div>
         )}
       </div>

@@ -363,7 +363,7 @@ function createOpenApiSpec() {
         },
         EventsListResponse: {
           type: "object",
-          required: ["events", "limit", "offset"],
+          required: ["events", "limit", "offset", "total"],
           properties: {
             events: {
               type: "array",
@@ -371,6 +371,18 @@ function createOpenApiSpec() {
             },
             limit: { type: "integer" },
             offset: { type: "integer" },
+            total: {
+              type: "integer",
+              description: "Total rows matching the current filter (for UI pagination)",
+            },
+          },
+        },
+        EventsFacetsResponse: {
+          type: "object",
+          required: ["event_types", "tool_names"],
+          properties: {
+            event_types: { type: "array", items: { type: "string" } },
+            tool_names: { type: "array", items: { type: "string" } },
           },
         },
         StatsResponse: {
@@ -1185,19 +1197,82 @@ function createOpenApiSpec() {
       "/api/events": {
         get: {
           tags: ["Events"],
-          summary: "List events",
+          summary: "List events with multi-dimensional filtering",
           operationId: "listEvents",
           parameters: [
-            { $ref: "#/components/parameters/SessionFilterQuery" },
-            { $ref: "#/components/parameters/LimitQuery" },
+            {
+              in: "query",
+              name: "event_type",
+              description: "Comma-separated event_type values (e.g. Stop,PreToolUse)",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "tool_name",
+              description: "Comma-separated tool_name values (e.g. Bash,Edit)",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "agent_id",
+              description: "Comma-separated agent_id values",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "session_id",
+              description: "Comma-separated session_id values",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "q",
+              description: "Text search across summary, tool_name, and data",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "from",
+              description: "ISO datetime lower bound (inclusive) on created_at",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              in: "query",
+              name: "to",
+              description: "ISO datetime upper bound (inclusive) on created_at",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              in: "query",
+              name: "limit",
+              description: "Max rows to return (1-500, default 50)",
+              schema: { type: "integer", minimum: 1, maximum: 500, default: 50 },
+            },
             { $ref: "#/components/parameters/OffsetQuery" },
           ],
           responses: {
             200: {
-              description: "Event list",
+              description: "Event list with total count for pagination",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/EventsListResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/events/facets": {
+        get: {
+          tags: ["Events"],
+          summary: "Distinct event_type and tool_name values available in the DB",
+          operationId: "listEventFacets",
+          responses: {
+            200: {
+              description: "Facet values for populating filter dropdowns",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EventsFacetsResponse" },
                 },
               },
             },

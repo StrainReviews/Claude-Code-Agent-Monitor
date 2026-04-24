@@ -1,17 +1,18 @@
 /**
  * @file EventDetail.tsx
  * @description Inline detail view rendered below an event row when expanded.
- * Renders every top-level JSON key from the hook payload as a single row of
- * `key: value`. Scalar values render inline; objects, arrays, and multiline
- * strings render inside a terminal-styled code block (dark bg, monospace) with
- * pretty-printed JSON or the raw text. Event-level fields (ID, session, agent)
- * lead the list so the user gets consistent structure across every event type.
+ * Shows a human-readable summary at the top, then every top-level JSON key
+ * from the hook payload as a single row. For `tool_input` and `tool_response`
+ * on recognised tools, rows use tool-aware renderers (terminal blocks, diffs,
+ * line-numbered code, match lists) instead of the generic JSON code view.
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Check } from "lucide-react";
 import type { DashboardEvent } from "../lib/types";
+import { buildEventSummary } from "../lib/event-summary";
+import { CopyButton } from "./event-views/primitives";
+import { ToolInputView, ToolResponseView } from "./event-views/tool-views";
 
 type EventDetailProps = {
   event: DashboardEvent;
@@ -39,6 +40,8 @@ export function EventDetail({ event }: EventDetailProps) {
     }
   }, [event.data]);
 
+  const summary = useMemo(() => buildEventSummary(event), [event]);
+
   const rows = useMemo<Row[]>(() => {
     const result: Row[] = [
       { key: "event_id", label: t("eventDetail.eventId"), value: event.id },
@@ -64,18 +67,114 @@ export function EventDetail({ event }: EventDetailProps) {
     return result;
   }, [event.id, event.session_id, event.agent_id, event.data, parsed, t]);
 
+  const hasToolInput = parsed != null && "tool_input" in parsed;
+  const hasToolResponse = parsed != null && "tool_response" in parsed;
+
   return (
-    <div className="bg-surface-2/60 border-t border-border px-5 py-4 animate-slide-up space-y-2">
-      {rows.map((row) => (
-        <FieldRow key={row.key} label={row.label} value={row.value} />
-      ))}
+    <div className="bg-surface-2/60 border-t border-border px-5 py-4 animate-slide-up space-y-3">
+      {summary && (
+        <SummaryBlock
+          summary={summary}
+          hasToolInput={hasToolInput}
+          hasToolResponse={hasToolResponse}
+        />
+      )}
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <FieldRow key={row.key} label={row.label} value={row.value} toolName={event.tool_name} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────── Summary block ─────────────────────────
+
+function SummaryBlock({
+  summary,
+  hasToolInput,
+  hasToolResponse,
+}: {
+  summary: { icon: string; headline: string; bullets: string[] };
+  hasToolInput: boolean;
+  hasToolResponse: boolean;
+}) {
+  const { t } = useTranslation("common");
+  const refs: string[] = [];
+  if (hasToolInput) refs.push("tool_input");
+  if (hasToolResponse) refs.push("tool_response");
+  const hint =
+    refs.length > 0 ? t("eventDetail.seeDetailsBelow", { fields: refs.join(" · ") }) : null;
+  return (
+    <div className="border border-border rounded overflow-hidden bg-surface-3/30">
+      <div className="px-3 py-1 border-b border-border bg-black/20">
+        <span className="text-gray-500 text-[10px] uppercase tracking-wide font-semibold">
+          {t("eventDetail.summary")}
+        </span>
+      </div>
+      <div className="p-3 space-y-1.5">
+        <div className="flex items-start gap-2">
+          <span className="text-base leading-none" aria-hidden="true">
+            {summary.icon}
+          </span>
+          <span className="text-[12px] text-gray-100 font-medium break-words">
+            {summary.headline}
+          </span>
+        </div>
+        {summary.bullets.length > 0 && (
+          <ul className="list-disc pl-6 space-y-0.5 text-[11px] text-gray-400">
+            {summary.bullets.map((b, i) => (
+              <li key={i}>{b}</li>
+            ))}
+          </ul>
+        )}
+        {hint && (
+          <div className="text-[11px] text-gray-500 italic pt-1 border-t border-border/40">
+            ↓ {hint}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ───────────────────────── Field row ─────────────────────────
 
-function FieldRow({ label, value }: { label: string; value: unknown }) {
+function FieldRow({
+  label,
+  value,
+  toolName,
+}: {
+  label: string;
+  value: unknown;
+  toolName: string | null;
+}) {
+  // Route tool_input / tool_response through tool-aware renderers when the
+  // tool is known. Unknown tools (or unknown shape for known tools) fall back
+  // to the generic CodeView below.
+  if (label === "tool_input") {
+    const view = ToolInputView({ toolName, input: value });
+    if (view) {
+      return (
+        <div className="grid grid-cols-[160px_1fr] gap-x-4 items-start text-[11px]">
+          <div className="text-gray-500 font-mono pt-2">{label}</div>
+          <div>{view}</div>
+        </div>
+      );
+    }
+  }
+  if (label === "tool_response") {
+    const view = ToolResponseView({ toolName, response: value });
+    if (view) {
+      return (
+        <div className="grid grid-cols-[160px_1fr] gap-x-4 items-start text-[11px]">
+          <div className="text-gray-500 font-mono pt-2">{label}</div>
+          <div>{view}</div>
+        </div>
+      );
+    }
+  }
+
   if (isInlineScalar(value)) {
     return (
       <div className="grid grid-cols-[160px_1fr] gap-x-4 items-start text-[11px]">
@@ -115,7 +214,7 @@ function ScalarValue({ value }: { value: unknown }) {
   return <>{String(value)}</>;
 }
 
-// ───────────────────────── Terminal-styled JSON code view ─────────────────────────
+// ───────────────────────── Terminal-styled JSON code view (fallback) ─────────────────────────
 
 function CodeView({ value }: { value: unknown }) {
   const text = typeof value === "string" ? value : safeStringify(value);
@@ -141,33 +240,4 @@ function safeStringify(value: unknown): string {
   } catch {
     return String(value);
   }
-}
-
-// ───────────────────────── Copy button ─────────────────────────
-
-function CopyButton({ text }: { text: string }) {
-  const { t } = useTranslation("common");
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard API can fail in insecure contexts — silently ignore.
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      className="flex items-center gap-1 text-[10px] py-0.5 px-1.5 rounded text-gray-400 hover:text-gray-200 hover:bg-surface-2 cursor-pointer"
-      aria-label={t("eventDetail.copy")}
-    >
-      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-      {copied ? t("eventDetail.copied") : t("eventDetail.copy")}
-    </button>
-  );
 }

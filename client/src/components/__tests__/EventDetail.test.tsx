@@ -52,12 +52,14 @@ describe("EventDetail", () => {
     expect(screen.getByText("false")).toBeInTheDocument();
   });
 
-  it("renders object payload fields in a JSON code view", () => {
+  it("renders Bash tool_input as a terminal block (command + description)", () => {
     render(<EventDetail event={baseEvent} />);
     expect(screen.getByText("tool_input")).toBeInTheDocument();
-    // Pretty-printed JSON contains the inner string unchanged.
-    expect(screen.getByText(/"command": "ls -la"/)).toBeInTheDocument();
-    expect(screen.getByText(/"description": "list files"/)).toBeInTheDocument();
+    // Terminal renderer shows the raw command and the `# description` line,
+    // not the pretty-printed JSON. Description appears both in the Summary
+    // block and in the terminal — `getAllByText` allows both.
+    expect(screen.getByText("ls -la")).toBeInTheDocument();
+    expect(screen.getAllByText(/list files/).length).toBeGreaterThan(0);
   });
 
   it("renders multiline strings in a text code view", () => {
