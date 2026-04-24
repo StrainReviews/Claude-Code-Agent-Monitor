@@ -64,6 +64,11 @@ function createOpenApiSpec() {
       { name: "Pricing", description: "Model pricing and token cost calculations" },
       { name: "Workflows", description: "Workflow intelligence and session drill-in" },
       { name: "Settings", description: "Operational maintenance endpoints" },
+      {
+        name: "Updates",
+        description:
+          "Detect upstream git changes and optionally self-update (local dashboard installs)",
+      },
       { name: "Documentation", description: "OpenAPI/Swagger endpoints" },
     ],
     components: {
@@ -1798,6 +1803,104 @@ function createOpenApiSpec() {
             },
             500: {
               description: "Upload or import failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/updates/status": {
+        get: {
+          tags: ["Updates"],
+          summary: "Check whether the dashboard git checkout is behind origin",
+          operationId: "getUpdatesStatus",
+          responses: {
+            200: {
+              description: "Update check result",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    additionalProperties: true,
+                    description:
+                      "Includes git_repo, update_available, commits_behind, remote_ref, local_sha, remote_sha, manual_command, and optional error/message fields.",
+                  },
+                },
+              },
+            },
+            500: {
+              description: "Update status query failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/updates/check": {
+        post: {
+          tags: ["Updates"],
+          summary: "Run an update check immediately and broadcast the result",
+          operationId: "triggerUpdatesCheck",
+          responses: {
+            200: {
+              description: "Fresh update status payload (also broadcast over WebSocket)",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    additionalProperties: true,
+                    description:
+                      "Same shape as GET /api/updates/status. Also sent as an update_status WebSocket message to all connected clients.",
+                  },
+                },
+              },
+            },
+            500: {
+              description: "Update check failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/updates/apply": {
+        post: {
+          tags: ["Updates"],
+          summary:
+            "Pull latest commits, run npm run setup, and restart (loopback only unless DASHBOARD_SELF_UPDATE=1)",
+          operationId: "applySelfUpdate",
+          responses: {
+            200: {
+              description: "Self-update sequence started; server process will exit",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      ok: { type: "boolean" },
+                      message: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+            400: {
+              description: "Not a git repo or already up to date",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+            403: {
+              description: "Self-update disabled for this client",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+            500: {
+              description: "Preflight check failed",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
               },

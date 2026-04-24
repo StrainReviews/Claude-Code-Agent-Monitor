@@ -1,0 +1,17 @@
+{
+  "title": "Có bản cập nhật cho bảng điều khiển",
+  "lead": "Đã có commit mới trên nhánh remote. Hãy kéo code, cài lại dependencies và khởi động lại.",
+  "commitsBehind": "Chậm {{ref}} {{count}} commit",
+  "copy": "Sao chép lệnh",
+  "copied": "Đã sao chép",
+  "dismiss": "Bỏ qua",
+  "apply": "Cập nhật & khởi động lại",
+  "applying": "Đang cập nhật…",
+  "applyError": "Không thể bắt đầu cập nhật",
+  "fetchError": "Không kết nối được remote git. Thử lại khi có mạng.",
+  "notGit": "Bản cài đặt này không phải bản git clone; hãy nâng cấp thủ công.",
+  "restartNote": "Máy chủ sẽ dừng ngắn rồi chạy lại khi xong.",
+  "checkNow": "Kiểm tra ngay",
+  "checking": "Đang kiểm tra…",
+  "checkError": "Không thể kiểm tra cập nhật"
+}

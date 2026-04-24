@@ -124,6 +124,21 @@ export interface ImportProgressMessage {
   counters?: Record<string, number>;
 }
 
+/** Payload for `update_status` WebSocket messages and GET /api/updates/status */
+export interface UpdateStatusPayload {
+  git_repo: boolean;
+  update_available: boolean;
+  repo_root?: string;
+  remote_ref?: string | null;
+  local_sha?: string | null;
+  remote_sha?: string | null;
+  commits_behind?: number;
+  manual_command?: string | null;
+  restart_hint?: string | null;
+  message?: string | null;
+  fetch_error?: string;
+}
+
 export interface WSMessage {
   type:
     | "session_created"
@@ -131,8 +146,9 @@ export interface WSMessage {
     | "agent_created"
     | "agent_updated"
     | "new_event"
-    | "import.progress";
-  data: Session | Agent | DashboardEvent | ImportProgressMessage;
+    | "import.progress"
+    | "update_status";
+  data: Session | Agent | DashboardEvent | ImportProgressMessage | UpdateStatusPayload;
   timestamp: string;
 }
 

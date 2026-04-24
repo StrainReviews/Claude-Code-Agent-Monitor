@@ -1,0 +1,17 @@
+{
+  "title": "Dashboard update available",
+  "lead": "New commits are on the remote branch. Pull, reinstall dependencies, and restart to pick them up.",
+  "commitsBehind": "{{count}} commit(s) behind {{ref}}",
+  "copy": "Copy command",
+  "copied": "Copied",
+  "dismiss": "Dismiss",
+  "apply": "Update & restart",
+  "applying": "Updating…",
+  "applyError": "Could not start update",
+  "fetchError": "Could not reach git remote. Try again when you are online.",
+  "notGit": "This install is not a git clone; use a manual upgrade path.",
+  "restartNote": "The server will stop briefly, then start again when finished.",
+  "checkNow": "Check now",
+  "checking": "Checking…",
+  "checkError": "Could not check for updates"
+}

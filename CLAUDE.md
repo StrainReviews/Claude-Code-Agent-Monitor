@@ -6,9 +6,9 @@
 - Keep MCP integration production-ready for local use (`mcp/`).
 
 ## Repo map
-- `server/`: Express API, hook ingestion, SQLite access, websocket broadcast.
+- `server/`: Express API, hook ingestion, SQLite access, websocket broadcast (includes optional git upstream checks and `routes/updates.js`).
 - `client/`: React + Vite UI.
-- `scripts/`: hook installer/handler, import, seed, cleanup utilities.
+- `scripts/`: hook installer/handler, import, seed, cleanup utilities, `self-update-restart.js` (pull → setup → restart).
 - `mcp/`: local MCP server exposing dashboard operations as tools.
 
 ## Non-negotiable engineering rules
