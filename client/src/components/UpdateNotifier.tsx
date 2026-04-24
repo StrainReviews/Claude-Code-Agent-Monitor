@@ -68,6 +68,14 @@ export function UpdateNotifier() {
     });
   }, [syncFromPayload]);
 
+  // Sidebar's "Check for updates" button fires this to signal that the user
+  // wants to see the modal again even if they previously dismissed this SHA.
+  useEffect(() => {
+    const handler = () => setDismissedSha(null);
+    window.addEventListener("dashboard:reset-update-dismissal", handler);
+    return () => window.removeEventListener("dashboard:reset-update-dismissal", handler);
+  }, []);
+
   const show = Boolean(
     status?.update_available && status.remote_sha && dismissedSha !== status.remote_sha
   );
