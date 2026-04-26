@@ -124,6 +124,42 @@ export interface ImportProgressMessage {
   counters?: Record<string, number>;
 }
 
+/** Payload for `update_status` WebSocket messages and GET /api/updates/status */
+export interface UpdateStatusPayload {
+  git_repo: boolean;
+  update_available: boolean;
+  repo_root?: string;
+  remote_ref?: string | null;
+  /** Remote name we compared against — "upstream" if configured (fork
+   * convention), else "origin", else whatever single remote is set up. */
+  canonical_remote?: string | null;
+  /** Local branch HEAD points at. null on detached HEAD. */
+  current_branch?: string | null;
+  /** What the local branch tracks (e.g. "origin/feature/foo"). null when
+   * no upstream is configured for the current branch. */
+  tracking_upstream?: string | null;
+  /** True when the local branch's tracked upstream is exactly remote_ref
+   * — i.e. a plain `git pull --ff-only` will do the right thing. */
+  tracks_canonical?: boolean;
+  /** Categorical hint for the UI. Discriminated so callers can branch on
+   * shape (e.g. show "Restart after running" only when the command
+   * actually rewrites the working tree). */
+  situation?:
+    | "tracking_canonical"
+    | "fork_or_diverged_tracking"
+    | "feature_branch"
+    | "detached_head";
+  /** Plain-language explanation when the user is *not* on the canonical
+   * default branch, so the manual command makes sense in context. */
+  situation_note?: string | null;
+  local_sha?: string | null;
+  remote_sha?: string | null;
+  commits_behind?: number;
+  manual_command?: string | null;
+  message?: string | null;
+  fetch_error?: string;
+}
+
 export interface WSMessage {
   type:
     | "session_created"
@@ -131,8 +167,9 @@ export interface WSMessage {
     | "agent_created"
     | "agent_updated"
     | "new_event"
-    | "import.progress";
-  data: Session | Agent | DashboardEvent | ImportProgressMessage;
+    | "import.progress"
+    | "update_status";
+  data: Session | Agent | DashboardEvent | ImportProgressMessage | UpdateStatusPayload;
   timestamp: string;
 }
 
@@ -337,26 +374,30 @@ export const STATUS_CONFIG: Record<
 
 export const SESSION_STATUS_CONFIG: Record<
   SessionStatus,
-  { labelKey: string; color: string; bg: string }
+  { labelKey: string; color: string; bg: string; dot: string }
 > = {
   active: {
     labelKey: "common:status.active",
     color: "text-emerald-400",
     bg: "bg-emerald-500/10 border-emerald-500/20",
+    dot: "bg-emerald-400",
   },
   completed: {
     labelKey: "common:status.completed",
     color: "text-violet-400",
     bg: "bg-violet-500/10 border-violet-500/20",
+    dot: "bg-violet-400",
   },
   error: {
     labelKey: "common:status.error",
     color: "text-red-400",
     bg: "bg-red-500/10 border-red-500/20",
+    dot: "bg-red-400",
   },
   abandoned: {
     labelKey: "common:status.abandoned",
     color: "text-yellow-400",
     bg: "bg-yellow-500/10 border-yellow-500/20",
+    dot: "bg-yellow-400",
   },
 };

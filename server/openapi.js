@@ -64,6 +64,11 @@ function createOpenApiSpec() {
       { name: "Pricing", description: "Model pricing and token cost calculations" },
       { name: "Workflows", description: "Workflow intelligence and session drill-in" },
       { name: "Settings", description: "Operational maintenance endpoints" },
+      {
+        name: "Updates",
+        description:
+          "Detect upstream git changes so users can pull and restart manually (local dashboard installs)",
+      },
       { name: "Documentation", description: "OpenAPI/Swagger endpoints" },
     ],
     components: {
@@ -363,7 +368,7 @@ function createOpenApiSpec() {
         },
         EventsListResponse: {
           type: "object",
-          required: ["events", "limit", "offset"],
+          required: ["events", "limit", "offset", "total"],
           properties: {
             events: {
               type: "array",
@@ -371,6 +376,18 @@ function createOpenApiSpec() {
             },
             limit: { type: "integer" },
             offset: { type: "integer" },
+            total: {
+              type: "integer",
+              description: "Total rows matching the current filter (for UI pagination)",
+            },
+          },
+        },
+        EventsFacetsResponse: {
+          type: "object",
+          required: ["event_types", "tool_names"],
+          properties: {
+            event_types: { type: "array", items: { type: "string" } },
+            tool_names: { type: "array", items: { type: "string" } },
           },
         },
         StatsResponse: {
@@ -1185,19 +1202,82 @@ function createOpenApiSpec() {
       "/api/events": {
         get: {
           tags: ["Events"],
-          summary: "List events",
+          summary: "List events with multi-dimensional filtering",
           operationId: "listEvents",
           parameters: [
-            { $ref: "#/components/parameters/SessionFilterQuery" },
-            { $ref: "#/components/parameters/LimitQuery" },
+            {
+              in: "query",
+              name: "event_type",
+              description: "Comma-separated event_type values (e.g. Stop,PreToolUse)",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "tool_name",
+              description: "Comma-separated tool_name values (e.g. Bash,Edit)",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "agent_id",
+              description: "Comma-separated agent_id values",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "session_id",
+              description: "Comma-separated session_id values",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "q",
+              description: "Text search across summary, tool_name, and data",
+              schema: { type: "string" },
+            },
+            {
+              in: "query",
+              name: "from",
+              description: "ISO datetime lower bound (inclusive) on created_at",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              in: "query",
+              name: "to",
+              description: "ISO datetime upper bound (inclusive) on created_at",
+              schema: { type: "string", format: "date-time" },
+            },
+            {
+              in: "query",
+              name: "limit",
+              description: "Max rows to return (1-500, default 50)",
+              schema: { type: "integer", minimum: 1, maximum: 500, default: 50 },
+            },
             { $ref: "#/components/parameters/OffsetQuery" },
           ],
           responses: {
             200: {
-              description: "Event list",
+              description: "Event list with total count for pagination",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/EventsListResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/events/facets": {
+        get: {
+          tags: ["Events"],
+          summary: "Distinct event_type and tool_name values available in the DB",
+          operationId: "listEventFacets",
+          responses: {
+            200: {
+              description: "Facet values for populating filter dropdowns",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EventsFacetsResponse" },
                 },
               },
             },
@@ -1723,6 +1803,62 @@ function createOpenApiSpec() {
             },
             500: {
               description: "Upload or import failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/updates/status": {
+        get: {
+          tags: ["Updates"],
+          summary: "Check whether the dashboard git checkout is behind origin",
+          operationId: "getUpdatesStatus",
+          responses: {
+            200: {
+              description: "Update check result",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    additionalProperties: true,
+                    description:
+                      "Includes git_repo, update_available, commits_behind, remote_ref, local_sha, remote_sha, manual_command, and optional error/message fields.",
+                  },
+                },
+              },
+            },
+            500: {
+              description: "Update status query failed",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/updates/check": {
+        post: {
+          tags: ["Updates"],
+          summary: "Run an update check immediately and broadcast the result",
+          operationId: "triggerUpdatesCheck",
+          responses: {
+            200: {
+              description: "Fresh update status payload (also broadcast over WebSocket)",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    additionalProperties: true,
+                    description:
+                      "Same shape as GET /api/updates/status. Also sent as an update_status WebSocket message to all connected clients.",
+                  },
+                },
+              },
+            },
+            500: {
+              description: "Update check failed",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
               },

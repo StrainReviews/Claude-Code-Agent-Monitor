@@ -24,6 +24,7 @@ const settingsRouter = require("./routes/settings");
 const workflowsRouter = require("./routes/workflows");
 const pushRouter = require("./routes/push");
 const importRouter = require("./routes/import");
+const updatesRouter = require("./routes/updates");
 
 function createApp() {
   const app = express();
@@ -43,6 +44,7 @@ function createApp() {
   app.use("/api/workflows", workflowsRouter);
   app.use("/api/push", pushRouter);
   app.use("/api/import", importRouter);
+  app.use("/api/updates", updatesRouter);
   app.get("/api/openapi.json", (_req, res) => {
     res.json(openApiSpec);
   });
@@ -89,7 +91,11 @@ function startServer(app, port) {
 if (require.main === module) {
   const PORT = parseInt(process.env.DASHBOARD_PORT || "4820", 10);
   const app = createApp();
-  startServer(app, PORT);
+  startServer(app, PORT).then(() => {
+    const { startUpdateScheduler } = require("./update-scheduler");
+    const { broadcast } = require("./websocket");
+    startUpdateScheduler({ broadcast });
+  });
 
   // Auto-install Claude Code hooks on every startup so users don't have to
   try {

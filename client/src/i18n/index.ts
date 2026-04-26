@@ -38,6 +38,9 @@ import kanban_vi from "./locales/vi/kanban.json";
 import errors_en from "./locales/en/errors.json";
 import errors_zh from "./locales/zh/errors.json";
 import errors_vi from "./locales/vi/errors.json";
+import updates_en from "./locales/en/updates.json";
+import updates_zh from "./locales/zh/updates.json";
+import updates_vi from "./locales/vi/updates.json";
 
 i18n
   .use(LanguageDetector)
@@ -55,6 +58,7 @@ i18n
         settings: settings_en,
         kanban: kanban_en,
         errors: errors_en,
+        updates: updates_en,
       },
       zh: {
         common: common_zh,
@@ -67,6 +71,7 @@ i18n
         settings: settings_zh,
         kanban: kanban_zh,
         errors: errors_zh,
+        updates: updates_zh,
       },
       vi: {
         common: common_vi,
@@ -79,6 +84,7 @@ i18n
         settings: settings_vi,
         kanban: kanban_vi,
         errors: errors_vi,
+        updates: updates_vi,
       },
     },
     supportedLngs: ["en", "zh", "vi"],
@@ -95,6 +101,7 @@ i18n
       "settings",
       "kanban",
       "errors",
+      "updates",
     ],
     defaultNS: "common",
     interpolation: { escapeValue: false },

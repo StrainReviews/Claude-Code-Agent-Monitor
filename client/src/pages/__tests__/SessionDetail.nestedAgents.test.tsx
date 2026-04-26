@@ -60,6 +60,17 @@ vi.mock("../../lib/api", () => ({
     pricing: {
       sessionCost: vi.fn(() => Promise.resolve({ total_cost: 0, breakdown: [] })),
     },
+    events: {
+      list: vi.fn(() =>
+        Promise.resolve({
+          events: [] as DashboardEvent[],
+          limit: 50,
+          offset: 0,
+          total: 0,
+        })
+      ),
+      facets: vi.fn(() => Promise.resolve({ event_types: [], tool_names: [] })),
+    },
   },
 }));
 
@@ -266,8 +277,10 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
 
     renderPage();
     expect(await screen.findByText("Main")).toBeInTheDocument();
-    // No expand button should exist for leaf node
-    expect(screen.queryByText(/subagent/)).not.toBeInTheDocument();
+    // No subagent-count button should exist for a leaf node. Match the
+    // "{{count}} subagent(s)" label specifically so we don't collide with
+    // the word "subagent" in unrelated explanatory copy elsewhere on the page.
+    expect(screen.queryByText(/\d+ subagent/)).not.toBeInTheDocument();
   });
 
   it("renders multiple main agents in the same session", async () => {

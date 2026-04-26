@@ -4,6 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -21,7 +22,15 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Languages,
+  RefreshCw,
 } from "lucide-react";
+import { api } from "../lib/api";
+import { eventBus } from "../lib/eventBus";
+import type { UpdateStatusPayload, WSMessage } from "../lib/types";
+
+function isUpdatePayload(x: unknown): x is UpdateStatusPayload {
+  return typeof x === "object" && x !== null && "git_repo" in x && "update_available" in x;
+}
 
 const NAV_KEYS = [
   { to: "/", icon: LayoutDashboard, key: "nav:dashboard" },
@@ -62,6 +71,53 @@ interface SidebarProps {
 export function Sidebar({ wsConnected, collapsed, onToggle }: SidebarProps) {
   const { t, i18n } = useTranslation();
   const websiteLabel = "sonnguyenhoang.com";
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatusPayload | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState(false);
+
+  useEffect(() => {
+    return eventBus.subscribe((msg: WSMessage) => {
+      if (msg.type !== "update_status") return;
+      if (isUpdatePayload(msg.data)) {
+        setUpdateStatus(msg.data);
+        setCheckError(Boolean(msg.data.fetch_error));
+      }
+    });
+  }, []);
+
+  const onCheckUpdates = async () => {
+    if (checking) return;
+    setChecking(true);
+    setCheckError(false);
+    // Explicit user intent — clear any prior dismissal so the modal can
+    // re-open if this check still reports an update.
+    try {
+      localStorage.removeItem("agent-monitor-update-dismissed-sha");
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(new Event("dashboard:reset-update-dismissal"));
+    try {
+      const fresh = await api.updates.check();
+      setUpdateStatus(fresh);
+      setCheckError(Boolean(fresh.fetch_error));
+    } catch {
+      setCheckError(true);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const updateAvailable = Boolean(updateStatus?.update_available);
+  const checkTitle = checking
+    ? t("nav:checkingForUpdates")
+    : checkError
+      ? t("nav:checkFailed")
+      : updateAvailable
+        ? t("nav:updateAvailable")
+        : updateStatus
+          ? t("nav:upToDate")
+          : t("nav:checkForUpdates");
   const currentLanguage = normalizeLanguage(i18n.resolvedLanguage ?? i18n.language);
   const currentIndex = SUPPORTED_LANGUAGES.indexOf(currentLanguage);
   const nextLanguage = SUPPORTED_LANGUAGES[(currentIndex + 1) % SUPPORTED_LANGUAGES.length];
@@ -227,6 +283,52 @@ export function Sidebar({ wsConnected, collapsed, onToggle }: SidebarProps) {
             {!collapsed && <span className="text-[11px] font-medium text-gray-600">v1.0.0</span>}
           </div>
         </div>
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={onCheckUpdates}
+            disabled={checking}
+            title={checkTitle}
+            aria-label={checkTitle}
+            className={`relative w-8 h-8 mx-auto flex items-center justify-center rounded-lg border bg-surface-2 transition-colors disabled:opacity-60 ${
+              updateAvailable
+                ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                : checkError
+                  ? "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                  : "border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+            }`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${checking ? "animate-spin" : ""}`} aria-hidden />
+            {updateAvailable && !checking && (
+              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            )}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onCheckUpdates}
+            disabled={checking}
+            title={checkTitle}
+            className={`w-full rounded-lg border bg-surface-2 px-2.5 py-2 text-xs transition-colors disabled:opacity-60 flex items-center justify-between gap-2 ${
+              updateAvailable
+                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                : checkError
+                  ? "border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                  : "border-border text-gray-300 hover:text-gray-100 hover:bg-surface-3"
+            }`}
+          >
+            <span className="inline-flex items-center gap-2 truncate">
+              <RefreshCw
+                className={`w-3.5 h-3.5 flex-shrink-0 ${checking ? "animate-spin" : ""}`}
+                aria-hidden
+              />
+              <span className="font-medium truncate">{checkTitle}</span>
+            </span>
+            {updateAvailable && !checking && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
+            )}
+          </button>
+        )}
         {!collapsed && (
           <div className="space-y-1.5">
             <a

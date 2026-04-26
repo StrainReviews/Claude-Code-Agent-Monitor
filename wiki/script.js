@@ -5,7 +5,7 @@
 
 /* ─── Mermaid initialisation ────────────────────────────────────────────── */
 mermaid.initialize({
-  startOnLoad: true,
+  startOnLoad: false,
   theme: "dark",
   themeVariables: {
     primaryColor: "#1a1a2b",
@@ -75,6 +75,67 @@ mermaid.initialize({
   },
   logLevel: "error",
 });
+
+/* ─── Lazy-render mermaid diagrams ─────────────────────────────────────────
+ * mermaid.min.js is ~3.2MB uncompressed and rendering 21 diagrams
+ * synchronously at DOMContentLoaded blocks the main thread for hundreds
+ * of ms (and forces a layout shift when SVGs replace text). Instead, we
+ * render each .mermaid block only when it scrolls within ~200px of the
+ * viewport. The render cost gets spread across scroll instead of dumped
+ * upfront, so first paint is near-instant.
+ *
+ * Falls back to eager rendering when IntersectionObserver isn't
+ * available, or on prefers-reduced-motion (where we want stable content
+ * up front rather than appearing-as-you-scroll motion). */
+(function () {
+  const blocks = Array.from(document.querySelectorAll(".mermaid"));
+  if (blocks.length === 0) return;
+
+  // Reserve a placeholder so the page doesn't collapse before render and
+  // the IntersectionObserver has stable layout to measure.
+  blocks.forEach(function (el) {
+    if (!el.style.minHeight) el.style.minHeight = "120px";
+    el.dataset.mermaidPending = "1";
+  });
+
+  function renderOne(el) {
+    if (!el.dataset.mermaidPending) return;
+    delete el.dataset.mermaidPending;
+    try {
+      // mermaid v10 API: render a specific subtree of nodes.
+      mermaid.run({ nodes: [el] }).catch(function () {
+        /* ignore — leave the source text visible if render fails */
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (!("IntersectionObserver" in window) || reduced.matches) {
+    blocks.forEach(renderOne);
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        renderOne(entry.target);
+      });
+    },
+    {
+      // Start rendering before the diagram is visible so it feels instant.
+      rootMargin: "200px 0px",
+      threshold: 0,
+    }
+  );
+
+  blocks.forEach(function (el) {
+    observer.observe(el);
+  });
+})();
 
 /* ─── Sidebar tooltips (collapsed state) ────────────────────────────────── */
 (function () {
@@ -213,16 +274,32 @@ mermaid.initialize({
     "main .wiki-footer > *",
   ];
 
-  const targets = Array.from(document.querySelectorAll(selectors.join(","))).filter(
+  const allTargets = Array.from(document.querySelectorAll(selectors.join(","))).filter(
     (element, index, collection) => collection.indexOf(element) === index
   );
-  const targetSet = new Set(targets);
+
+  if (allTargets.length === 0) return;
+
+  /* Only animate elements that start below the initial viewport.
+   *
+   * On a normal top-of-page load, the hero and first-fold content are
+   * already where the user is looking — a fade-in there just delays
+   * paint. More importantly, on a deep-link load (e.g. #update-notifier),
+   * the browser scrolls to the target section *before* this script runs;
+   * applying reveal-on-scroll to that section's children would leave
+   * them opacity 0 with up to 550ms + 250ms stagger before they appear.
+   *
+   * Measuring getBoundingClientRect() here — after DOM parse and after
+   * the browser's hash scroll — tells us exactly what's already visible
+   * (or scrolled past). Those elements skip reveal entirely. Everything
+   * below the fold keeps the staggered fade on scroll as before. */
+  const viewportBottom = window.innerHeight;
+  const targets = allTargets.filter(
+    (target) => target.getBoundingClientRect().top >= viewportBottom
+  );
 
   if (targets.length === 0) return;
-
-  const revealImmediately = () => {
-    targets.forEach((target) => target.classList.add("is-visible"));
-  };
+  const targetSet = new Set(targets);
 
   targets.forEach((target) => {
     target.classList.add("reveal-on-scroll");
@@ -236,7 +313,7 @@ mermaid.initialize({
   });
 
   if (prefersReducedMotion.matches || !("IntersectionObserver" in window)) {
-    revealImmediately();
+    targets.forEach((target) => target.classList.add("is-visible"));
     return;
   }
 
