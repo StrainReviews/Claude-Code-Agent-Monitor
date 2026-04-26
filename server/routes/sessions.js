@@ -7,6 +7,8 @@ const { Router } = require("express");
 const { stmts, db } = require("../db");
 const { broadcast } = require("../websocket");
 const { calculateCost } = require("./pricing");
+const { reconcileSession, reconcileAll } = require("../lib/subagent-reconciler");
+const { transcriptCache } = require("./hooks");
 
 const router = Router();
 
@@ -59,16 +61,30 @@ router.get("/", (req, res) => {
   if (rows.length > 0) {
     const ids = rows.map((r) => r.id);
     const placeholders = ids.map(() => "?").join(",");
+    // Combine main-session tokens (token_usage, baselines applied) with
+    // per-subagent tokens (subagent_token_usage). Subagent transcripts are
+    // disjoint from the main transcript so additive summation is correct.
     const allTokens = db
       .prepare(
         `SELECT session_id, model,
-          input_tokens + baseline_input as input_tokens,
-          output_tokens + baseline_output as output_tokens,
-          cache_read_tokens + baseline_cache_read as cache_read_tokens,
-          cache_write_tokens + baseline_cache_write as cache_write_tokens
-        FROM token_usage WHERE session_id IN (${placeholders})`
+          SUM(input_tokens)       as input_tokens,
+          SUM(output_tokens)      as output_tokens,
+          SUM(cache_read_tokens)  as cache_read_tokens,
+          SUM(cache_write_tokens) as cache_write_tokens
+        FROM (
+          SELECT session_id, model,
+            input_tokens + baseline_input       as input_tokens,
+            output_tokens + baseline_output     as output_tokens,
+            cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+            cache_write_tokens + baseline_cache_write as cache_write_tokens
+          FROM token_usage WHERE session_id IN (${placeholders})
+          UNION ALL
+          SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+          FROM subagent_token_usage WHERE session_id IN (${placeholders})
+        )
+        GROUP BY session_id, model`
       )
-      .all(...ids);
+      .all(...ids, ...ids);
 
     const rules = stmts.listPricing.all();
     const tokensBySession = {};
@@ -142,6 +158,55 @@ router.patch("/:id", (req, res) => {
   const session = stmts.getSession.get(req.params.id);
   broadcast("session_updated", session);
   res.json({ session });
+});
+
+// On-demand subagent reconciliation. Re-derives the correct Agent <-> JSONL
+// binding from first-line timestamps and repairs any drift in
+// `subagent_token_usage` / `agents.model`. Safe to call repeatedly.
+// Query `dry_run=1` returns the would-be changes without writing.
+router.post("/:id/reconcile", (req, res) => {
+  const session = stmts.getSession.get(req.params.id);
+  if (!session) {
+    return res.status(404).json({ error: { code: "NOT_FOUND", message: "Session not found" } });
+  }
+  const dryRun = req.query.dry_run === "1" || req.query.dry_run === "true";
+  try {
+    const result = reconcileSession({
+      db,
+      stmts,
+      transcriptCache,
+      session,
+      projectsRoot:
+        process.env.CLAUDE_PROJECTS_ROOT ||
+        require("path").join(require("os").homedir(), ".claude", "projects"),
+      dryRun,
+    });
+    if (!dryRun && (result.modelUpdates > 0 || result.tokenUpdates > 0)) {
+      broadcast("session_updated", stmts.getSession.get(req.params.id));
+    }
+    res.json({ ok: true, dry_run: dryRun, result });
+  } catch (e) {
+    res.status(500).json({ error: { code: "RECONCILE_FAILED", message: e.message } });
+  }
+});
+
+// Run the reconciler across every recent/active session in one call.
+router.post("/reconcile-all", (req, res) => {
+  const dryRun = req.query.dry_run === "1" || req.query.dry_run === "true";
+  try {
+    const result = reconcileAll({
+      db,
+      stmts,
+      transcriptCache,
+      projectsRoot:
+        process.env.CLAUDE_PROJECTS_ROOT ||
+        require("path").join(require("os").homedir(), ".claude", "projects"),
+      dryRun,
+    });
+    res.json({ ok: true, dry_run: dryRun, result });
+  } catch (e) {
+    res.status(500).json({ error: { code: "RECONCILE_FAILED", message: e.message } });
+  }
 });
 
 module.exports = router;

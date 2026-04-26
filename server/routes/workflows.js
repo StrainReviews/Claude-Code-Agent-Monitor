@@ -456,19 +456,32 @@ function getModelDelegation(statusFilter) {
     )
     .all(...ss.params);
 
-  // Token cost per model — filter via session_id on token_usage table
+  // Token cost per model — combines main-session token_usage (with baselines)
+  // and per-subagent subagent_token_usage. Haiku-on-Opus sessions only show
+  // Haiku tokens in the subagent rows, so summing per model yields the right
+  // per-model totals without any subtraction.
   const sfToken = sessionIdFilter(statusFilter);
   const tokensByModel = db
     .prepare(
       `SELECT model,
-        SUM(input_tokens + baseline_input) as input_tokens,
-        SUM(output_tokens + baseline_output) as output_tokens,
-        SUM(cache_read_tokens + baseline_cache_read) as cache_read_tokens,
-        SUM(cache_write_tokens + baseline_cache_write) as cache_write_tokens
-       FROM token_usage WHERE 1=1${sfToken.clause}
+        SUM(input_tokens)       as input_tokens,
+        SUM(output_tokens)      as output_tokens,
+        SUM(cache_read_tokens)  as cache_read_tokens,
+        SUM(cache_write_tokens) as cache_write_tokens
+       FROM (
+         SELECT session_id, model,
+           input_tokens + baseline_input       as input_tokens,
+           output_tokens + baseline_output     as output_tokens,
+           cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+           cache_write_tokens + baseline_cache_write as cache_write_tokens
+         FROM token_usage WHERE 1=1${sfToken.clause}
+         UNION ALL
+         SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+         FROM subagent_token_usage WHERE 1=1${sfToken.clause}
+       )
        GROUP BY model ORDER BY (input_tokens + output_tokens) DESC`
     )
-    .all(...sfToken.params);
+    .all(...sfToken.params, ...sfToken.params);
 
   return { mainModels, subagentModels, tokensByModel };
 }
@@ -635,14 +648,19 @@ function getSessionComplexity(statusFilter) {
 
   const sessions = rows.map((r) => {
     const dur = durationSec(r);
-    // Get token count for this session
+    // Get token count for this session (main + all subagents, disjoint sources)
     const tokens = db
       .prepare(
-        `SELECT SUM(input_tokens + baseline_input + output_tokens + baseline_output +
-                    cache_read_tokens + baseline_cache_read + cache_write_tokens + baseline_cache_write) as total
-         FROM token_usage WHERE session_id = ?`
+        `SELECT SUM(total) as total FROM (
+           SELECT input_tokens + baseline_input + output_tokens + baseline_output +
+                  cache_read_tokens + baseline_cache_read + cache_write_tokens + baseline_cache_write as total
+           FROM token_usage WHERE session_id = ?
+           UNION ALL
+           SELECT input_tokens + output_tokens + cache_read_tokens + cache_write_tokens as total
+           FROM subagent_token_usage WHERE session_id = ?
+         )`
       )
-      .get(r.id);
+      .get(r.id, r.id);
 
     return {
       id: r.id,
@@ -745,6 +763,7 @@ function buildAgentTree(agents) {
       task: a.task,
       started_at: a.started_at,
       ended_at: a.ended_at,
+      model: a.model ?? null,
       children: [],
     };
   }

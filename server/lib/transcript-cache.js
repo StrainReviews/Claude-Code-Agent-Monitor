@@ -151,6 +151,31 @@ class TranscriptCache {
     return result.compaction.entries.map((e) => ({ ...e }));
   }
 
+  /**
+   * Summarize a subagent transcript JSONL: return the per-model token breakdown
+   * and the "primary" model (the one with the most output tokens — in practice
+   * a subagent almost always runs on a single model, but a subagent can
+   * internally delegate so multiple models may appear).
+   *
+   * Returns `null` if the file is missing or has no usage data. Otherwise
+   * `{ primaryModel, tokensByModel }` where `tokensByModel` is a map of
+   * `{ input, output, cacheRead, cacheWrite }`.
+   */
+  extractSubagentSummary(agentTranscriptPath) {
+    const result = this.extract(agentTranscriptPath);
+    if (!result || !result.tokensByModel) return null;
+    const entries = Object.entries(result.tokensByModel);
+    if (entries.length === 0) return null;
+    // Primary = model with the largest output_tokens contribution. Output is a
+    // better signal than input because every call has some input (including
+    // cached prompt prefix), but only the model that actually generated text
+    // contributes meaningfully to output.
+    const [primaryModel] = entries.reduce((best, cur) =>
+      cur[1].output > best[1].output ? cur : best
+    );
+    return { primaryModel, tokensByModel: result.tokensByModel };
+  }
+
   _fullRead(filePath) {
     const content = fs.readFileSync(filePath, "utf8");
     return this._parseContent(content);
