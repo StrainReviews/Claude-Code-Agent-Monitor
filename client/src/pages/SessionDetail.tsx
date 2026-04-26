@@ -3,7 +3,6 @@
  * @description Displays detailed information about a specific session, including its agents, events, and cost breakdown, with real-time updates and an expandable agent hierarchy view.
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
-
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -18,10 +17,14 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  MessageSquare,
+  List,
+  AlertCircle,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
 import { AgentCard } from "../components/AgentCard";
+import { ConversationView } from "../components/conversation/ConversationView";
 import { SessionStatusBadge, AgentStatusBadge } from "../components/StatusBadge";
 import { EventDetail } from "../components/EventDetail";
 import {
@@ -43,7 +46,9 @@ import {
 } from "../lib/event-grouping";
 import type { AgentInfo } from "../lib/event-grouping";
 import { formatDateTime, formatDuration, fmtCostFull, timeAgo } from "../lib/format";
-import type { Session, Agent, DashboardEvent, SessionStatus, CostResult } from "../lib/types";
+import type { Session, Agent, DashboardEvent, SessionStatus, CostResult, TranscriptInfo } from "../lib/types";
+
+type DetailTab = "agents" | "conversation" | "timeline";
 
 const EVENTS_INITIAL_BATCH = 50;
 const EVENTS_MORE_BATCH = 500;
@@ -68,6 +73,11 @@ export function SessionDetail() {
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => {
     return new Set<string>();
   });
+const [activeTab, setActiveTab] = useState<DetailTab>("agents");
+  const [transcripts, setTranscripts] = useState<TranscriptInfo[]>([]);
+  const [pendingTranscriptId, setPendingTranscriptId] = useState<string | null>(null);
+  const [transcriptNotFound, setTranscriptNotFound] = useState(false);
+  const notFoundTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(() => new Set());
 
   function toggleEvent(id: number) {
@@ -94,6 +104,16 @@ export function SessionDetail() {
     navigate("/sessions");
   }, [navigate]);
 
+  // Auto-dismiss not-found warning after 8 seconds
+  useEffect(() => {
+    if (transcriptNotFound) {
+      notFoundTimerRef.current = setTimeout(() => setTranscriptNotFound(false), 8000);
+      return () => {
+        if (notFoundTimerRef.current) clearTimeout(notFoundTimerRef.current);
+      };
+    }
+  }, [transcriptNotFound]);
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -115,6 +135,87 @@ export function SessionDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+// Load transcripts list (for Agent → Conversation navigation ID mapping)
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    api.sessions.transcripts(id).then((result) => {
+      if (!cancelled) setTranscripts(result.transcripts);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [id]);
+
+  // Navigate to Conversation tab and select the matching transcript when clicking an agent
+  const navigateToAgentConversation = useCallback((agent: Agent) => {
+    // Clear any previous not-found warning
+    setTranscriptNotFound(false);
+
+    const findTranscriptId = (ts: TranscriptInfo[]): string | null => {
+      // 1. Exact match via db_agent_id (most reliable)
+      const exactMatch = ts.find((t) => t.db_agent_id === agent.id);
+      if (exactMatch) return exactMatch.id;
+
+      // 2. Main agent fallback
+      if (agent.type === "main") return "main";
+
+      // 3. Fallback: match by subagent_type or type, then narrow by name
+      let candidates = ts.filter((t) => t.type !== "main");
+      if (agent.subagent_type) {
+        const byType = candidates.filter(
+          (t) => t.subagent_type === agent.subagent_type || t.type === agent.subagent_type
+        );
+        if (byType.length > 0) candidates = byType;
+      }
+      if (agent.name && candidates.length > 1) {
+        const byName = candidates.filter((t) => t.name === agent.name);
+        if (byName.length > 0) candidates = byName;
+      }
+      if (candidates.length === 1) return candidates[0]!.id;
+
+      return null;
+    };
+
+    // Try matching with currently loaded transcripts
+    let transcriptId = findTranscriptId(transcripts);
+
+    if (transcriptId) {
+      setPendingTranscriptId(transcriptId);
+      setActiveTab("conversation");
+    } else if (transcripts.length === 0 && id) {
+      // Transcripts not loaded yet — fetch them and retry
+      api.sessions.transcripts(id).then((result) => {
+        const freshId = findTranscriptId(result.transcripts);
+        if (freshId) {
+          setTranscripts(result.transcripts);
+          setPendingTranscriptId(freshId);
+          setActiveTab("conversation");
+        } else {
+          setTranscriptNotFound(true);
+        }
+      }).catch(() => {
+        setTranscriptNotFound(true);
+      });
+    } else {
+      // No matching transcript found — show info to user
+      setTranscriptNotFound(true);
+    }
+  }, [transcripts, id]);
+
+  // Compute compaction labels: "#1", "#2", etc. based on started_at order
+  const compactionLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    const compactions = agents
+      .filter((a) => a.subagent_type === "compaction")
+      .sort((a, b) => (a.started_at || "").localeCompare(b.started_at || ""));
+    compactions.forEach((a, i) => {
+      const time = a.started_at
+        ? new Date(a.started_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+        : "";
+      map.set(a.id, `#${i + 1}${time ? ` · ${time}` : ""}`);
+    });
+    return map;
+  }, [agents]);
 
   // Event list is fetched separately from the session metadata so it can
   // respect the user's filters and use the server-driven pagination. Status
@@ -192,7 +293,6 @@ export function SessionDetail() {
       setEventsLoadingMore(false);
     }
   }, [eventApiParams, events.length]);
-
   // Auto-expand agents that have working subagents (at any depth)
   useEffect(() => {
     const parentsWithActiveChildren = new Set<string>();
@@ -339,330 +439,387 @@ export function SessionDetail() {
         </button>
       </div>
 
-      {/* Agents */}
-      <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
+      {/* Tab Navigation */}
+      <div className="flex items-center gap-1 border-b border-border">
+        <button
+          onClick={() => { setActiveTab("agents"); setTranscriptNotFound(false); }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "agents"
+              ? "border-violet-500 text-violet-400"
+              : "border-transparent text-gray-500 hover:text-gray-300"
+          }`}
+        >
           <Bot className="w-4 h-4" />
-          {t("detail.agents")} ({agents.length})
-        </h3>
-        {agents.length === 0 ? (
-          <p className="text-sm text-gray-500">{t("detail.noAgents")}</p>
-        ) : (
-          <div className="space-y-2">
-            {(() => {
-              const agentMap = new Map(agents.map((a) => [a.id, a]));
-              const childrenByParent = new Map<string, Agent[]>();
-              const rootAgents: Agent[] = [];
-              for (const a of agents) {
-                if (a.parent_agent_id && agentMap.has(a.parent_agent_id)) {
-                  const list = childrenByParent.get(a.parent_agent_id) || [];
-                  list.push(a);
-                  childrenByParent.set(a.parent_agent_id, list);
-                } else if (!a.parent_agent_id || !agentMap.has(a.parent_agent_id)) {
-                  rootAgents.push(a);
-                }
-              }
-
-              function countDescendants(id: string): number {
-                const kids = childrenByParent.get(id) || [];
-                return kids.reduce((sum, k) => sum + 1 + countDescendants(k.id), 0);
-              }
-
-              function renderAgentNode(agent: Agent, depth: number) {
-                const children = childrenByParent.get(agent.id) || [];
-                const isExpanded = expandedAgents.has(agent.id);
-                const hasChildren = children.length > 0;
-                const isSubagent = depth > 0;
-                const totalDesc = hasChildren ? countDescendants(agent.id) : 0;
-
-                return (
-                  <div key={agent.id}>
-                    <div className="flex items-center gap-1 min-w-0">
-                      {hasChildren && (
-                        <button
-                          onClick={() =>
-                            setExpandedAgents((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(agent.id)) next.delete(agent.id);
-                              else next.add(agent.id);
-                              return next;
-                            })
-                          }
-                          className="p-1 text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="w-4 h-4" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4" />
-                          )}
-                        </button>
-                      )}
-                      {isSubagent && !hasChildren && <span className="w-6 flex-shrink-0" />}
-                      {isSubagent && (
-                        <GitBranch className="w-3 h-3 text-violet-400 flex-shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <AgentCard agent={agent} />
-                      </div>
-                    </div>
-
-                    {hasChildren && isExpanded && (
-                      <div className="ml-6 mt-1 space-y-1 border-l-2 border-violet-500/20 pl-3">
-                        {children.map((child) => renderAgentNode(child, depth + 1))}
-                      </div>
-                    )}
-
-                    {hasChildren && !isExpanded && (
-                      <button
-                        onClick={() => setExpandedAgents((prev) => new Set([...prev, agent.id]))}
-                        className="ml-7 mt-1 text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
-                      >
-                        {t("common:subagent_label", { count: totalDesc })}
-                      </button>
-                    )}
-                  </div>
-                );
-              }
-
-              const orphans = rootAgents.filter(
-                (a) =>
-                  a.type === "subagent" && a.parent_agent_id && !agentMap.has(a.parent_agent_id)
-              );
-              const roots = rootAgents.filter(
-                (a) =>
-                  !(a.type === "subagent" && a.parent_agent_id && !agentMap.has(a.parent_agent_id))
-              );
-
-              return (
-                <>
-                  {roots.map((agent) => renderAgentNode(agent, 0))}
-
-                  {orphans.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-[11px] text-gray-500 mb-2 uppercase tracking-wider">
-                        {t("detail.unparented")}
-                      </p>
-                      <div className="space-y-1">
-                        {orphans.map((agent) => renderAgentNode(agent, 1))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
+{t("detail.agents")} ({agents.length})
+        </button>
+        <button
+          onClick={() => { setActiveTab("conversation"); setTranscriptNotFound(false); }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "conversation"
+              ? "border-violet-500 text-violet-400"
+              : "border-transparent text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <MessageSquare className="w-4 h-4" />
+          Conversation
+        </button>
+        <button
+          onClick={() => { setActiveTab("timeline"); setTranscriptNotFound(false); }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "timeline"
+              ? "border-violet-500 text-violet-400"
+              : "border-transparent text-gray-500 hover:text-gray-300"
+          }`}
+        >
+          <List className="w-4 h-4" />
+          Timeline ({events.length}/{eventsTotal})
+        </button>
       </div>
 
-      {/* Cost Breakdown */}
-      {cost && cost.breakdown.length > 0 && cost.total_cost > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-            <DollarSign className="w-4 h-4" />
-            {t("detail.costBreakdown")}
-          </h3>
-          <div className="card overflow-x-auto">
-            <table className="w-full min-w-[600px]">
-              <thead>
-                <tr className="border-b border-border text-left">
-                  <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                    {t("common:cost.model")}
-                  </th>
-                  <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
-                    {t("common:token.input")}
-                  </th>
-                  <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
-                    {t("common:token.output")}
-                  </th>
-                  <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
-                    {t("common:token.cacheRead")}
-                  </th>
-                  <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
-                    {t("common:token.cacheWrite")}
-                  </th>
-                  <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
-                    {t("common:cost.cost")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {cost.breakdown.map((row) => (
-                  <tr key={row.model} className="hover:bg-surface-4 transition-colors">
-                    <td className="px-5 py-2.5 text-sm font-mono text-gray-300">{row.model}</td>
-                    <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
-                      {row.input_tokens.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
-                      {row.output_tokens.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
-                      {row.cache_read_tokens.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
-                      {row.cache_write_tokens.toLocaleString()}
-                    </td>
-                    <td className="px-5 py-2.5 text-sm text-emerald-400 text-right font-mono font-medium">
-                      {fmtCostFull(row.cost, 4)}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-surface-2">
-                  <td className="px-5 py-2.5 text-sm font-medium text-gray-200" colSpan={5}>
-                    {t("common:total")}
-                  </td>
-                  <td className="px-5 py-2.5 text-sm text-emerald-400 text-right font-mono font-semibold">
-                    {fmtCostFull(cost.total_cost, 4)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      {/* Tab Content */}
+      {transcriptNotFound && (
+        <div className="flex items-center gap-2 px-4 py-2.5 mb-3 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Conversation transcript not found for this agent. The transcript file may be missing or not yet linked.</span>
+          <button
+            onClick={() => setTranscriptNotFound(false)}
+            className="ml-auto text-amber-400/60 hover:text-amber-400 transition-colors"
+          >
+            <List className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* Event Timeline */}
-      <div>
-        <h3 className="text-sm font-medium text-gray-300 mb-4">
-          {t("detail.eventTimeline")} ({events.length}/{eventsTotal})
-        </h3>
-        <div className="mb-3">
-          <EventFiltersInfo />
-        </div>
-        <div className="mb-3">
-          <EventFilters
-            value={filters}
-            onChange={setFilters}
-            hideSessionFilter
-            agentOptions={agents.map((a) => ({ id: a.id, label: a.name || a.id }))}
-          />
-        </div>
-        <div className="flex items-center gap-2 mb-3 px-1">
-          <div
-            role="group"
-            aria-label="view mode"
-            className="inline-flex rounded-md border border-border overflow-hidden"
-          >
-            <button
-              type="button"
-              onClick={() => setGrouped(true)}
-              aria-pressed={grouped}
-              className={`text-[11px] px-3 py-1 cursor-pointer ${
-                grouped
-                  ? "bg-accent/20 text-accent"
-                  : "bg-surface-2 text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              {t("common:eventFilters.grouped")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setGrouped(false)}
-              aria-pressed={!grouped}
-              className={`text-[11px] px-3 py-1 border-l border-border cursor-pointer ${
-                !grouped
-                  ? "bg-accent/20 text-accent"
-                  : "bg-surface-2 text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              {t("common:eventFilters.flat")}
-            </button>
-          </div>
-        </div>
-        {events.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            {isEmptyFilters(filters) ? t("detail.noEvents") : t("common:eventFilters.noResults")}
-          </p>
-        ) : (
-          <div className="card overflow-hidden">
-            <div className="divide-y divide-border max-h-[600px] overflow-y-auto overflow-x-auto">
-              {grouped
-                ? eventGroups.map((group) => (
-                    <EventGroupRow key={group.key} group={group} agentInfoById={agentInfoById} />
-                  ))
-                : events.map((event, i) => {
-                    const key = event.id ?? i;
-                    const isOpen = event.id != null && expandedEvents.has(event.id);
-                    return (
-                      <div key={key}>
-                        <button
-                          type="button"
-                          onClick={() => event.id != null && toggleEvent(event.id)}
-                          aria-expanded={isOpen}
-                          aria-label={
-                            isOpen
-                              ? t("common:eventDetail.collapse")
-                              : t("common:eventDetail.expand")
-                          }
-                          className="w-full text-left px-5 py-3 flex items-center gap-4 hover:bg-surface-4 transition-colors min-w-0 cursor-pointer"
-                        >
-                          <span
-                            className={`text-gray-500 text-[10px] w-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-                            aria-hidden="true"
+      {activeTab === "agents" && (
+        <div>
+          {agents.length === 0 ? (
+            <p className="text-sm text-gray-500">{t("detail.noAgents")}</p>
+          ) : (
+            <div className="space-y-2">
+              {(() => {
+                // Build parent→children map for the full tree (works at any depth)
+                const agentMap = new Map(agents.map((a) => [a.id, a]));
+                const childrenByParent = new Map<string, Agent[]>();
+                const rootAgents: Agent[] = [];
+                for (const a of agents) {
+                  if (a.parent_agent_id && agentMap.has(a.parent_agent_id)) {
+                    const list = childrenByParent.get(a.parent_agent_id) || [];
+                    list.push(a);
+                    childrenByParent.set(a.parent_agent_id, list);
+                  } else if (!a.parent_agent_id || !agentMap.has(a.parent_agent_id)) {
+                    rootAgents.push(a);
+                  }
+                }
+
+                // Count all descendants (recursive) for collapsed badge
+                function countDescendants(id: string): number {
+                  const kids = childrenByParent.get(id) || [];
+                  return kids.reduce((sum, k) => sum + 1 + countDescendants(k.id), 0);
+                }
+
+                // Recursive agent node renderer
+                function renderAgentNode(agent: Agent, depth: number) {
+                  const children = childrenByParent.get(agent.id) || [];
+                  const isExpanded = expandedAgents.has(agent.id);
+                  const hasChildren = children.length > 0;
+                  const isSubagent = depth > 0;
+                  const totalDesc = hasChildren ? countDescendants(agent.id) : 0;
+
+                  return (
+                    <div key={agent.id}>
+                      <div className="flex items-center gap-1 min-w-0">
+                        {hasChildren && (
+                          <button
+                            onClick={() =>
+                              setExpandedAgents((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(agent.id)) next.delete(agent.id);
+                                else next.add(agent.id);
+                                return next;
+                              })
+                            }
+                            className="p-1 text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
                           >
-                            ▶
-                          </span>
-                          <div className="w-16 text-[11px] text-gray-600 font-mono flex-shrink-0">
-                            {timeAgo(event.created_at)}
-                          </div>
-                          <AgentStatusBadge status={statusFromEventType(event.event_type)} />
-                          {(() => {
-                            const info = event.agent_id
-                              ? agentInfoById.get(event.agent_id)
-                              : undefined;
-                            // Session is implicit on this page — project is
-                            // still shown so the row identifies the working
-                            // directory when you share / search.
-                            const project = projectByEventId.get(event.id) ?? null;
-                            const origin = buildOriginLabel(
-                              project,
-                              null,
-                              agentOriginLabel(event.agent_id, info)
-                            );
-                            return (
-                              <span className="text-sm text-gray-300 flex-1 truncate">
-                                {origin && (
-                                  <span
-                                    className="text-gray-500 mr-1"
-                                    title={event.agent_id ?? undefined}
-                                  >
-                                    {origin} ·
-                                  </span>
-                                )}
-                                {buildEventTitle(event)}
-                              </span>
-                            );
-                          })()}
-                          {event.tool_name && (
-                            <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono">
-                              {event.tool_name}
-                            </span>
-                          )}
-                        </button>
-                        {isOpen && <EventDetail event={event} />}
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronRight className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                        {isSubagent && !hasChildren && <span className="w-6 flex-shrink-0" />}
+                        {isSubagent && (
+                          <GitBranch className="w-3 h-3 text-violet-400 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <AgentCard agent={agent} label={compactionLabels.get(agent.id)} onClick={() => navigateToAgentConversation(agent)} />
+                        </div>
                       </div>
-                    );
-                  })}
+
+                      {/* Recursive children (collapsible) */}
+                      {hasChildren && isExpanded && (
+                        <div className="ml-6 mt-1 space-y-1 border-l-2 border-violet-500/20 pl-3">
+                          {children.map((child) => renderAgentNode(child, depth + 1))}
+                        </div>
+                      )}
+
+                      {/* Descendant count badge when collapsed */}
+                      {hasChildren && !isExpanded && (
+                        <button
+                          onClick={() => setExpandedAgents((prev) => new Set([...prev, agent.id]))}
+                          className="ml-7 mt-1 text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+                        >
+                          {t("common:subagent_label", { count: totalDesc })}
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Separate true orphans (subagent whose parent_agent_id references a missing agent)
+                const orphans = rootAgents.filter(
+                  (a) =>
+                    a.type === "subagent" && a.parent_agent_id && !agentMap.has(a.parent_agent_id)
+                );
+                const roots = rootAgents.filter(
+                  (a) =>
+                    !(a.type === "subagent" && a.parent_agent_id && !agentMap.has(a.parent_agent_id))
+                );
+
+                return (
+                  <>
+                    {roots.map((agent) => renderAgentNode(agent, 0))}
+
+                    {/* Orphaned subagents */}
+                    {orphans.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-[11px] text-gray-500 mb-2 uppercase tracking-wider">
+                          {t("detail.unparented")}
+                        </p>
+                        <div className="space-y-1">
+                          {orphans.map((agent) => renderAgentNode(agent, 1))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Cost Breakdown — shown under Agents tab */}
+          {cost && cost.breakdown.length > 0 && cost.total_cost > 0 && (
+            <div className="mt-8">
+              <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
+                <DollarSign className="w-4 h-4" />
+                {t("detail.costBreakdown")}
+              </h3>
+              <div className="card overflow-x-auto">
+                <table className="w-full min-w-[600px]">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        {t("common:cost.model")}
+                      </th>
+                      <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                        {t("common:token.input")}
+                      </th>
+                      <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                        {t("common:token.output")}
+                      </th>
+                      <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                        {t("common:token.cacheRead")}
+                      </th>
+                      <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                        {t("common:token.cacheWrite")}
+                      </th>
+                      <th className="px-5 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                        {t("common:cost.cost")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {cost.breakdown.map((row) => (
+                      <tr key={row.model} className="hover:bg-surface-4 transition-colors">
+                        <td className="px-5 py-2.5 text-sm font-mono text-gray-300">{row.model}</td>
+                        <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
+                          {row.input_tokens.toLocaleString()}
+                        </td>
+                        <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
+                          {row.output_tokens.toLocaleString()}
+                        </td>
+                        <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
+                          {row.cache_read_tokens.toLocaleString()}
+                        </td>
+                        <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
+                          {row.cache_write_tokens.toLocaleString()}
+                        </td>
+                        <td className="px-5 py-2.5 text-sm text-emerald-400 text-right font-mono font-medium">
+                          {fmtCostFull(row.cost, 4)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-surface-2">
+                      <td className="px-5 py-2.5 text-sm font-medium text-gray-200" colSpan={5}>
+                        {t("common:total")}
+                      </td>
+                      <td className="px-5 py-2.5 text-sm text-emerald-400 text-right font-mono font-semibold">
+                        {fmtCostFull(cost.total_cost, 4)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "conversation" && (
+        <ConversationView sessionId={session.id} initialTranscriptId={pendingTranscriptId} />
+      )}
+
+      {activeTab === "timeline" && (
+        <div>
+          <div className="mb-3">
+            <EventFiltersInfo />
+          </div>
+          <div className="mb-3">
+            <EventFilters
+              value={filters}
+              onChange={setFilters}
+              hideSessionFilter
+              agentOptions={agents.map((a) => ({ id: a.id, label: a.name || a.id }))}
+            />
+          </div>
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <div
+              role="group"
+              aria-label="view mode"
+              className="inline-flex rounded-md border border-border overflow-hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setGrouped(true)}
+                aria-pressed={grouped}
+                className={`text-[11px] px-3 py-1 cursor-pointer ${
+                  grouped
+                    ? "bg-accent/20 text-accent"
+                    : "bg-surface-2 text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {t("common:eventFilters.grouped")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGrouped(false)}
+                aria-pressed={!grouped}
+                className={`text-[11px] px-3 py-1 border-l border-border cursor-pointer ${
+                  !grouped
+                    ? "bg-accent/20 text-accent"
+                    : "bg-surface-2 text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {t("common:eventFilters.flat")}
+              </button>
             </div>
           </div>
-        )}
-        {events.length < eventsTotal && (
-          <div className="flex items-center justify-between mt-3 px-1">
-            <span className="text-xs text-gray-500">
-              {t("common:eventFilters.showing", { shown: events.length, total: eventsTotal })}
-            </span>
-            <button
-              type="button"
-              onClick={loadMoreEvents}
-              disabled={eventsLoadingMore}
-              className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {eventsLoadingMore
-                ? t("common:eventFilters.loading")
-                : t("common:eventFilters.loadMore")}
-            </button>
-          </div>
-        )}
-      </div>
+          {events.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              {isEmptyFilters(filters) ? t("detail.noEvents") : t("common:eventFilters.noResults")}
+            </p>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="divide-y divide-border max-h-[600px] overflow-y-auto overflow-x-auto">
+                {grouped
+                  ? eventGroups.map((group) => (
+                      <EventGroupRow key={group.key} group={group} agentInfoById={agentInfoById} />
+                    ))
+                  : events.map((event, i) => {
+                      const key = event.id ?? i;
+                      const isOpen = event.id != null && expandedEvents.has(event.id);
+                      return (
+                        <div key={key}>
+                          <button
+                            type="button"
+                            onClick={() => event.id != null && toggleEvent(event.id)}
+                            aria-expanded={isOpen}
+                            aria-label={
+                              isOpen
+                                ? t("common:eventDetail.collapse")
+                                : t("common:eventDetail.expand")
+                            }
+                            className="w-full text-left px-5 py-3 flex items-center gap-4 hover:bg-surface-4 transition-colors min-w-0 cursor-pointer"
+                          >
+                            <span
+                              className={`text-gray-500 text-[10px] w-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                              aria-hidden="true"
+                            >
+                              ▶
+                            </span>
+                            <div className="w-16 text-[11px] text-gray-600 font-mono flex-shrink-0">
+                              {timeAgo(event.created_at)}
+                            </div>
+                            <AgentStatusBadge status={statusFromEventType(event.event_type)} />
+                            {(() => {
+                              const info = event.agent_id
+                                ? agentInfoById.get(event.agent_id)
+                                : undefined;
+                              // Session is implicit on this page — project is
+                              // still shown so the row identifies the working
+                              // directory when you share / search.
+                              const project = projectByEventId.get(event.id) ?? null;
+                              const origin = buildOriginLabel(
+                                project,
+                                null,
+                                agentOriginLabel(event.agent_id, info)
+                              );
+                              return (
+                                <span className="text-sm text-gray-300 flex-1 truncate">
+                                  {origin && (
+                                    <span
+                                      className="text-gray-500 mr-1"
+                                      title={event.agent_id ?? undefined}
+                                    >
+                                      {origin} ·
+                                    </span>
+                                  )}
+                                  {buildEventTitle(event)}
+                                </span>
+                              );
+                            })()}
+                            {event.tool_name && (
+                              <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono">
+                                {event.tool_name}
+                              </span>
+                            )}
+                          </button>
+                          {isOpen && <EventDetail event={event} />}
+                        </div>
+                      );
+                    })}
+              </div>
+            </div>
+          )}
+          {events.length < eventsTotal && (
+            <div className="flex items-center justify-between mt-3 px-1">
+              <span className="text-xs text-gray-500">
+                {t("common:eventFilters.showing", { shown: events.length, total: eventsTotal })}
+              </span>
+              <button
+                type="button"
+                onClick={loadMoreEvents}
+                disabled={eventsLoadingMore}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {eventsLoadingMore
+                  ? t("common:eventFilters.loading")
+                  : t("common:eventFilters.loadMore")}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
