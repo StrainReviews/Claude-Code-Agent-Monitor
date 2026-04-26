@@ -13,7 +13,8 @@ const { transcriptCache } = require("./hooks");
 
 const router = Router();
 
-const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
+const { getSettingsPath } = require("../lib/claude-home");
+const CLAUDE_SETTINGS_PATH = getSettingsPath();
 
 function getDbSize() {
   try {

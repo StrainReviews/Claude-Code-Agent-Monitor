@@ -13,6 +13,8 @@ import type {
   Session,
   SessionDrillIn,
   Stats,
+TranscriptListResult,
+  TranscriptResult,
   UpdateStatusPayload,
   WorkflowData,
 } from "./types";
@@ -58,6 +60,25 @@ export const api = {
       request<{ session: Session; agents: Agent[]; events: DashboardEvent[] }>(
         `/sessions/${encodeURIComponent(id)}`
       ),
+    transcripts: (id: string) =>
+      request<TranscriptListResult>(
+        `/sessions/${encodeURIComponent(id)}/transcripts`
+      ),
+    transcript: (
+      id: string,
+      params?: { agent_id?: string; limit?: number; offset?: number; after?: number; before?: number }
+    ) => {
+      const qs = new URLSearchParams();
+      if (params?.agent_id) qs.set("agent_id", params.agent_id);
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
+      if (params?.after != null) qs.set("after", String(params.after));
+      if (params?.before != null) qs.set("before", String(params.before));
+      const q = qs.toString();
+      return request<TranscriptResult>(
+        `/sessions/${encodeURIComponent(id)}/transcript${q ? `?${q}` : ""}`
+      );
+    },
   },
 
   agents: {

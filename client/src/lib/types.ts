@@ -350,6 +350,47 @@ export const STATUS_CONFIG: Record<
   },
 };
 
+// ── Transcript / Conversation types ──
+
+export interface TranscriptContent {
+  type: "text" | "tool_use" | "tool_result" | "thinking";
+  text?: string;
+  name?: string;
+  id?: string;
+  input?: Record<string, unknown> | { _truncated: string };
+  output?: string;
+  is_error?: boolean;
+}
+
+export interface TranscriptMessage {
+  type: "user" | "assistant";
+  timestamp: string | null;
+  content: TranscriptContent[];
+  model?: string;
+  usage?: { input_tokens: number; output_tokens: number };
+}
+
+export interface TranscriptResult {
+  messages: TranscriptMessage[];
+  total: number;
+  has_more: boolean;
+  last_line: number;
+  first_line: number;
+}
+
+export interface TranscriptInfo {
+  id: string;
+  name: string;
+  type: "main" | "subagent" | "compaction";
+  subagent_type?: string | null;
+  has_transcript: boolean;
+  db_agent_id?: string | null;
+}
+
+export interface TranscriptListResult {
+  transcripts: TranscriptInfo[];
+}
+
 export const SESSION_STATUS_CONFIG: Record<
   SessionStatus,
   { labelKey: string; color: string; bg: string }

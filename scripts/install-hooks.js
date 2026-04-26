@@ -9,9 +9,9 @@
 
 const fs = require("fs");
 const path = require("path");
-const os = require("os");
 
-const SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
+const { getSettingsPath } = require("../server/lib/claude-home");
+const SETTINGS_PATH = getSettingsPath();
 const HOOK_HANDLER = path.resolve(__dirname, "hook-handler.js").replace(/\\/g, "/");
 
 // Hook types to install. Some support matchers, some don't.
