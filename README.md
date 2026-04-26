@@ -1,6 +1,6 @@
 # Agent Dashboard for Claude Code
 
-### Real-time monitoring platform for Claude Code agent activity
+### Real-time monitoring platform for Claude Code agent activity 🚀
 
 A professional dashboard to track and visualize your Claude Code agent sessions, tool usage, and subagent orchestration in real-time. Built with Node.js, Express, React, and SQLite, it integrates directly with Claude Code via its native hook system for seamless session tracking and analytics.
 
