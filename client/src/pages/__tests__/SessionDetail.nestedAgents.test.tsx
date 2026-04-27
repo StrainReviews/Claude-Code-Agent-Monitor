@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { SessionDetail } from "../SessionDetail";
 import type { Agent, Session, DashboardEvent } from "../../lib/types";
@@ -56,6 +56,26 @@ vi.mock("../../lib/api", () => ({
           events: [] as DashboardEvent[],
         })
       ),
+      transcripts: vi.fn(() => Promise.resolve({ transcripts: [] })),
+      stats: vi.fn(() =>
+        Promise.resolve({
+          session_id: mockSession.id,
+          total_events: 0,
+          events_by_type: [],
+          tools_used: [],
+          error_count: 0,
+          first_event_at: null,
+          last_event_at: null,
+          agents: { total: 0, main: 0, subagent: 0, compaction: 0, by_status: {} },
+          subagent_types: [],
+          tokens: {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+          },
+        })
+      ),
     },
     pricing: {
       sessionCost: vi.fn(() => Promise.resolve({ total_cost: 0, breakdown: [] })),
@@ -88,6 +108,11 @@ function renderPage() {
       </Routes>
     </MemoryRouter>
   );
+}
+
+/** Get the agent-tree region for scoped queries (avoids matches in the active-agent banner). */
+async function findTree() {
+  return await screen.findByTestId("agent-tree");
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -143,11 +168,13 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
     ];
 
     renderPage();
-    // All levels should render (auto-expanded because they have working children)
-    expect(await screen.findByText("Main")).toBeInTheDocument();
-    expect(await screen.findByText("Level-1")).toBeInTheDocument();
-    expect(await screen.findByText("Level-2")).toBeInTheDocument();
-    expect(await screen.findByText("Level-3")).toBeInTheDocument();
+    const tree = await findTree();
+    // All levels should render in the tree (auto-expanded because they have working children).
+    // The active-agent banner may also display "Level-1", so we scope to the tree.
+    await waitFor(() => expect(within(tree).getByText("Main")).toBeInTheDocument());
+    expect(within(tree).getByText("Level-1")).toBeInTheDocument();
+    expect(within(tree).getByText("Level-2")).toBeInTheDocument();
+    expect(within(tree).getByText("Level-3")).toBeInTheDocument();
   });
 
   it("shows descendant count in collapsed badge for nested agents", async () => {
@@ -232,8 +259,9 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
     ];
 
     renderPage();
-    expect(await screen.findByText("Main")).toBeInTheDocument();
-    expect(await screen.findByText("Orphan Agent")).toBeInTheDocument();
+    const tree = await findTree();
+    expect(within(tree).getByText("Main")).toBeInTheDocument();
+    expect(within(tree).getByText("Orphan Agent")).toBeInTheDocument();
     expect(await screen.findByText("Unparented Subagents")).toBeInTheDocument();
   });
 
@@ -265,11 +293,12 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
     ];
 
     renderPage();
+    const tree = await findTree();
     // All levels should be visible because l3 is working, triggering ancestor expansion
-    expect(await screen.findByText("Main")).toBeInTheDocument();
-    expect(await screen.findByText("Level-1")).toBeInTheDocument();
-    expect(await screen.findByText("Level-2")).toBeInTheDocument();
-    expect(await screen.findByText("Deep Active")).toBeInTheDocument();
+    await waitFor(() => expect(within(tree).getByText("Main")).toBeInTheDocument());
+    expect(within(tree).getByText("Level-1")).toBeInTheDocument();
+    expect(within(tree).getByText("Level-2")).toBeInTheDocument();
+    expect(within(tree).getByText("Deep Active")).toBeInTheDocument();
   });
 
   it("handles agents with no children (leaf nodes)", async () => {
@@ -305,10 +334,11 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
     ];
 
     renderPage();
-    expect(await screen.findByText("Main-A")).toBeInTheDocument();
-    expect(await screen.findByText("Main-B")).toBeInTheDocument();
+    const tree = await findTree();
+    await waitFor(() => expect(within(tree).getByText("Main-A")).toBeInTheDocument());
+    expect(within(tree).getByText("Main-B")).toBeInTheDocument();
     // Sub of B auto-expanded (working)
-    expect(await screen.findByText("Sub of B")).toBeInTheDocument();
+    expect(within(tree).getByText("Sub of B")).toBeInTheDocument();
   });
 
   it("renders sibling subagents at the same depth", async () => {

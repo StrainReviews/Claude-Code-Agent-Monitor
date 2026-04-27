@@ -46,6 +46,8 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/workspace.xml
 .vs/
+.superpowers/
+.omc/
 *.swp
 *.swo
 *.sublime-project

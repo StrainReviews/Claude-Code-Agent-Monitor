@@ -173,6 +173,32 @@ export interface WSMessage {
   timestamp: string;
 }
 
+// ── Session stats ──
+
+export interface SessionStats {
+  session_id: string;
+  total_events: number;
+  events_by_type: Array<{ event_type: string; count: number }>;
+  tools_used: Array<{ tool_name: string; count: number }>;
+  error_count: number;
+  first_event_at: string | null;
+  last_event_at: string | null;
+  agents: {
+    total: number;
+    main: number;
+    subagent: number;
+    compaction: number;
+    by_status: Record<string, number>;
+  };
+  subagent_types: Array<{ subagent_type: string; count: number }>;
+  tokens: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_write_tokens: number;
+  };
+}
+
 // ── Workflow types ──
 
 export interface WorkflowStats {
@@ -371,6 +397,47 @@ export const STATUS_CONFIG: Record<
     dot: "bg-red-400",
   },
 };
+
+// ── Transcript / Conversation types ──
+
+export interface TranscriptContent {
+  type: "text" | "tool_use" | "tool_result" | "thinking";
+  text?: string;
+  name?: string;
+  id?: string;
+  input?: Record<string, unknown> | { _truncated: string };
+  output?: string;
+  is_error?: boolean;
+}
+
+export interface TranscriptMessage {
+  type: "user" | "assistant";
+  timestamp: string | null;
+  content: TranscriptContent[];
+  model?: string;
+  usage?: { input_tokens: number; output_tokens: number };
+}
+
+export interface TranscriptResult {
+  messages: TranscriptMessage[];
+  total: number;
+  has_more: boolean;
+  last_line: number;
+  first_line: number;
+}
+
+export interface TranscriptInfo {
+  id: string;
+  name: string;
+  type: "main" | "subagent" | "compaction";
+  subagent_type?: string | null;
+  has_transcript: boolean;
+  db_agent_id?: string | null;
+}
+
+export interface TranscriptListResult {
+  transcripts: TranscriptInfo[];
+}
 
 export const SESSION_STATUS_CONFIG: Record<
   SessionStatus,

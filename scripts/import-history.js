@@ -15,8 +15,9 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
-const CLAUDE_DIR = path.join(process.env.HOME || process.env.USERPROFILE, ".claude");
-const PROJECTS_DIR = path.join(CLAUDE_DIR, "projects");
+const { getClaudeHome, getProjectsDir } = require("../server/lib/claude-home");
+const CLAUDE_DIR = getClaudeHome();
+const PROJECTS_DIR = getProjectsDir();
 
 /**
  * Parse a single JSONL session file to extract session metadata.

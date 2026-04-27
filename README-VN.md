@@ -157,9 +157,21 @@ flowchart LR
 </p>
 
 <p align="center">
-  <img src="images/session.png" alt="Session Detail Overview" width="100%">
+  <img src="images/session-agents.png" alt="Chi tiết phiên — tab Agent" width="100%">
   <br>
-  <em>🔬 <strong>Chi tiết phiên</strong> — cây phân cấp Agent đầy đủ và dòng thời gian sự kiện theo trình tự, có bộ lọc đa chiều và bộ render tải trọng nhận biết công cụ</em>
+  <em>🤖 <strong>Chi tiết phiên · Agent</strong> — bảng tổng quan thời gian thực (sự kiện, lượt gọi công cụ, subagent, lần nén, lỗi, thời lượng), thanh sử dụng top công cụ, phân tích theo loại subagent, dòng chảy token và cây phân cấp Agent</em>
+</p>
+
+<p align="center">
+  <img src="images/session-conversation.png" alt="Chi tiết phiên — tab Conversation" width="100%">
+  <br>
+  <em>💬 <strong>Chi tiết phiên · Conversation</strong> — trình xem bản ghi trực tiếp với render markdown, khối code có syntax highlight (số dòng + nút sao chép) và các khối tool call có style theo từng công cụ</em>
+</p>
+
+<p align="center">
+  <img src="images/session-timeline.png" alt="Chi tiết phiên — tab Timeline" width="100%">
+  <br>
+  <em>🔬 <strong>Chi tiết phiên · Timeline</strong> — dòng thời gian sự kiện theo trình tự, có bộ lọc đa chiều, gom nhóm Pre/Post theo `tool_use_id`, và bộ render tải trọng nhận biết công cụ</em>
 </p>
 
 <p align="center">
@@ -199,7 +211,7 @@ Bảng điều khiển cung cấp một bộ tính năng toàn diện để giá
 | **Bảng điều khiển**                      | Số liệu thống kê tổng quan, thẻ Agent đang hoạt động với hệ thống phân cấp Subagent có thể thu gọn, nguồn cấp dữ liệu hoạt động gần đây                                                                                                                                                                                 |
 | **Bảng Kanban**                   | Hai chế độ với nút chuyển ở đầu trang (lưu trong `localStorage`): **Agent** — 5 cột (Nhàn rỗi / Đã kết nối / Đang làm / Hoàn tất / Lỗi), và **Phiên** — 4 cột (Hoạt động / Hoàn tất / Lỗi / Bỏ dở). Mỗi cột tìm nạp theo trạng thái từ máy chủ (không giới hạn thực tế mỗi cột), sau đó phân trang phía client với 10 thẻ mỗi cột kèm nút "Hiện thêm". Đăng ký WebSocket bám theo chế độ đang xem (`agent_*` so với `session_*`) nên cập nhật khác chế độ không gây tải lại |
 | **Phiên**                       | Bảng toàn bộ phiên có tìm kiếm, bộ lọc và **phân trang phía máy chủ**. Mỗi lần đổi trang gọi `/api/sessions?status=&q=&limit=10&offset=…`, nên tính toán chi phí chỉ chạy trên trang đang hiển thị — không phụ thuộc số phiên trong CSDL. Ô tìm kiếm (`q=`) thực hiện so khớp không phân biệt hoa thường trên `id` / `name` / `cwd` ở máy chủ với debounce 300 ms; phản hồi kèm `total` cho bộ phân trang. Bộ lọc trạng thái, tìm kiếm và phân trang kết hợp với nhau |
-| **Chi tiết phiên**                 | Cây phân cấp tác nhân mỗi phiên (mẹ/con) và dòng thời gian sự kiện đầy đủ                                                                                                                                                                                                      |
+| **Chi tiết phiên**                 | Bảng tổng quan thời gian thực mỗi phiên với banner tác nhân đang hoạt động (công cụ + tác vụ hiện tại), sáu ô đếm (sự kiện kèm tốc độ sự kiện/phút, lượt gọi công cụ, subagent, lần nén, lỗi, thời lượng đang đếm), thanh sử dụng top công cụ, phân tích theo loại subagent, dải dòng chảy token, và đám mây chip loại sự kiện — tất cả được làm mới trực tiếp theo sự kiện hook. Bên dưới: cây phân cấp tác nhân, dòng thời gian sự kiện đầy đủ với bộ lọc đa chiều, nhóm Pre/Post theo `tool_use_id`, khối tóm tắt dễ đọc, bộ kết xuất nhận biết công cụ (terminal cho Bash, diff cho Edit, code có số dòng cho Read/Write, danh sách kết quả khớp cho Grep, thẻ key/value cho công cụ MCP), và tab Conversation hiển thị bản ghi với markdown (tiêu đề, danh sách, blockquote, bảng, danh sách công việc), khối code có syntax highlight (js/ts, python, json, bash, html, css, sql, yaml, diff) kèm số dòng và nút sao chép, cùng các khối tool call có style theo từng công cụ (Bash → terminal, Edit → cũ/mới song song, Write → nhãn file, Read → chip đường dẫn, Grep → thẻ pattern) |
 | **Nguồn cấp dữ liệu hoạt động**                  | Nhật ký sự kiện phát trực tuyến theo thời gian thực với tính năng tạm dừng/tiếp tục và phân trang; nhấp vào bất kỳ hàng sự kiện nào để mở rộng nội dung hook payload ngay tại chỗ (bảng EventDetail nội tuyến); nút "Phiên →" chuyên biệt ở cuối mỗi hàng điều hướng trực tiếp đến chi tiết phiên mà không thu gọn feed                                                                   |
 | **Phân tích**                      | Mức sử dụng mã thông báo, tần suất công cụ, bản đồ nhiệt hoạt động (trung tâm, căn chỉnh ngày trong tuần bắt đầu từ Chủ nhật, chú thích công cụ tên ngày), xu hướng phiên, chỉ báo kết nối trực tiếp/ngoại tuyến                                                                                                           |
 | **Cập nhật trực tiếp**                   | Đẩy WebSocket -- không bỏ phiếu, cập nhật giao diện người dùng tức thì                                                                                                                                                                                                                             |
@@ -706,12 +718,15 @@ Tài liệu OpenAPI được tạo từ `server/openapi.js` và giao diện ngư
 
 ### Phiên
 
-| Phương pháp  | Con đường                | Thông số truy vấn                | Sự miêu tả                           |
-| ------- | ------------------- | --------------------------- | ------------------------------------- |
-| `GET`   | `/api/sessions`     | `status`, `q`, `limit`, `offset` | Liệt kê phiên kèm số lượng Agent và chi phí mỗi phiên. `q` tìm không phân biệt hoa thường trên `id` / `name` / `cwd`; `limit` mặc định 50, tối đa 10000; phản hồi gồm `total` cho bộ phân trang |
-| `GET`   | `/api/sessions/:id` | --                          | Chi tiết phiên với các Agent và sự kiện |
-| `POST`  | `/api/sessions`     | --                          | Tạo phiên (idempotent trên `id`)   |
-| `PATCH` | `/api/sessions/:id` | --                          | Cập nhật trạng thái/siêu dữ liệu phiên        |
+| Phương pháp  | Con đường                            | Thông số truy vấn                                                | Sự miêu tả                                                                                              |
+| ------- | -------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `GET`   | `/api/sessions`                  | `status`, `q`, `limit`, `offset`                                 | Liệt kê phiên kèm số lượng Agent và chi phí mỗi phiên. `q` tìm không phân biệt hoa thường trên `id` / `name` / `cwd`; `limit` mặc định 50, tối đa 10000; phản hồi gồm `total` cho bộ phân trang |
+| `GET`   | `/api/sessions/:id`              | --                                                               | Chi tiết phiên với các Agent và sự kiện                                                                 |
+| `GET`   | `/api/sessions/:id/stats`        | --                                                               | Số liệu tổng hợp cấp phiên cho bảng tổng quan: sự kiện, sự kiện theo loại, top công cụ, số lỗi, số đếm tác nhân theo loại/trạng thái, phân tích loại subagent, tổng token, khoảng thời gian |
+| `GET`   | `/api/sessions/:id/transcripts`  | --                                                               | Danh sách bản ghi JSONL có sẵn cho phiên (chính + subagent + nén)                                       |
+| `GET`   | `/api/sessions/:id/transcript`   | `agent_id`, `limit`, `offset`, `after`, `before`                 | Phát các tin nhắn từ một bản ghi cụ thể với phân trang theo con trỏ                                     |
+| `POST`  | `/api/sessions`                  | --                                                               | Tạo phiên (idempotent trên `id`)                                                                        |
+| `PATCH` | `/api/sessions/:id`              | --                                                               | Cập nhật trạng thái/siêu dữ liệu phiên                                                                  |
 
 ### Agent
 

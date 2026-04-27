@@ -156,9 +156,21 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
 </p>
 
 <p align="center">
-  <img src="images/session.png" alt="Session Detail Overview" width="100%">
+  <img src="images/session-agents.png" alt="Session Detail — Agents tab" width="100%">
   <br>
-  <em>🔬 <strong>Session Detail</strong> — full agent hierarchy tree and chronological event timeline with multi-dimension filters and tool-aware payload renderers</em>
+  <em>🤖 <strong>Session Detail · Agents</strong> — real-time overview tiles (events, tool calls, subagents, compactions, errors, duration), top-tool usage bars, subagent type breakdown, token flow, and the agent hierarchy tree</em>
+</p>
+
+<p align="center">
+  <img src="images/session-conversation.png" alt="Session Detail — Conversation tab" width="100%">
+  <br>
+  <em>💬 <strong>Session Detail · Conversation</strong> — live transcript viewer with markdown rendering, syntax-highlighted code blocks (line numbers + copy), and per-tool styled tool calls</em>
+</p>
+
+<p align="center">
+  <img src="images/session-timeline.png" alt="Session Detail — Timeline tab" width="100%">
+  <br>
+  <em>🔬 <strong>Session Detail · Timeline</strong> — chronological event timeline with multi-dimension filters, Pre/Post grouping by `tool_use_id`, and tool-aware payload renderers</em>
 </p>
 
 <p align="center">
@@ -198,7 +210,7 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 | **Dashboard**                      | Overview stats, active agent cards with collapsible subagent hierarchy, recent activity feed                                                                                                                                                                                 |
 | **Kanban Board**                   | Two views with a header toggle (persisted in `localStorage`): **Agents** — 5 columns (Idle / Connected / Working / Completed / Error) — and **Sessions** — 4 columns (Active / Completed / Error / Abandoned). Each column fetches its own status from the server (effectively unlimited per status), then paginates client-side at 10 cards per column with a "Show more" affordance. WS subscription scopes to the active view (`agent_*` vs `session_*` frames) so off-view updates don't trigger refetches |
 | **Sessions**                       | Searchable, filterable, **server-paginated** table of every recorded session. Each page click hits `/api/sessions?status=&q=&limit=10&offset=…`, so cost computation runs only over the visible page — independent of how many sessions exist in the database. The search box (`q=`) does case-insensitive matching across `id` / `name` / `cwd` on the server with a 300 ms debounce, and the response carries a `total` count for the paginator UI. Status filter, search, and pagination compose. |
-| **Session Detail**                 | Per-session agent hierarchy tree and full event timeline with multi-dimension filters (status, event type, tool, agent, text search, date range), Pre/Post grouping by `tool_use_id`, human-readable summary block, and tool-aware input/response renderers (terminal for Bash, unified diff for Edit, line-numbered code for Read/Write, match list for Grep, key/value card for MCP tools) |
+| **Session Detail**                 | Per-session real-time overview panel with active-agent banner (current tool + task), six tile counters (events with events/min rate, tool calls, subagents, compactions, errors, ticking duration), top-tool usage bars, subagent type breakdown, stacked token-flow strip, and event-type pill cloud — all live-refreshed on hook events. Below it: agent hierarchy tree, full event timeline with multi-dimension filters (status, event type, tool, agent, text search, date range), Pre/Post grouping by `tool_use_id`, human-readable summary block, tool-aware input/response renderers (terminal for Bash, unified diff for Edit, line-numbered code for Read/Write, match list for Grep, key/value card for MCP tools), and a Conversation tab that renders transcripts with markdown (headings, lists, blockquotes, tables, task lists), syntax-highlighted code blocks (js/ts, python, json, bash, html, css, sql, yaml, diff) with line numbers and copy-to-clipboard, and per-tool styled tool calls (Bash → terminal, Edit → side-by-side old/new, Write → file label, Read → path chip, Grep → pattern card) |
 | **Activity Feed**                  | Real-time streaming event log with pause/resume, multi-dimension filters (same toolbar as Session Detail plus a Session filter), server-driven "Load more" pagination, debounced filter-aware live refresh preserving the loaded page size, grouping toggle, origin prefix showing project › session › subagent, and a "Session →" button per row                                         |
 | **Analytics**                      | Token usage, tool frequency, activity heatmap (centered, day-of-week aligned starting Sunday, day-name tooltips), session trends, live/offline connection indicator                                                                                                           |
 | **Live Updates**                   | WebSocket push -- no polling, instant UI updates                                                                                                                                                                                                                             |
@@ -710,12 +722,15 @@ The OpenAPI document is generated from `server/openapi.js`, and Swagger UI is se
 
 ### Sessions
 
-| Method  | Path                | Query Params                | Description                           |
-| ------- | ------------------- | --------------------------- | ------------------------------------- |
-| `GET`   | `/api/sessions`     | `status`, `q`, `limit`, `offset` | List sessions with agent counts and per-session cost. `q` does case-insensitive search across `id` / `name` / `cwd`. `limit` defaults to 50, max 10000. Response includes `total` for paginators. |
-| `GET`   | `/api/sessions/:id` | --                          | Session detail with agents and events |
-| `POST`  | `/api/sessions`     | --                          | Create session (idempotent on `id`)   |
-| `PATCH` | `/api/sessions/:id` | --                          | Update session status/metadata        |
+| Method  | Path                            | Query Params                                                     | Description                                                                                  |
+| ------- | ------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GET`   | `/api/sessions`                 | `status`, `q`, `limit`, `offset`                                 | List sessions with agent counts and per-session cost. `q` does case-insensitive search across `id` / `name` / `cwd`. `limit` defaults to 50, max 10000. Response includes `total` for paginators. |
+| `GET`   | `/api/sessions/:id`             | --                                                               | Session detail with agents and events                                                        |
+| `GET`   | `/api/sessions/:id/stats`       | --                                                               | Aggregated counts powering the Session Detail overview panel: events, events-by-type, top tool usage, error count, agent type/status counts, subagent type breakdown, token totals, time range |
+| `GET`   | `/api/sessions/:id/transcripts` | --                                                               | List available JSONL transcripts for the session (main + subagents + compactions)            |
+| `GET`   | `/api/sessions/:id/transcript`  | `agent_id`, `limit`, `offset`, `after`, `before`                 | Stream messages from a specific transcript with cursor-based pagination                      |
+| `POST`  | `/api/sessions`                 | --                                                               | Create session (idempotent on `id`)                                                          |
+| `PATCH` | `/api/sessions/:id`             | --                                                               | Update session status/metadata                                                               |
 
 ### Agents
 

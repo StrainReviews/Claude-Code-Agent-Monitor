@@ -12,10 +12,11 @@ import { formatDuration, timeAgo } from "../lib/format";
 
 interface AgentCardProps {
   agent: Agent;
+  label?: string;
   onClick?: () => void;
 }
 
-export function AgentCard({ agent, onClick }: AgentCardProps) {
+export function AgentCard({ agent, label, onClick }: AgentCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
   const isActive = agent.status === "working" || agent.status === "connected";
@@ -52,8 +53,8 @@ export function AgentCard({ agent, onClick }: AgentCardProps) {
           </div>
           <div className="min-w-0 overflow-hidden">
             <p className="text-sm font-medium text-gray-200 truncate">{agent.name}</p>
-            {agent.subagent_type && (
-              <p className="text-[11px] text-gray-500 truncate">{agent.subagent_type}</p>
+            {(label || agent.subagent_type) && (
+              <p className="text-[11px] text-gray-500 truncate">{label || agent.subagent_type}</p>
             )}
           </div>
         </div>
