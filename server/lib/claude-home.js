@@ -49,7 +49,13 @@ function getTranscriptPath(sessionId, cwd) {
 function getSubagentTranscriptPath(sessionId, cwd, agentId) {
   if (!cwd) return null;
   const encoded = encodeCwd(cwd);
-  const candidate = path.join(getProjectsDir(), encoded, sessionId, "subagents", `agent-${agentId}.jsonl`);
+  const candidate = path.join(
+    getProjectsDir(),
+    encoded,
+    sessionId,
+    "subagents",
+    `agent-${agentId}.jsonl`
+  );
   if (fs.existsSync(candidate)) return candidate;
   // Fallback: scan all project directories
   return findSubagentTranscriptPath(sessionId, agentId);

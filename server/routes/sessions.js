@@ -149,7 +149,8 @@ router.get("/:id/transcripts", async (req, res) => {
   const dbAgents = stmts.listAgentsBySession.all(req.params.id) || [];
 
   // Main session transcript
-  const mainPath = getTranscriptPath(req.params.id, session.cwd) || findTranscriptPath(req.params.id);
+  const mainPath =
+    getTranscriptPath(req.params.id, session.cwd) || findTranscriptPath(req.params.id);
   if (mainPath && fs.existsSync(mainPath)) {
     // Main agent database ID format: <sessionId>-main
     const mainDbAgent = dbAgents.find((a) => a.type === "main");
@@ -182,7 +183,9 @@ router.get("/:id/transcripts", async (req, res) => {
           const candidate = path.join(projectsDir, d.name, req.params.id, "subagents");
           if (fs.existsSync(candidate)) subagentDirs.push(candidate);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -197,13 +200,17 @@ router.get("/:id/transcripts", async (req, res) => {
         let meta = null;
         const metaPath = path.join(dir, file.replace(".jsonl", ".meta.json"));
         if (fs.existsSync(metaPath)) {
-          try { meta = JSON.parse(fs.readFileSync(metaPath, "utf8")); } catch { /* ignore */ }
+          try {
+            meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+          } catch {
+            /* ignore */
+          }
         }
 
         const isCompact = shortId.startsWith("acompact-");
         const transcriptName = isCompact
           ? "Context Compaction"
-          : (meta?.description || meta?.agentType || shortId);
+          : meta?.description || meta?.agentType || shortId;
         const transcriptSubagentType = meta?.agentType || null;
 
         // Read first-line timestamp from JSONL for time-based matching
@@ -215,7 +222,9 @@ router.get("/:id/transcripts", async (req, res) => {
             const entry = JSON.parse(firstLine);
             transcriptTimestamp = entry.timestamp || null;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
 
         result.push({
           id: shortId,
@@ -227,7 +236,9 @@ router.get("/:id/transcripts", async (req, res) => {
           _timestamp: transcriptTimestamp,
         });
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   // Match database agents to transcripts using best-effort strategies
@@ -249,9 +260,7 @@ router.get("/:id/transcripts", async (req, res) => {
     agentsByType[key].push(a);
   }
   for (const key of Object.keys(agentsByType)) {
-    agentsByType[key].sort((a, b) =>
-      (a.started_at || "").localeCompare(b.started_at || "")
-    );
+    agentsByType[key].sort((a, b) => (a.started_at || "").localeCompare(b.started_at || ""));
   }
 
   // Step 3: Sort transcripts by type+time, then match by index within each type group
@@ -343,8 +352,7 @@ router.get("/:id/transcript", async (req, res) => {
       getSubagentTranscriptPath(req.params.id, session.cwd, agentId) ||
       findSubagentTranscriptPath(req.params.id, agentId);
   } else {
-    jsonlPath =
-      getTranscriptPath(req.params.id, session.cwd) || findTranscriptPath(req.params.id);
+    jsonlPath = getTranscriptPath(req.params.id, session.cwd) || findTranscriptPath(req.params.id);
   }
 
   if (!jsonlPath || !fs.existsSync(jsonlPath)) {
@@ -448,7 +456,11 @@ router.get("/:id/transcript", async (req, res) => {
         lineNum++;
         if (!line.trim()) continue;
         let entry;
-        try { entry = JSON.parse(line); } catch { continue; }
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
         if (entry.type !== "user" && entry.type !== "assistant") continue;
 
         if (!foundStart) {
@@ -475,7 +487,11 @@ router.get("/:id/transcript", async (req, res) => {
         lineNum++;
         if (!line.trim()) continue;
         let entry;
-        try { entry = JSON.parse(line); } catch { continue; }
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
         if (entry.type !== "user" && entry.type !== "assistant") continue;
         if (lineNum >= beforeLine) {
           // We've reached the boundary — stop reading
@@ -503,7 +519,11 @@ router.get("/:id/transcript", async (req, res) => {
         lineNum++;
         if (!line.trim()) continue;
         let entry;
-        try { entry = JSON.parse(line); } catch { continue; }
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
         if (entry.type !== "user" && entry.type !== "assistant") continue;
 
         const message = parseMessage(entry, lineNum);
@@ -528,7 +548,11 @@ router.get("/:id/transcript", async (req, res) => {
         lineNum++;
         if (!line.trim()) continue;
         let entry;
-        try { entry = JSON.parse(line); } catch { continue; }
+        try {
+          entry = JSON.parse(line);
+        } catch {
+          continue;
+        }
         if (entry.type !== "user" && entry.type !== "assistant") continue;
 
         const message = parseMessage(entry, lineNum);

@@ -15,7 +15,9 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [selectedTranscript, setSelectedTranscript] = useState<string | null>(initialTranscriptId ?? null);
+  const [selectedTranscript, setSelectedTranscript] = useState<string | null>(
+    initialTranscriptId ?? null
+  );
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<TranscriptInfo[]>([]);
@@ -41,7 +43,9 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
       }
     }
     loadTranscripts();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId]);
 
   // Sync external initialTranscriptId to internal state
@@ -81,7 +85,9 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [sessionId, selectedTranscript]);
 
   // WebSocket subscription: incrementally load new messages on new_event
@@ -184,8 +190,7 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
     if (!container) return;
 
     // Detect if at bottom
-    const atBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
     isAtBottomRef.current = atBottom;
 
     // Hide "new messages" indicator when scrolled to bottom
@@ -282,7 +287,10 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
       {/* New messages indicator */}
       {showNewMsg && (
         <button
-          onClick={() => { scrollToBottom(); setShowNewMsg(false); }}
+          onClick={() => {
+            scrollToBottom();
+            setShowNewMsg(false);
+          }}
           className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg transition-colors z-10"
         >
           <ArrowDown className="w-3 h-3" />

@@ -9,9 +9,7 @@ interface MessageListProps {
 }
 
 /** Build a map from tool_use id → tool_result for matching */
-function buildToolResultMap(
-  messages: TranscriptMessage[]
-): Map<string, TranscriptContent> {
+function buildToolResultMap(messages: TranscriptMessage[]): Map<string, TranscriptContent> {
   const map = new Map<string, TranscriptContent>();
   for (const msg of messages) {
     if (msg.type !== "user") continue;
@@ -52,7 +50,14 @@ function isTaskNotification(text: string): boolean {
 }
 
 /** Generic collapsible content block */
-function CollapsibleBlock({ text, icon, title, borderClass, bgClass, textClass }: {
+function CollapsibleBlock({
+  text,
+  icon,
+  title,
+  borderClass,
+  bgClass,
+  textClass,
+}: {
   text: string;
   icon: React.ReactNode;
   title: string;
@@ -100,9 +105,7 @@ export function MessageList({ messages, loading }: MessageListProps) {
 
   if (messages.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500 text-sm">
-        No conversation records found.
-      </div>
+      <div className="text-center py-12 text-gray-500 text-sm">No conversation records found.</div>
     );
   }
 
@@ -156,7 +159,8 @@ export function MessageList({ messages, loading }: MessageListProps) {
                 )}
                 {msg.usage && (
                   <span className="text-[11px] text-gray-600 font-mono">
-                    {msg.usage.input_tokens.toLocaleString()}in / {msg.usage.output_tokens.toLocaleString()}out
+                    {msg.usage.input_tokens.toLocaleString()}in /{" "}
+                    {msg.usage.output_tokens.toLocaleString()}out
                   </span>
                 )}
                 {msg.timestamp && (
@@ -228,7 +232,10 @@ export function MessageList({ messages, loading }: MessageListProps) {
                   const thinkKey = idx * 100 + bIdx;
                   const isExpanded = expandedThinking.has(thinkKey);
                   return (
-                    <div key={bIdx} className="rounded-lg border border-amber-500/20 bg-amber-500/5">
+                    <div
+                      key={bIdx}
+                      className="rounded-lg border border-amber-500/20 bg-amber-500/5"
+                    >
                       <button
                         onClick={() =>
                           setExpandedThinking((prev) => {
@@ -260,14 +267,8 @@ export function MessageList({ messages, loading }: MessageListProps) {
                 }
 
                 if (block.type === "tool_use") {
-                  const matchedResult = block.id ? toolResultMap.get(block.id) ?? null : null;
-                  return (
-                    <ToolCallBlock
-                      key={bIdx}
-                      toolUse={block}
-                      toolResult={matchedResult}
-                    />
-                  );
+                  const matchedResult = block.id ? (toolResultMap.get(block.id) ?? null) : null;
+                  return <ToolCallBlock key={bIdx} toolUse={block} toolResult={matchedResult} />;
                 }
 
                 // tool_result blocks rendered inside ToolCallBlock, skip standalone

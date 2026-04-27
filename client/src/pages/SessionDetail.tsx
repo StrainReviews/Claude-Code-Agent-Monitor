@@ -46,7 +46,14 @@ import {
 } from "../lib/event-grouping";
 import type { AgentInfo } from "../lib/event-grouping";
 import { formatDateTime, formatDuration, fmtCostFull, timeAgo } from "../lib/format";
-import type { Session, Agent, DashboardEvent, SessionStatus, CostResult, TranscriptInfo } from "../lib/types";
+import type {
+  Session,
+  Agent,
+  DashboardEvent,
+  SessionStatus,
+  CostResult,
+  TranscriptInfo,
+} from "../lib/types";
 
 type DetailTab = "agents" | "conversation" | "timeline";
 
@@ -73,7 +80,7 @@ export function SessionDetail() {
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => {
     return new Set<string>();
   });
-const [activeTab, setActiveTab] = useState<DetailTab>("agents");
+  const [activeTab, setActiveTab] = useState<DetailTab>("agents");
   const [transcripts, setTranscripts] = useState<TranscriptInfo[]>([]);
   const [pendingTranscriptId, setPendingTranscriptId] = useState<string | null>(null);
   const [transcriptNotFound, setTranscriptNotFound] = useState(false);
@@ -136,71 +143,82 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
     load();
   }, [load]);
 
-// Load transcripts list (for Agent → Conversation navigation ID mapping)
+  // Load transcripts list (for Agent → Conversation navigation ID mapping)
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    api.sessions.transcripts(id).then((result) => {
-      if (!cancelled) setTranscripts(result.transcripts);
-    }).catch(() => {});
-    return () => { cancelled = true; };
+    api.sessions
+      .transcripts(id)
+      .then((result) => {
+        if (!cancelled) setTranscripts(result.transcripts);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   // Navigate to Conversation tab and select the matching transcript when clicking an agent
-  const navigateToAgentConversation = useCallback((agent: Agent) => {
-    // Clear any previous not-found warning
-    setTranscriptNotFound(false);
+  const navigateToAgentConversation = useCallback(
+    (agent: Agent) => {
+      // Clear any previous not-found warning
+      setTranscriptNotFound(false);
 
-    const findTranscriptId = (ts: TranscriptInfo[]): string | null => {
-      // 1. Exact match via db_agent_id (most reliable)
-      const exactMatch = ts.find((t) => t.db_agent_id === agent.id);
-      if (exactMatch) return exactMatch.id;
+      const findTranscriptId = (ts: TranscriptInfo[]): string | null => {
+        // 1. Exact match via db_agent_id (most reliable)
+        const exactMatch = ts.find((t) => t.db_agent_id === agent.id);
+        if (exactMatch) return exactMatch.id;
 
-      // 2. Main agent fallback
-      if (agent.type === "main") return "main";
+        // 2. Main agent fallback
+        if (agent.type === "main") return "main";
 
-      // 3. Fallback: match by subagent_type or type, then narrow by name
-      let candidates = ts.filter((t) => t.type !== "main");
-      if (agent.subagent_type) {
-        const byType = candidates.filter(
-          (t) => t.subagent_type === agent.subagent_type || t.type === agent.subagent_type
-        );
-        if (byType.length > 0) candidates = byType;
-      }
-      if (agent.name && candidates.length > 1) {
-        const byName = candidates.filter((t) => t.name === agent.name);
-        if (byName.length > 0) candidates = byName;
-      }
-      if (candidates.length === 1) return candidates[0]!.id;
-
-      return null;
-    };
-
-    // Try matching with currently loaded transcripts
-    let transcriptId = findTranscriptId(transcripts);
-
-    if (transcriptId) {
-      setPendingTranscriptId(transcriptId);
-      setActiveTab("conversation");
-    } else if (transcripts.length === 0 && id) {
-      // Transcripts not loaded yet — fetch them and retry
-      api.sessions.transcripts(id).then((result) => {
-        const freshId = findTranscriptId(result.transcripts);
-        if (freshId) {
-          setTranscripts(result.transcripts);
-          setPendingTranscriptId(freshId);
-          setActiveTab("conversation");
-        } else {
-          setTranscriptNotFound(true);
+        // 3. Fallback: match by subagent_type or type, then narrow by name
+        let candidates = ts.filter((t) => t.type !== "main");
+        if (agent.subagent_type) {
+          const byType = candidates.filter(
+            (t) => t.subagent_type === agent.subagent_type || t.type === agent.subagent_type
+          );
+          if (byType.length > 0) candidates = byType;
         }
-      }).catch(() => {
+        if (agent.name && candidates.length > 1) {
+          const byName = candidates.filter((t) => t.name === agent.name);
+          if (byName.length > 0) candidates = byName;
+        }
+        if (candidates.length === 1) return candidates[0]!.id;
+
+        return null;
+      };
+
+      // Try matching with currently loaded transcripts
+      let transcriptId = findTranscriptId(transcripts);
+
+      if (transcriptId) {
+        setPendingTranscriptId(transcriptId);
+        setActiveTab("conversation");
+      } else if (transcripts.length === 0 && id) {
+        // Transcripts not loaded yet — fetch them and retry
+        api.sessions
+          .transcripts(id)
+          .then((result) => {
+            const freshId = findTranscriptId(result.transcripts);
+            if (freshId) {
+              setTranscripts(result.transcripts);
+              setPendingTranscriptId(freshId);
+              setActiveTab("conversation");
+            } else {
+              setTranscriptNotFound(true);
+            }
+          })
+          .catch(() => {
+            setTranscriptNotFound(true);
+          });
+      } else {
+        // No matching transcript found — show info to user
         setTranscriptNotFound(true);
-      });
-    } else {
-      // No matching transcript found — show info to user
-      setTranscriptNotFound(true);
-    }
-  }, [transcripts, id]);
+      }
+    },
+    [transcripts, id]
+  );
 
   // Compute compaction labels: "#1", "#2", etc. based on started_at order
   const compactionLabels = useMemo(() => {
@@ -210,7 +228,10 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
       .sort((a, b) => (a.started_at || "").localeCompare(b.started_at || ""));
     compactions.forEach((a, i) => {
       const time = a.started_at
-        ? new Date(a.started_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+        ? new Date(a.started_at).toLocaleTimeString(undefined, {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
         : "";
       map.set(a.id, `#${i + 1}${time ? ` · ${time}` : ""}`);
     });
@@ -442,7 +463,10 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
       {/* Tab Navigation */}
       <div className="flex items-center gap-1 border-b border-border">
         <button
-          onClick={() => { setActiveTab("agents"); setTranscriptNotFound(false); }}
+          onClick={() => {
+            setActiveTab("agents");
+            setTranscriptNotFound(false);
+          }}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "agents"
               ? "border-violet-500 text-violet-400"
@@ -450,10 +474,13 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
           }`}
         >
           <Bot className="w-4 h-4" />
-{t("detail.agents")} ({agents.length})
+          {t("detail.agents")} ({agents.length})
         </button>
         <button
-          onClick={() => { setActiveTab("conversation"); setTranscriptNotFound(false); }}
+          onClick={() => {
+            setActiveTab("conversation");
+            setTranscriptNotFound(false);
+          }}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "conversation"
               ? "border-violet-500 text-violet-400"
@@ -464,7 +491,10 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
           Conversation
         </button>
         <button
-          onClick={() => { setActiveTab("timeline"); setTranscriptNotFound(false); }}
+          onClick={() => {
+            setActiveTab("timeline");
+            setTranscriptNotFound(false);
+          }}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "timeline"
               ? "border-violet-500 text-violet-400"
@@ -480,7 +510,10 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
       {transcriptNotFound && (
         <div className="flex items-center gap-2 px-4 py-2.5 mb-3 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
-          <span>Conversation transcript not found for this agent. The transcript file may be missing or not yet linked.</span>
+          <span>
+            Conversation transcript not found for this agent. The transcript file may be missing or
+            not yet linked.
+          </span>
           <button
             onClick={() => setTranscriptNotFound(false)}
             className="ml-auto text-amber-400/60 hover:text-amber-400 transition-colors"
@@ -513,7 +546,9 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
                 // Sort roots and children by started_at ascending (chronological order)
                 rootAgents.sort((a, b) => (a.started_at || "").localeCompare(b.started_at || ""));
                 for (const key of childrenByParent.keys()) {
-                  childrenByParent.get(key)!.sort((a, b) => (a.started_at || "").localeCompare(b.started_at || ""));
+                  childrenByParent
+                    .get(key)!
+                    .sort((a, b) => (a.started_at || "").localeCompare(b.started_at || ""));
                 }
 
                 // Count all descendants (recursive) for collapsed badge
@@ -557,7 +592,11 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
                           <GitBranch className="w-3 h-3 text-violet-400 flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <AgentCard agent={agent} label={compactionLabels.get(agent.id)} onClick={() => navigateToAgentConversation(agent)} />
+                          <AgentCard
+                            agent={agent}
+                            label={compactionLabels.get(agent.id)}
+                            onClick={() => navigateToAgentConversation(agent)}
+                          />
                         </div>
                       </div>
 
@@ -588,7 +627,11 @@ const [activeTab, setActiveTab] = useState<DetailTab>("agents");
                 );
                 const roots = rootAgents.filter(
                   (a) =>
-                    !(a.type === "subagent" && a.parent_agent_id && !agentMap.has(a.parent_agent_id))
+                    !(
+                      a.type === "subagent" &&
+                      a.parent_agent_id &&
+                      !agentMap.has(a.parent_agent_id)
+                    )
                 );
 
                 return (

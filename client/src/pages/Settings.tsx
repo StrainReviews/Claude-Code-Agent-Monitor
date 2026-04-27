@@ -794,7 +794,8 @@ export function Settings() {
           CLAUDE_HOME
         </h3>
         <p className="text-xs text-gray-500 mb-4">
-          Root directory for Claude Code session data. Changing this updates the scan path for transcripts and imports immediately.
+          Root directory for Claude Code session data. Changing this updates the scan path for
+          transcripts and imports immediately.
         </p>
 
         <div className="card p-5 space-y-4">
@@ -802,7 +803,10 @@ export function Settings() {
             <input
               type="text"
               value={claudeHomeInput}
-              onChange={(e) => { setClaudeHomeInput(e.target.value); setClaudeHomeError(null); }}
+              onChange={(e) => {
+                setClaudeHomeInput(e.target.value);
+                setClaudeHomeError(null);
+              }}
               className="flex-1 bg-surface-4 border border-surface-3 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-violet-500/50"
               placeholder="/path/to/claude-home"
             />
@@ -814,9 +818,7 @@ export function Settings() {
               {claudeHomeSaving ? "Saving..." : "Save"}
             </button>
           </div>
-          {claudeHomeError && (
-            <p className="text-xs text-red-400">{claudeHomeError}</p>
-          )}
+          {claudeHomeError && <p className="text-xs text-red-400">{claudeHomeError}</p>}
           {claudeHome && (
             <p className="text-xs text-gray-500">
               Current: <code className="text-gray-400">{claudeHome}</code>

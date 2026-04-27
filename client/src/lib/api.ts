@@ -13,7 +13,7 @@ import type {
   Session,
   SessionDrillIn,
   Stats,
-TranscriptListResult,
+  TranscriptListResult,
   TranscriptResult,
   UpdateStatusPayload,
   WorkflowData,
@@ -61,12 +61,16 @@ export const api = {
         `/sessions/${encodeURIComponent(id)}`
       ),
     transcripts: (id: string) =>
-      request<TranscriptListResult>(
-        `/sessions/${encodeURIComponent(id)}/transcripts`
-      ),
+      request<TranscriptListResult>(`/sessions/${encodeURIComponent(id)}/transcripts`),
     transcript: (
       id: string,
-      params?: { agent_id?: string; limit?: number; offset?: number; after?: number; before?: number }
+      params?: {
+        agent_id?: string;
+        limit?: number;
+        offset?: number;
+        after?: number;
+        before?: number;
+      }
     ) => {
       const qs = new URLSearchParams();
       if (params?.agent_id) qs.set("agent_id", params.agent_id);

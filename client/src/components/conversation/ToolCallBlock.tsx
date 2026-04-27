@@ -16,9 +16,7 @@ export function ToolCallBlock({ toolUse, toolResult }: ToolCallBlockProps) {
   return (
     <div
       className={`rounded-lg border text-sm ${
-        isError
-          ? "border-red-500/30 bg-red-500/5"
-          : "border-surface-3 bg-surface-2"
+        isError ? "border-red-500/30 bg-red-500/5" : "border-surface-3 bg-surface-2"
       }`}
     >
       {/* Header — always visible */}
@@ -31,7 +29,9 @@ export function ToolCallBlock({ toolUse, toolResult }: ToolCallBlockProps) {
         ) : (
           <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
         )}
-        <Wrench className={`w-3.5 h-3.5 flex-shrink-0 ${isError ? "text-red-400" : "text-violet-400"}`} />
+        <Wrench
+          className={`w-3.5 h-3.5 flex-shrink-0 ${isError ? "text-red-400" : "text-violet-400"}`}
+        />
         <span className="font-mono text-violet-300 font-medium">{toolUse.name}</span>
         {isError && <AlertCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />}
         <span className="text-gray-600 text-xs ml-auto">tool_use</span>
@@ -60,9 +60,7 @@ export function ToolCallBlock({ toolUse, toolResult }: ToolCallBlockProps) {
               </p>
               <pre
                 className={`text-xs rounded p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all ${
-                  isError
-                    ? "text-red-300 bg-red-500/10"
-                    : "text-gray-300 bg-surface-4"
+                  isError ? "text-red-300 bg-red-500/10" : "text-gray-300 bg-surface-4"
                 }`}
               >
                 {toolResult.output || "(empty)"}
