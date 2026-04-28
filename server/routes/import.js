@@ -38,8 +38,7 @@ const {
 
 const router = Router();
 
-const CLAUDE_DIR = path.join(os.homedir(), ".claude");
-const DEFAULT_PROJECTS_DIR = path.join(CLAUDE_DIR, "projects");
+const { getClaudeHome, getProjectsDir } = require("../lib/claude-home");
 
 // Upload limits — deliberately generous because transcripts can be large.
 // Configurable at runtime via env for deployments that need tighter bounds.
@@ -131,29 +130,33 @@ function countsSummary(counters) {
 // ────────────────────────────────────────────────────────────────────────────
 router.get("/guide", (_req, res) => {
   const platform = process.platform;
+  const claudeHome = getClaudeHome();
+  const claudeHomeDisplay = claudeHome.replace(os.homedir(), "~");
+  const projectsDisplay = path.join(claudeHomeDisplay, "projects");
   const defaults = {
-    darwin: "~/.claude/projects",
-    linux: "~/.claude/projects",
-    win32: "%USERPROFILE%\\.claude\\projects",
+    darwin: projectsDisplay,
+    linux: projectsDisplay,
+    win32: projectsDisplay.replace(/\//g, "\\"),
   };
+  const archiveBase = claudeHomeDisplay;
   const archiveCmd = {
-    darwin: "tar -czf claude-history.tar.gz -C ~/.claude projects",
-    linux: "tar -czf claude-history.tar.gz -C ~/.claude projects",
-    win32: 'tar -czf claude-history.tar.gz -C "%USERPROFILE%\\.claude" projects',
+    darwin: `tar -czf claude-history.tar.gz -C ${archiveBase} projects`,
+    linux: `tar -czf claude-history.tar.gz -C ${archiveBase} projects`,
+    win32: `tar -czf claude-history.tar.gz -C "${projectsDisplay.replace(/\//g, "\\")}" projects`,
   };
-  const exists = fs.existsSync(DEFAULT_PROJECTS_DIR);
+  const exists = fs.existsSync(getProjectsDir());
   let projectCount = 0;
   let fileCount = 0;
   if (exists) {
     try {
       const dirs = fs
-        .readdirSync(DEFAULT_PROJECTS_DIR, { withFileTypes: true })
+        .readdirSync(getProjectsDir(), { withFileTypes: true })
         .filter((d) => d.isDirectory());
       projectCount = dirs.length;
       for (const d of dirs) {
         try {
           fileCount += fs
-            .readdirSync(path.join(DEFAULT_PROJECTS_DIR, d.name))
+            .readdirSync(path.join(getProjectsDir(), d.name))
             .filter((f) => f.endsWith(".jsonl")).length;
         } catch {
           /* non-fatal */
@@ -166,8 +169,8 @@ router.get("/guide", (_req, res) => {
 
   res.json({
     platform,
-    default_projects_dir: DEFAULT_PROJECTS_DIR,
-    default_projects_dir_display: defaults[platform] || DEFAULT_PROJECTS_DIR,
+    default_projects_dir: getProjectsDir(),
+    default_projects_dir_display: defaults[platform] || getProjectsDir(),
     default_projects_dir_exists: exists,
     default_projects_dir_stats: { projects: projectCount, jsonl_files: fileCount },
     archive_command: archiveCmd[platform] || archiveCmd.linux,

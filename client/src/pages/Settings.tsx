@@ -44,6 +44,7 @@ import {
   Coins,
   BarChart3,
   Settings as SettingsIcon,
+  FolderOpen,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
@@ -202,17 +203,24 @@ export function Settings() {
   const [notifPrefs, setNotifPrefs] = useState<NotifPrefs>(loadNotifPrefs);
   const [abandonHours, setAbandonHours] = useState("24");
   const [purgeDays, setPurgeDays] = useState("90");
+  const [claudeHome, setClaudeHomeState] = useState("");
+  const [claudeHomeInput, setClaudeHomeInput] = useState("");
+  const [claudeHomeSaving, setClaudeHomeSaving] = useState(false);
+  const [claudeHomeError, setClaudeHomeError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [pricingRes, costRes, infoRes] = await Promise.all([
+      const [pricingRes, costRes, infoRes, claudeHomeRes] = await Promise.all([
         api.pricing.list(),
         api.pricing.totalCost(),
         api.settings.info(),
+        api.settings.claudeHome.get(),
       ]);
       setPricing(pricingRes.pricing);
       setTotalCost(costRes.total_cost);
       setSysInfo(infoRes);
+      setClaudeHomeState(claudeHomeRes.claude_home);
+      setClaudeHomeInput(claudeHomeRes.claude_home);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("messages.failedLoad"));
@@ -391,6 +399,21 @@ export function Settings() {
         );
       return parts.length > 0 ? parts.join(". ") : t("data.nothingToClean");
     });
+
+  const handleSaveClaudeHome = async () => {
+    if (claudeHomeInput === claudeHome) return;
+    setClaudeHomeSaving(true);
+    setClaudeHomeError(null);
+    try {
+      const res = await api.settings.claudeHome.set(claudeHomeInput);
+      setClaudeHomeState(res.claude_home);
+      setClaudeHomeInput(res.claude_home);
+    } catch (err) {
+      setClaudeHomeError(err instanceof Error ? err.message : "Failed to update CLAUDE_HOME");
+    } finally {
+      setClaudeHomeSaving(false);
+    }
+  };
 
   const lastUpdated =
     pricing.length > 0
@@ -760,6 +783,46 @@ export function Settings() {
               </div>
               <p className="text-[11px] text-gray-600 font-mono truncate">{sysInfo.hooks.path}</p>
             </>
+          )}
+        </div>
+      </section>
+
+      {/* ─── CLAUDE HOME ─── */}
+      <section>
+        <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
+          <FolderOpen className="w-4 h-4 text-gray-500" />
+          CLAUDE_HOME
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Root directory for Claude Code session data. Changing this updates the scan path for
+          transcripts and imports immediately.
+        </p>
+
+        <div className="card p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <input
+              type="text"
+              value={claudeHomeInput}
+              onChange={(e) => {
+                setClaudeHomeInput(e.target.value);
+                setClaudeHomeError(null);
+              }}
+              className="flex-1 bg-surface-4 border border-surface-3 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-violet-500/50"
+              placeholder="/path/to/claude-home"
+            />
+            <button
+              onClick={handleSaveClaudeHome}
+              disabled={claudeHomeSaving || claudeHomeInput === claudeHome}
+              className="btn-primary px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {claudeHomeSaving ? "Saving..." : "Save"}
+            </button>
+          </div>
+          {claudeHomeError && <p className="text-xs text-red-400">{claudeHomeError}</p>}
+          {claudeHome && (
+            <p className="text-xs text-gray-500">
+              Current: <code className="text-gray-400">{claudeHome}</code>
+            </p>
           )}
         </div>
       </section>

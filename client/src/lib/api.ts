@@ -12,7 +12,10 @@ import type {
   ModelPricing,
   Session,
   SessionDrillIn,
+  SessionStats,
   Stats,
+  TranscriptListResult,
+  TranscriptResult,
   UpdateStatusPayload,
   WorkflowData,
 } from "./types";
@@ -61,6 +64,30 @@ export const api = {
       request<{ session: Session; agents: Agent[]; events: DashboardEvent[] }>(
         `/sessions/${encodeURIComponent(id)}`
       ),
+    stats: (id: string) => request<SessionStats>(`/sessions/${encodeURIComponent(id)}/stats`),
+    transcripts: (id: string) =>
+      request<TranscriptListResult>(`/sessions/${encodeURIComponent(id)}/transcripts`),
+    transcript: (
+      id: string,
+      params?: {
+        agent_id?: string;
+        limit?: number;
+        offset?: number;
+        after?: number;
+        before?: number;
+      }
+    ) => {
+      const qs = new URLSearchParams();
+      if (params?.agent_id) qs.set("agent_id", params.agent_id);
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
+      if (params?.after != null) qs.set("after", String(params.after));
+      if (params?.before != null) qs.set("before", String(params.before));
+      const q = qs.toString();
+      return request<TranscriptResult>(
+        `/sessions/${encodeURIComponent(id)}/transcript${q ? `?${q}` : ""}`
+      );
+    },
   },
 
   agents: {
@@ -124,6 +151,14 @@ export const api = {
         hooks: { installed: boolean; path: string; hooks: Record<string, boolean> };
         server: { uptime: number; node_version: string; platform: string; ws_connections: number };
       }>("/settings/info"),
+    claudeHome: {
+      get: () => request<{ claude_home: string }>("/settings/claude-home"),
+      set: (path: string) =>
+        request<{ ok: boolean; claude_home: string }>("/settings/claude-home", {
+          method: "PUT",
+          body: JSON.stringify({ path }),
+        }),
+    },
     clearData: () =>
       request<{ ok: boolean; cleared: Record<string, number> }>("/settings/clear-data", {
         method: "POST",

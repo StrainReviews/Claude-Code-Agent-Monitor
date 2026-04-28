@@ -207,6 +207,71 @@ curl http://localhost:4820/api/sessions/sess_abc123
 
 ---
 
+#### Get Session Stats
+
+```http
+GET /api/sessions/:id/stats
+```
+
+Returns aggregated counts powering the Session Detail overview panel. All aggregation runs in SQL — the response is cheap to compute even for sessions with tens of thousands of events.
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | Session ID |
+
+**Example Request:**
+
+```bash
+curl http://localhost:4820/api/sessions/sess_abc123/stats
+```
+
+**Example Response:**
+
+```json
+{
+  "session_id": "sess_abc123",
+  "total_events": 14082,
+  "events_by_type": [
+    { "event_type": "PreToolUse", "count": 5210 },
+    { "event_type": "PostToolUse", "count": 5208 }
+  ],
+  "tools_used": [
+    { "tool_name": "Bash", "count": 1842 },
+    { "tool_name": "Read", "count": 1340 }
+  ],
+  "error_count": 12,
+  "first_event_at": "2026-04-26T18:59:00.000Z",
+  "last_event_at": "2026-04-29T21:30:14.000Z",
+  "agents": {
+    "total": 12,
+    "main": 1,
+    "subagent": 11,
+    "compaction": 5,
+    "by_status": { "completed": 11, "working": 1 }
+  },
+  "subagent_types": [
+    { "subagent_type": "Explore", "count": 4 }
+  ],
+  "tokens": {
+    "input_tokens": 1376,
+    "output_tokens": 760304,
+    "cache_read_tokens": 337641891,
+    "cache_write_tokens": 5126047
+  }
+}
+```
+
+**Error Responses:**
+
+| Code | Description |
+|------|-------------|
+| 404 | Session not found |
+| 500 | Internal server error |
+
+---
+
 #### Get Session Agents
 
 ```http

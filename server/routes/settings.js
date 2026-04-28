@@ -13,7 +13,8 @@ const { transcriptCache } = require("./hooks");
 
 const router = Router();
 
-const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
+const { getSettingsPath, getClaudeHome, setClaudeHome } = require("../lib/claude-home");
+const CLAUDE_SETTINGS_PATH = getSettingsPath();
 
 function getDbSize() {
   try {
@@ -168,6 +169,29 @@ router.get("/export", (_req, res) => {
     token_usage: tokenUsage,
     model_pricing: pricing,
   });
+});
+
+// GET /api/settings/claude-home — get current CLAUDE_HOME path
+router.get("/claude-home", (_req, res) => {
+  res.json({ claude_home: getClaudeHome() });
+});
+
+// PUT /api/settings/claude-home — update CLAUDE_HOME path
+router.put("/claude-home", (req, res) => {
+  const { path: newPath } = req.body;
+  if (!newPath || typeof newPath !== "string") {
+    return res.status(400).json({
+      error: { code: "INVALID_PATH", message: "path is required and must be a string" },
+    });
+  }
+  try {
+    const resolved = setClaudeHome(newPath);
+    res.json({ ok: true, claude_home: resolved });
+  } catch (err) {
+    res.status(400).json({
+      error: { code: "INVALID_PATH", message: err.message },
+    });
+  }
 });
 
 // POST /api/settings/cleanup — abandon stale sessions, purge old data

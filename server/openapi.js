@@ -255,11 +255,16 @@ function createOpenApiSpec() {
         },
         SessionsListResponse: {
           type: "object",
-          required: ["sessions", "limit", "offset"],
+          required: ["sessions", "limit", "offset", "total"],
           properties: {
             sessions: { type: "array", items: { $ref: "#/components/schemas/Session" } },
             limit: { type: "integer" },
             offset: { type: "integer" },
+            total: {
+              type: "integer",
+              description:
+                "Total sessions matching the filters (independent of limit/offset). Used by paginators.",
+            },
           },
         },
         SessionCreateRequest: {
@@ -291,6 +296,204 @@ function createOpenApiSpec() {
             session: { $ref: "#/components/schemas/Session" },
             agents: { type: "array", items: { $ref: "#/components/schemas/Agent" } },
             events: { type: "array", items: { $ref: "#/components/schemas/DashboardEvent" } },
+          },
+        },
+        TranscriptInfo: {
+          type: "object",
+          required: ["id", "name", "type", "has_transcript"],
+          properties: {
+            id: {
+              type: "string",
+              description:
+                "'main' for the session's main transcript, otherwise a subagent or compaction id.",
+            },
+            name: { type: "string" },
+            type: { type: "string", enum: ["main", "subagent", "compaction"] },
+            subagent_type: { type: "string", nullable: true },
+            has_transcript: { type: "boolean" },
+            db_agent_id: {
+              type: "string",
+              nullable: true,
+              description:
+                "Foreign key into agents.id when this transcript belongs to a tracked subagent.",
+            },
+          },
+        },
+        TranscriptListResponse: {
+          type: "object",
+          required: ["transcripts"],
+          properties: {
+            transcripts: {
+              type: "array",
+              items: { $ref: "#/components/schemas/TranscriptInfo" },
+            },
+          },
+        },
+        TranscriptContent: {
+          type: "object",
+          required: ["type"],
+          properties: {
+            type: {
+              type: "string",
+              enum: ["text", "tool_use", "tool_result", "thinking"],
+            },
+            text: { type: "string" },
+            name: { type: "string", description: "Tool name when type === tool_use." },
+            id: {
+              type: "string",
+              description: "Tool-use id used to pair tool_use with tool_result.",
+            },
+            input: {
+              description: "Tool input payload (object) or { _truncated: string } when oversized.",
+              oneOf: [{ type: "object", additionalProperties: true }, { type: "string" }],
+            },
+            output: { type: "string", description: "Tool output text when type === tool_result." },
+            is_error: { type: "boolean" },
+          },
+        },
+        TranscriptMessage: {
+          type: "object",
+          required: ["type", "content"],
+          properties: {
+            type: { type: "string", enum: ["user", "assistant"] },
+            timestamp: { type: "string", format: "date-time", nullable: true },
+            content: {
+              type: "array",
+              items: { $ref: "#/components/schemas/TranscriptContent" },
+            },
+            model: { type: "string" },
+            usage: {
+              type: "object",
+              properties: {
+                input_tokens: { type: "integer", minimum: 0 },
+                output_tokens: { type: "integer", minimum: 0 },
+              },
+            },
+          },
+        },
+        TranscriptResponse: {
+          type: "object",
+          required: ["messages", "total", "has_more", "last_line", "first_line"],
+          properties: {
+            messages: {
+              type: "array",
+              items: { $ref: "#/components/schemas/TranscriptMessage" },
+            },
+            total: {
+              type: "integer",
+              minimum: 0,
+              description: "Total messages available in the transcript.",
+            },
+            has_more: {
+              type: "boolean",
+              description: "True when older messages remain (use `before` to load them).",
+            },
+            last_line: {
+              type: "integer",
+              minimum: 0,
+              description:
+                "JSONL line number of the newest returned message — pass back as `after` for incremental fetches.",
+            },
+            first_line: {
+              type: "integer",
+              minimum: 0,
+              description:
+                "JSONL line number of the oldest returned message — pass back as `before` to page backwards.",
+            },
+          },
+        },
+        SessionStatsResponse: {
+          type: "object",
+          description:
+            "Aggregated counts powering the SessionOverview panel on the Session Detail page. All aggregation runs in SQL.",
+          required: [
+            "session_id",
+            "total_events",
+            "events_by_type",
+            "tools_used",
+            "error_count",
+            "first_event_at",
+            "last_event_at",
+            "agents",
+            "subagent_types",
+            "tokens",
+          ],
+          properties: {
+            session_id: { type: "string" },
+            total_events: { type: "integer", minimum: 0 },
+            events_by_type: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["event_type", "count"],
+                properties: {
+                  event_type: { type: "string" },
+                  count: { type: "integer", minimum: 0 },
+                },
+              },
+            },
+            tools_used: {
+              type: "array",
+              description: "Top 15 tools used in this session, sorted by count descending.",
+              items: {
+                type: "object",
+                required: ["tool_name", "count"],
+                properties: {
+                  tool_name: { type: "string" },
+                  count: { type: "integer", minimum: 0 },
+                },
+              },
+            },
+            error_count: {
+              type: "integer",
+              minimum: 0,
+              description:
+                "Events whose event_type or summary matches /error/i or /failed/i (case-insensitive).",
+            },
+            first_event_at: { type: "string", format: "date-time", nullable: true },
+            last_event_at: { type: "string", format: "date-time", nullable: true },
+            agents: {
+              type: "object",
+              required: ["total", "main", "subagent", "compaction", "by_status"],
+              properties: {
+                total: { type: "integer", minimum: 0 },
+                main: { type: "integer", minimum: 0 },
+                subagent: { type: "integer", minimum: 0 },
+                compaction: { type: "integer", minimum: 0 },
+                by_status: {
+                  type: "object",
+                  additionalProperties: { type: "integer", minimum: 0 },
+                },
+              },
+            },
+            subagent_types: {
+              type: "array",
+              description:
+                "Subagent types in this session with counts. Excludes the special 'compaction' type which is surfaced via agents.compaction.",
+              items: {
+                type: "object",
+                required: ["subagent_type", "count"],
+                properties: {
+                  subagent_type: { type: "string" },
+                  count: { type: "integer", minimum: 0 },
+                },
+              },
+            },
+            tokens: {
+              type: "object",
+              required: [
+                "input_tokens",
+                "output_tokens",
+                "cache_read_tokens",
+                "cache_write_tokens",
+              ],
+              properties: {
+                input_tokens: { type: "integer", minimum: 0 },
+                output_tokens: { type: "integer", minimum: 0 },
+                cache_read_tokens: { type: "integer", minimum: 0 },
+                cache_write_tokens: { type: "integer", minimum: 0 },
+              },
+            },
           },
         },
         SessionUpdateRequest: {
@@ -964,9 +1167,18 @@ function createOpenApiSpec() {
         get: {
           tags: ["Sessions"],
           summary: "List sessions",
+          description:
+            "Returns a paginated list of sessions with agent counts and per-session cost. Status filter, search, and pagination compose. Cost computation runs over the returned page only — independent of total session count.",
           operationId: "listSessions",
           parameters: [
             { $ref: "#/components/parameters/SessionStatusQuery" },
+            {
+              name: "q",
+              in: "query",
+              schema: { type: "string" },
+              description:
+                "Case-insensitive search across `id` / `name` / `cwd`. Composes with the status filter when both are present.",
+            },
             { $ref: "#/components/parameters/LimitQuery" },
             { $ref: "#/components/parameters/OffsetQuery" },
           ],
@@ -1070,6 +1282,126 @@ function createOpenApiSpec() {
             },
             404: {
               description: "Session not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/sessions/{id}/stats": {
+        get: {
+          tags: ["Sessions"],
+          summary: "Get aggregated session stats",
+          description:
+            "Returns aggregated counts for the SessionOverview panel: events, events-by-type, top tool usage, error count, agent type/status counts, subagent type breakdown, and token totals. All aggregation runs in SQL — cheap to call even for sessions with tens of thousands of events. Frontend debounces calls to this endpoint on `new_event` / `agent_*` / `session_updated` websocket frames so counters track the running session.",
+          operationId: "getSessionStats",
+          parameters: [{ $ref: "#/components/parameters/SessionIdPath" }],
+          responses: {
+            200: {
+              description: "Aggregated session stats",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/SessionStatsResponse" },
+                },
+              },
+            },
+            404: {
+              description: "Session not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/sessions/{id}/transcripts": {
+        get: {
+          tags: ["Sessions"],
+          summary: "List available transcripts for a session",
+          description:
+            "Lists every JSONL transcript file associated with a session — the main agent's transcript plus any subagent and compaction transcripts. Used by the Conversation tab on the Session Detail page to populate the transcript switcher.",
+          operationId: "listSessionTranscripts",
+          parameters: [{ $ref: "#/components/parameters/SessionIdPath" }],
+          responses: {
+            200: {
+              description: "List of transcripts available for the session",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/TranscriptListResponse" },
+                },
+              },
+            },
+            404: {
+              description: "Session not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/sessions/{id}/transcript": {
+        get: {
+          tags: ["Sessions"],
+          summary: "Stream messages from a specific transcript",
+          description:
+            "Returns parsed messages from a JSONL transcript with cursor-based pagination. Pass `agent_id` to select a specific subagent or compaction transcript. The frontend uses `after` for incremental live updates on `new_event` and `before` to load older messages on scroll-up.",
+          operationId: "getSessionTranscript",
+          parameters: [
+            { $ref: "#/components/parameters/SessionIdPath" },
+            {
+              name: "agent_id",
+              in: "query",
+              schema: { type: "string" },
+              description:
+                "Transcript identifier — 'main' for the session's main transcript, or a subagent / compaction id from /transcripts.",
+            },
+            {
+              name: "limit",
+              in: "query",
+              schema: { type: "integer", default: 50, minimum: 1, maximum: 500 },
+              description: "Maximum number of messages to return.",
+            },
+            {
+              name: "offset",
+              in: "query",
+              schema: { type: "integer", minimum: 0 },
+              description:
+                "Offset from the start of the transcript (mutually exclusive with after/before).",
+            },
+            {
+              name: "after",
+              in: "query",
+              schema: { type: "integer", minimum: 0 },
+              description:
+                "Only return messages whose JSONL line number is strictly greater than this value. Used for incremental live updates.",
+            },
+            {
+              name: "before",
+              in: "query",
+              schema: { type: "integer", minimum: 0 },
+              description:
+                "Only return messages whose JSONL line number is strictly less than this value. Used to load older messages on scroll-up.",
+            },
+          ],
+          responses: {
+            200: {
+              description: "Parsed messages with cursor metadata",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/TranscriptResponse" },
+                },
+              },
+            },
+            404: {
+              description: "Session or transcript not found",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/ErrorResponse" },
