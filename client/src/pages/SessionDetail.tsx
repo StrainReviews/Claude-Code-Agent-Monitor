@@ -823,7 +823,12 @@ export function SessionDetail() {
               <div className="divide-y divide-border max-h-[600px] overflow-y-auto overflow-x-auto">
                 {grouped
                   ? eventGroups.map((group) => (
-                      <EventGroupRow key={group.key} group={group} agentInfoById={agentInfoById} />
+                      <EventGroupRow
+                        key={group.key}
+                        group={group}
+                        agentInfoById={agentInfoById}
+                        sessionNameById={sessionNameById}
+                      />
                     ))
                   : events.map((event, i) => {
                       const key = event.id ?? i;
