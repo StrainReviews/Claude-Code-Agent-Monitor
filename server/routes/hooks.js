@@ -627,12 +627,12 @@ const processEvent = db.transaction((hookType, data) => {
         }
       }
 
-      // Discover models for in-flight subagents by scanning the nested
-      // subagents/ directory next to the main transcript. This fires on every
-      // tick of the main agent's event stream, so a running subagent gets a
-      // model badge as soon as its first JSONL line is written — no need to
-      // wait for SubagentStop.
-      backfillWorkingSubagents(sessionId, data.transcript_path);
+      // Defer subagent model backfill to after the transaction completes.
+      // Running filesystem I/O inside a synchronous DB transaction blocks the
+      // event loop and makes the server unresponsive under high hook traffic.
+      if (data.transcript_path) {
+        setImmediate(() => backfillWorkingSubagents(sessionId, data.transcript_path));
+      }
 
       // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)
       if (result.errors) {

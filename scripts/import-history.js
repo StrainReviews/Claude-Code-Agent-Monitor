@@ -1240,6 +1240,8 @@ async function importAllSessions(dbModule) {
     }
   });
 
+  const yieldToEventLoop = () => new Promise((r) => setImmediate(r));
+
   for (const projDir of projectDirs) {
     const projPath = path.join(PROJECTS_DIR, projDir);
     const files = fs.readdirSync(projPath).filter((f) => f.endsWith(".jsonl"));
@@ -1248,6 +1250,14 @@ async function importAllSessions(dbModule) {
     const batch = [];
     for (const file of files) {
       try {
+        const sessionId = path.basename(file, ".jsonl");
+        if (dbModule.stmts.getSession.get(sessionId)) {
+          skipped++;
+          continue;
+        }
+
+        await yieldToEventLoop();
+
         const session = await parseSessionFile(path.join(projPath, file));
         if (!session) {
           skipped++;
@@ -1261,6 +1271,7 @@ async function importAllSessions(dbModule) {
           session.parsedSubagents = [];
           for (const sf of subFiles) {
             try {
+              await yieldToEventLoop();
               const subData = await parseSubagentFile(path.join(subDir, sf));
               if (subData) session.parsedSubagents.push(subData);
             } catch {
