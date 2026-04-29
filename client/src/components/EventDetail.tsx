@@ -23,6 +23,10 @@ type EventDetailProps = {
    *  SessionDetail) should pass it; older callers can omit it and the panel
    *  falls back to id-only display. */
   agentInfoById?: Map<string, AgentInfo>;
+  /** Optional lookup so the panel can surface a human-friendly session
+   *  label (e.g. "AI-Assistant-Chatbot (enumerated-wandering-jellyfish)")
+   *  next to the raw session_id. Same fallback rules as agentInfoById. */
+  sessionNameById?: Map<string, string>;
 };
 
 /** Human-friendly label for an agent — `subagent_type · name` when both add
@@ -93,7 +97,7 @@ function humanizeKey(key: string): string {
 
 type Row = { key: string; label: string; value: unknown };
 
-export function EventDetail({ event, agentInfoById }: EventDetailProps) {
+export function EventDetail({ event, agentInfoById, sessionNameById }: EventDetailProps) {
   const { t } = useTranslation("common");
 
   const parsed = useMemo<Record<string, unknown> | null>(() => {
@@ -113,8 +117,19 @@ export function EventDetail({ event, agentInfoById }: EventDetailProps) {
   const rows = useMemo<Row[]>(() => {
     const result: Row[] = [
       { key: "event_id", label: t("eventDetail.eventId"), value: event.id },
-      { key: "session_id", label: t("eventDetail.sessionId"), value: event.session_id },
     ];
+    // Surface the session name above the raw id when we can resolve it —
+    // makes "f2f3c568-..." recognisable as e.g. "AI-Assistant-Chatbot
+    // (enumerated-wandering-jellyfish)" without losing the id below.
+    const sessionName = sessionNameById?.get(event.session_id);
+    if (sessionName && sessionName.trim().length > 0) {
+      result.push({ key: "session_name", label: t("eventDetail.session"), value: sessionName });
+    }
+    result.push({
+      key: "session_id",
+      label: t("eventDetail.sessionId"),
+      value: event.session_id,
+    });
     if (event.agent_id) {
       // Surface the agent name above the raw id when we can resolve it —
       // makes "f2f3c568-...-subagent-14" recognisable as e.g.
@@ -146,7 +161,16 @@ export function EventDetail({ event, agentInfoById }: EventDetailProps) {
     }
 
     return result;
-  }, [event.id, event.session_id, event.agent_id, event.data, parsed, agentInfoById, t]);
+  }, [
+    event.id,
+    event.session_id,
+    event.agent_id,
+    event.data,
+    parsed,
+    agentInfoById,
+    sessionNameById,
+    t,
+  ]);
 
   const hasToolInput = parsed != null && "tool_input" in parsed;
   const hasToolResponse = parsed != null && "tool_response" in parsed;

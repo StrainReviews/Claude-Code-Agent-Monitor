@@ -280,6 +280,14 @@ export function SessionDetail() {
     return map;
   }, [agents]);
 
+  // Single-entry session-name lookup so EventDetail can surface the session
+  // label above the raw id, mirroring the agentInfoById pattern.
+  const sessionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (session?.id && session?.name) map.set(session.id, session.name);
+    return map;
+  }, [session?.id, session?.name]);
+
   // Precompute project per event so flat-row rendering doesn't re-parse JSON.
   const projectByEventId = useMemo(() => {
     const map = new Map<number, string | null>();
@@ -868,7 +876,13 @@ export function SessionDetail() {
                               </span>
                             )}
                           </button>
-                          {isOpen && <EventDetail event={event} agentInfoById={agentInfoById} />}
+                          {isOpen && (
+                            <EventDetail
+                              event={event}
+                              agentInfoById={agentInfoById}
+                              sessionNameById={sessionNameById}
+                            />
+                          )}
                         </div>
                       );
                     })}

@@ -165,7 +165,11 @@ export function EventGroupRow({
         )}
       </div>
 
-      {expanded && isSingleEvent && group.events[0] && <EventDetail event={group.events[0]} agentInfoById={agentInfoById} />}
+      {expanded && isSingleEvent && group.events[0] && <EventDetail
+          event={group.events[0]}
+          agentInfoById={agentInfoById}
+          sessionNameById={sessionNameById}
+        />}
 
       {expanded && !isSingleEvent && (
         <div className="bg-surface-2/40 border-t border-border divide-y divide-border">
@@ -200,7 +204,11 @@ export function EventGroupRow({
                     {buildEventTitle(event)}
                   </span>
                 </button>
-                {innerOpen && <EventDetail event={event} agentInfoById={agentInfoById} />}
+                {innerOpen && <EventDetail
+                    event={event}
+                    agentInfoById={agentInfoById}
+                    sessionNameById={sessionNameById}
+                  />}
               </div>
             );
           })}

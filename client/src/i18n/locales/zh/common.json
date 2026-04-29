@@ -80,6 +80,7 @@
     "summary": "摘要",
     "seeDetailsBelow": "完整详情请看下方 {{fields}}",
     "eventId": "事件 ID",
+    "session": "会话",
     "sessionId": "会话 ID",
     "agentId": "Agent ID",
     "agent": "Agent",

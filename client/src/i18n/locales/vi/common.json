@@ -80,6 +80,7 @@
     "summary": "Tóm tắt",
     "seeDetailsBelow": "Xem chi tiết đầy đủ bên dưới trong {{fields}}",
     "eventId": "ID sự kiện",
+    "session": "Phiên",
     "sessionId": "ID phiên",
     "agentId": "ID Agent",
     "agent": "Agent",
