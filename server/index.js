@@ -245,9 +245,10 @@ if (require.main === module) {
   setInterval(() => runReconciler("periodic"), RECONCILER_INTERVAL_MS);
 
   // Auto-import legacy sessions and backfill compaction tracking on startup.
-  // Skipped when SKIP_STARTUP_IMPORT=1 to avoid blocking the event loop on
-  // large ~/.claude/projects/ trees (thousands of JSONL files).
-  if (process.env.SKIP_STARTUP_IMPORT !== "1") {
+  // Disabled by default for large ~/.claude/projects/ trees (thousands of
+  // JSONL files block the event loop). Enable with STARTUP_IMPORT=1 or run
+  // `npm run setup` for one-time historical backfill.
+  if (process.env.STARTUP_IMPORT === "1") {
     const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
     const dbModule = require("./db");
     setTimeout(() => {
