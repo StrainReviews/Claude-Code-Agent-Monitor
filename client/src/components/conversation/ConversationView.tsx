@@ -1,9 +1,19 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { ChevronDown, Loader2, ArrowDown, MessagesSquare } from "lucide-react";
+import { ChevronDown, Loader2, ArrowDown, MessagesSquare, RefreshCw } from "lucide-react";
 import { api } from "../../lib/api";
 import { eventBus } from "../../lib/eventBus";
 import { MessageList } from "./MessageList";
 import type { TranscriptMessage, TranscriptInfo, WSMessage } from "../../lib/types";
+
+// Catch-up poll interval. Claude Code only fires hooks on PreToolUse /
+// PostToolUse / Stop, which means a user-typed message (no hook) and any
+// assistant text written between two hook fires is invisible until the next
+// hook event. A short visibility-gated poll closes that gap and also rescues
+// the conversation from missed/late WebSocket frames.
+const POLL_INTERVAL_MS = 3000;
+// Rescan the transcripts list periodically so new subagents that spawn
+// mid-session appear in the dropdown without a page reload.
+const TRANSCRIPTS_REFRESH_MS = 15000;
 
 interface ConversationViewProps {
   sessionId: string;
@@ -29,8 +39,16 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const fetchingRef = useRef(false);
+  // When a fetch is in flight and a new trigger arrives (WS event, poll,
+  // manual refresh), we queue exactly one re-fetch so events that landed
+  // during the in-flight request aren't silently dropped.
+  const pendingFetchRef = useRef(false);
+  // Refresh-button spinner state — separate from initial `loading` so the
+  // existing skeleton doesn't blink during a manual refresh.
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Load available transcript list
+  // Load available transcript list (also rescanned on a short interval so
+  // newly-spawned subagents appear in the dropdown without a page reload).
   useEffect(() => {
     let cancelled = false;
     async function loadTranscripts() {
@@ -43,8 +61,10 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
       }
     }
     loadTranscripts();
+    const interval = window.setInterval(loadTranscripts, TRANSCRIPTS_REFRESH_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
     };
   }, [sessionId]);
 
@@ -90,33 +110,43 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
     };
   }, [sessionId, selectedTranscript]);
 
-  // WebSocket subscription: incrementally load new messages on new_event
-  useEffect(() => {
-    const unsubscribe = eventBus.subscribe((msg: WSMessage) => {
-      if (msg.type !== "new_event") return;
-      // Only process events for the current session
-      const data = msg.data as { session_id?: string };
-      if (data.session_id !== sessionId) return;
-      // Incremental load
-      fetchNewMessages();
-    });
-    return unsubscribe;
-  }, [sessionId, selectedTranscript]);
-
-  // Incrementally load new messages
+  // Incrementally load new messages. Two modes:
+  //   - bootstrap (lastLineRef === 0): the initial load saw an empty
+  //     transcript, so we pull the latest 50 to seed the view. This unblocks
+  //     fresh sessions where the JSONL hadn't been written yet at mount.
+  //   - incremental (lastLineRef > 0): tail-fetch lines after the highest
+  //     parsed message we've seen. The server already de-overlaps via
+  //     afterLine, so we can safely append.
   const fetchNewMessages = useCallback(async () => {
-    if (lastLineRef.current === 0 || fetchingRef.current) return;
+    if (fetchingRef.current) {
+      // Coalesce: remember a trigger arrived during this fetch and re-run
+      // exactly once when the in-flight request settles.
+      pendingFetchRef.current = true;
+      return;
+    }
     fetchingRef.current = true;
+    pendingFetchRef.current = false;
+
+    const wasBootstrap = lastLineRef.current === 0;
     try {
       const result = await api.sessions.transcript(sessionId, {
         agent_id: selectedTranscript || undefined,
-        after: lastLineRef.current,
+        ...(wasBootstrap ? {} : { after: lastLineRef.current }),
         limit: 50,
       });
       if (result.messages.length === 0) return;
 
       lastLineRef.current = result.last_line;
-      setMessages((prev) => [...prev, ...result.messages]);
+
+      if (wasBootstrap) {
+        // Seed the view in a single render so the user sees the whole
+        // catch-up batch instead of a blank panel followed by a partial one.
+        setMessages(result.messages);
+        firstLineRef.current = result.first_line;
+        setHasMore(result.has_more);
+      } else {
+        setMessages((prev) => [...prev, ...result.messages]);
+      }
       setTotal(result.total);
 
       // Auto-scroll if user is at bottom; otherwise show "new messages" indicator
@@ -129,8 +159,86 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
       // Non-fatal
     } finally {
       fetchingRef.current = false;
+      // Drain a queued trigger if one arrived during the fetch.
+      if (pendingFetchRef.current) {
+        pendingFetchRef.current = false;
+        // Defer one tick so React state updates from this call commit first.
+        setTimeout(() => fetchNewMessages(), 0);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, selectedTranscript]);
+
+  // WebSocket subscription: refetch on every new_event for this session.
+  // Hook coverage isn't complete (a user-typed message fires no hook), so we
+  // also poll below to catch what WS misses.
+  useEffect(() => {
+    const unsubscribe = eventBus.subscribe((msg: WSMessage) => {
+      if (msg.type !== "new_event") return;
+      const data = msg.data as { session_id?: string };
+      if (data.session_id !== sessionId) return;
+      fetchNewMessages();
+    });
+    return unsubscribe;
+  }, [sessionId, fetchNewMessages]);
+
+  // Resync on WebSocket reconnect: events that landed during a transient
+  // disconnect are gone from the bus, but the JSONL still has them, so a
+  // single tail-fetch on reconnect catches the conversation up.
+  useEffect(() => {
+    return eventBus.onConnection((connected) => {
+      if (connected) fetchNewMessages();
+    });
+  }, [fetchNewMessages]);
+
+  // Visibility-gated polling fallback. Covers:
+  //   1. User-typed messages (no Claude Code hook fires for those).
+  //   2. Long assistant turns where text streams between hook fires.
+  //   3. Late JSONL flushes that arrive after the triggering hook's fetch.
+  //   4. Dropped/missed WebSocket frames.
+  useEffect(() => {
+    let interval: number | null = null;
+    function start() {
+      if (interval !== null) return;
+      interval = window.setInterval(() => {
+        if (document.visibilityState === "visible") fetchNewMessages();
+      }, POLL_INTERVAL_MS);
+    }
+    function stop() {
+      if (interval !== null) {
+        window.clearInterval(interval);
+        interval = null;
+      }
+    }
+    function onVisibility() {
+      if (document.visibilityState === "visible") {
+        // Tab just became visible — fire a one-shot catch-up immediately
+        // and resume polling. Backgrounded tabs throttle setInterval, so
+        // restarting on focus avoids a stale conversation.
+        fetchNewMessages();
+        start();
+      } else {
+        stop();
+      }
+    }
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [fetchNewMessages]);
+
+  // Manual refresh — surfaces a control in the toolbar so users can force
+  // a sync without reloading the page.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchNewMessages();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchNewMessages]);
 
   // Scroll-up to load history
   const loadHistory = useCallback(async () => {
@@ -213,8 +321,9 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
 
   return (
     <div className="relative flex flex-col" style={{ minHeight: 0 }}>
-      {/* Toolbar */}
-      {(transcripts.length > 1 || (!loading && total > 0)) && (
+      {/* Toolbar — always rendered after the initial load so users can
+          refresh even when no messages have streamed yet. */}
+      {!loading && (
         <div className="flex items-center gap-3 mb-3 flex-shrink-0">
           {transcripts.length > 1 && (
             <div className="relative">
@@ -236,6 +345,17 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
             <MessagesSquare className="w-3 h-3" />
             {total} message{total !== 1 ? "s" : ""}
           </span>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing || loading}
+            title="Refresh conversation"
+            aria-label="Refresh conversation"
+            className="inline-flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-gray-200 bg-surface-2 border border-surface-3 hover:border-violet-500/30 rounded-md px-2 py-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
         </div>
       )}
 

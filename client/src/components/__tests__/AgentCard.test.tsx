@@ -108,6 +108,34 @@ describe("AgentCard", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it("renders waiting badge and yellow accent when awaiting_input_since is set", () => {
+    const { container } = renderCard(
+      <AgentCard
+        agent={makeAgent({
+          status: "idle",
+          awaiting_input_since: "2026-03-05T10:01:00.000Z",
+        })}
+      />
+    );
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
+    const card = container.querySelector(".card-hover");
+    expect(card?.className).toContain("border-l-yellow-500/60");
+  });
+
+  it("ignores awaiting_input_since once the agent has completed", () => {
+    renderCard(
+      <AgentCard
+        agent={makeAgent({
+          status: "completed",
+          awaiting_input_since: "2026-03-05T10:01:00.000Z",
+          ended_at: "2026-03-05T10:02:00.000Z",
+        })}
+      />
+    );
+    expect(screen.getByText("Completed")).toBeInTheDocument();
+    expect(screen.queryByText("Waiting")).not.toBeInTheDocument();
+  });
+
   it("should show duration for completed agents with ended_at", () => {
     renderCard(
       <AgentCard

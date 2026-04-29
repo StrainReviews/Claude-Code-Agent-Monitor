@@ -63,6 +63,14 @@ describe("AgentStatusBadge", () => {
     const dot = container.querySelector(".animate-pulse-dot");
     expect(dot).toBeInTheDocument();
   });
+
+  it("should render waiting status with yellow dot and pulse by default", () => {
+    const { container } = render(<AgentStatusBadge status="waiting" />);
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
+    const dot = container.querySelector(".animate-pulse-dot");
+    expect(dot).toBeInTheDocument();
+    expect(container.querySelector(".bg-yellow-400")).toBeInTheDocument();
+  });
 });
 
 describe("SessionStatusBadge", () => {
@@ -84,5 +92,13 @@ describe("SessionStatusBadge", () => {
   it("should render abandoned status", () => {
     render(<SessionStatusBadge status="abandoned" />);
     expect(screen.getByText("Abandoned")).toBeInTheDocument();
+  });
+
+  it("should render waiting status with pulsing yellow dot", () => {
+    const { container } = render(<SessionStatusBadge status="waiting" />);
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
+    const dot = container.querySelector(".animate-pulse-dot");
+    expect(dot).toBeInTheDocument();
+    expect(container.querySelector(".bg-yellow-400")).toBeInTheDocument();
   });
 });

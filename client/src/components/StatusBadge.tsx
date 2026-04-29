@@ -5,17 +5,20 @@
  */
 import { useTranslation } from "react-i18next";
 import { STATUS_CONFIG, SESSION_STATUS_CONFIG } from "../lib/types";
-import type { AgentStatus, SessionStatus } from "../lib/types";
+import type { EffectiveAgentStatus, EffectiveSessionStatus } from "../lib/types";
 
 interface AgentStatusBadgeProps {
-  status: AgentStatus;
+  status: EffectiveAgentStatus;
   pulse?: boolean;
 }
 
 export function AgentStatusBadge({ status, pulse }: AgentStatusBadgeProps) {
   const { t } = useTranslation();
   const config = STATUS_CONFIG[status];
-  const shouldPulse = pulse ?? (status === "working" || status === "connected");
+  // "waiting" pulses by default so the user's eye is drawn to sessions that
+  // need their attention, matching the pulsing for active/working states.
+  const shouldPulse =
+    pulse ?? (status === "working" || status === "connected" || status === "waiting");
 
   return (
     <span className={`badge ${config.bg} ${config.color}`}>
@@ -30,11 +33,23 @@ export function AgentStatusBadge({ status, pulse }: AgentStatusBadgeProps) {
 }
 
 interface SessionStatusBadgeProps {
-  status: SessionStatus;
+  status: EffectiveSessionStatus;
+  pulse?: boolean;
 }
 
-export function SessionStatusBadge({ status }: SessionStatusBadgeProps) {
+export function SessionStatusBadge({ status, pulse }: SessionStatusBadgeProps) {
   const { t } = useTranslation();
   const config = SESSION_STATUS_CONFIG[status];
-  return <span className={`badge ${config.bg} ${config.color}`}>{t(config.labelKey)}</span>;
+  const shouldPulse = pulse ?? status === "waiting";
+  return (
+    <span className={`badge ${config.bg} ${config.color}`}>
+      {shouldPulse && (
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${config.dot} animate-pulse-dot`}
+          aria-hidden="true"
+        />
+      )}
+      {t(config.labelKey)}
+    </span>
+  );
 }

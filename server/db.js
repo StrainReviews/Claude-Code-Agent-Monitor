@@ -212,6 +212,24 @@ try {
   db.prepare("UPDATE agents SET updated_at = COALESCE(ended_at, started_at)").run();
 }
 
+// Migrate: add `awaiting_input_since` columns to sessions and agents.
+// When Claude Code emits a Notification asking for permission or user input,
+// we mark the session and its main agent as awaiting input by stamping this
+// column with the notification's ISO timestamp. The underlying status enum
+// stays unchanged (so existing CHECK constraints, queries, and aggregations
+// keep working); the UI derives an effective "waiting" status whenever this
+// column is non-null.
+try {
+  db.prepare("SELECT awaiting_input_since FROM sessions LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE sessions ADD COLUMN awaiting_input_since TEXT").run();
+}
+try {
+  db.prepare("SELECT awaiting_input_since FROM agents LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE agents ADD COLUMN awaiting_input_since TEXT").run();
+}
+
 // Migrate: add compaction baseline columns to token_usage.
 // When conversation compaction rewrites the JSONL, pre-compaction token counts
 // are lost from the transcript. Baselines preserve those counts so the effective
@@ -297,6 +315,24 @@ const stmts = {
   ),
   reactivateAgent: db.prepare(
     "UPDATE agents SET status = 'connected', ended_at = NULL, current_tool = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
+  // Awaiting-input state. Stamping awaiting_input_since marks the row as
+  // "waiting" for user attention without touching the underlying status
+  // enum (kept stable for legacy CHECK constraints and aggregations).
+  setSessionAwaitingInput: db.prepare(
+    "UPDATE sessions SET awaiting_input_since = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
+  clearSessionAwaitingInput: db.prepare(
+    "UPDATE sessions SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
+  ),
+  setAgentAwaitingInput: db.prepare(
+    "UPDATE agents SET awaiting_input_since = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
+  clearAgentAwaitingInput: db.prepare(
+    "UPDATE agents SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
+  ),
+  clearSessionAgentsAwaitingInput: db.prepare(
+    "UPDATE agents SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND awaiting_input_since IS NOT NULL"
   ),
   // Find the deepest currently-working subagent in a session using a recursive CTE.
   // Used to infer which agent is spawning a new subagent when hook events don't
