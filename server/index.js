@@ -212,7 +212,7 @@ if (require.main === module) {
   // expensive (reads JSONL headers) and only needs to run every 5 min.
   const { reconcileAll } = require("./lib/subagent-reconciler");
   const RECONCILER_INTERVAL_MS = parseInt(
-    process.env.RECONCILER_INTERVAL_MS || `${5 * 60 * 1000}`,
+    process.env.RECONCILER_INTERVAL_MS || `${30 * 60 * 1000}`,
     10
   );
   const RECONCILER_ENABLED = process.env.RECONCILER_ENABLED !== "false";
@@ -223,6 +223,7 @@ if (require.main === module) {
         db: cleanupDb.db,
         stmts: cleanupDb.stmts,
         transcriptCache,
+        maxAgeMs: 30 * 60 * 1000,
       });
       if (r.sessionsChanged > 0) {
         console.log(

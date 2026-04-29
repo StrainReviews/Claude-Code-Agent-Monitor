@@ -18,6 +18,8 @@ const router = Router();
 // Shared cache instance — reused by periodic compaction scanner via router.transcriptCache
 const transcriptCache = new TranscriptCache();
 
+const _backfillThrottle = new Set();
+
 // Scan the nested subagents/ directory next to the main transcript and fill
 // in model + token usage for any subagent row that is still "working" and
 // has no model yet.
@@ -627,11 +629,15 @@ const processEvent = db.transaction((hookType, data) => {
         }
       }
 
-      // Defer subagent model backfill to after the transaction completes.
-      // Running filesystem I/O inside a synchronous DB transaction blocks the
-      // event loop and makes the server unresponsive under high hook traffic.
-      if (data.transcript_path) {
-        setImmediate(() => backfillWorkingSubagents(sessionId, data.transcript_path));
+      // Defer subagent model backfill — throttled to once per 10s per session
+      // to avoid flooding the event loop with filesystem scans under high
+      // hook traffic (400+ events/5min during active Claude sessions).
+      if (data.transcript_path && !_backfillThrottle.has(sessionId)) {
+        _backfillThrottle.add(sessionId);
+        setTimeout(() => {
+          _backfillThrottle.delete(sessionId);
+          backfillWorkingSubagents(sessionId, data.transcript_path);
+        }, 10_000);
       }
 
       // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)

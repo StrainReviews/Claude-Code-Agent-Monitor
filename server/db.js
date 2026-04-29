@@ -133,6 +133,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
   CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
   CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_events_dedup ON events(session_id, event_type, created_at);
   CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
   CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
 `);
