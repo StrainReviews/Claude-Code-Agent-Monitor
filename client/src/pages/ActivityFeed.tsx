@@ -145,7 +145,11 @@ export function ActivityFeed() {
         if (cancelled) return;
         const map = new Map<string, string>();
         for (const s of sessions) {
-          if (s.name) map.set(s.id, s.name);
+          // Always populate so the EventDetail panel's "Session" row shows
+          // an identifiable label even for unnamed sessions. Matches the
+          // fallback used by SessionDetail's header.
+          const label = s.name?.trim() || `Session ${s.id.slice(0, 8)}`;
+          map.set(s.id, label);
         }
         setSessionNameById(map);
       })

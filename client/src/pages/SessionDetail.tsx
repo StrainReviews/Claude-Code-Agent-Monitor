@@ -281,10 +281,15 @@ export function SessionDetail() {
   }, [agents]);
 
   // Single-entry session-name lookup so EventDetail can surface the session
-  // label above the raw id, mirroring the agentInfoById pattern.
+  // label above the raw id, mirroring the agentInfoById pattern. Falls back
+  // to "Session abcdefgh" when session.name is null/empty so the row always
+  // shows *something* identifiable — matches the header's display logic.
   const sessionNameById = useMemo(() => {
     const map = new Map<string, string>();
-    if (session?.id && session?.name) map.set(session.id, session.name);
+    if (session?.id) {
+      const label = session.name?.trim() || `Session ${session.id.slice(0, 8)}`;
+      map.set(session.id, label);
+    }
     return map;
   }, [session?.id, session?.name]);
 
