@@ -629,15 +629,21 @@ const processEvent = db.transaction((hookType, data) => {
         }
       }
 
-      // Defer subagent model backfill — throttled to once per 10s per session
+      // Defer subagent model backfill — throttled to once per 30s per session
       // to avoid flooding the event loop with filesystem scans under high
       // hook traffic (400+ events/5min during active Claude sessions).
+      // Wrapped in try/catch because the deferred write can hit SQLITE_BUSY
+      // if a processEvent transaction is in flight.
       if (data.transcript_path && !_backfillThrottle.has(sessionId)) {
         _backfillThrottle.add(sessionId);
         setTimeout(() => {
           _backfillThrottle.delete(sessionId);
-          backfillWorkingSubagents(sessionId, data.transcript_path);
-        }, 10_000);
+          try {
+            backfillWorkingSubagents(sessionId, data.transcript_path);
+          } catch {
+            // SQLITE_BUSY — will retry on next throttle window
+          }
+        }, 30_000);
       }
 
       // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)
