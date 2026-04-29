@@ -27,6 +27,7 @@ import { AgentCard } from "../components/AgentCard";
 import { SessionOverview } from "../components/SessionOverview";
 import { ConversationView } from "../components/conversation/ConversationView";
 import { SessionStatusBadge, AgentStatusBadge } from "../components/StatusBadge";
+import { effectiveSessionStatus } from "../lib/types";
 import { EventDetail } from "../components/EventDetail";
 import {
   EventFilters,
@@ -51,7 +52,6 @@ import type {
   Session,
   Agent,
   DashboardEvent,
-  SessionStatus,
   CostResult,
   TranscriptInfo,
 } from "../lib/types";
@@ -428,7 +428,7 @@ export function SessionDetail() {
             <h2 className="text-xl font-semibold text-gray-100">
               {session.name || `${t("defaultName")}${session.id.slice(0, 8)}`}
             </h2>
-            <SessionStatusBadge status={session.status as SessionStatus} />
+            <SessionStatusBadge status={effectiveSessionStatus(session)} />
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
             <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 font-mono bg-surface-2 px-2 py-1 rounded">

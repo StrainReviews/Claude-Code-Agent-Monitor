@@ -14,6 +14,34 @@ const router = Router();
 // Shared cache instance — reused by periodic compaction scanner via router.transcriptCache
 const transcriptCache = new TranscriptCache();
 
+// Detect Notification messages that indicate Claude Code is blocked waiting
+// for the user (permission prompt or "waiting for your input" notice). Idle
+// notifications such as "Claude has finished responding" intentionally do
+// NOT match — those don't actually block the session.
+const WAITING_INPUT_PATTERN =
+  /\bpermission\b|waiting (?:for )?(?:your )?(?:input|response|reply|approval)|needs?\s+your\s+(?:input|approval|response|attention)|approval\s+(?:needed|required)|awaiting\s+(?:your\s+)?(?:input|approval|response)/i;
+
+function isWaitingForUserMessage(msg) {
+  if (!msg || typeof msg !== "string") return false;
+  return WAITING_INPUT_PATTERN.test(msg);
+}
+
+function clearAwaitingInput(sessionId, mainAgentId, broadcastUpdates) {
+  // Clear waiting flag on the main agent and any other agents on this session
+  // (subagents don't normally enter waiting state, but keep them in sync just
+  // in case a future notification path stamps one).
+  const cleared = stmts.clearSessionAgentsAwaitingInput.run(sessionId);
+  const sessCleared = stmts.clearSessionAwaitingInput.run(sessionId);
+  if (broadcastUpdates && cleared.changes > 0 && mainAgentId) {
+    const refreshedMain = stmts.getAgent.get(mainAgentId);
+    if (refreshedMain) broadcast("agent_updated", refreshedMain);
+  }
+  if (broadcastUpdates && sessCleared.changes > 0) {
+    const refreshedSess = stmts.getSession.get(sessionId);
+    if (refreshedSess) broadcast("session_updated", refreshedSess);
+  }
+}
+
 function ensureSession(sessionId, data) {
   let session = stmts.getSession.get(sessionId);
   if (!session) {
@@ -85,6 +113,14 @@ const processEvent = db.transaction((hookType, data) => {
   let toolName = data.tool_name || null;
   let summary = null;
   let agentId = mainAgentId;
+
+  // Any non-Notification hook event implies the user has resumed (the CLI
+  // wouldn't run a tool, finish a turn, or close the session while still
+  // blocked on a permission prompt). Clear any pending waiting flag so the
+  // UI flips out of the yellow "Waiting" state immediately.
+  if (hookType !== "Notification") {
+    clearAwaitingInput(sessionId, mainAgentId, true);
+  }
 
   switch (hookType) {
     case "PreToolUse": {
@@ -316,6 +352,19 @@ const processEvent = db.transaction((hookType, data) => {
       // Tag compaction-related notifications so they show as Compaction events
       if (/compact|compress|context.*(reduc|truncat|summar)/i.test(msg)) {
         eventType = "Compaction";
+        summary = msg;
+      } else if (isWaitingForUserMessage(msg)) {
+        // Claude Code is blocked waiting for the user (permission prompt or
+        // explicit "waiting for input" notice). Stamp session + main agent
+        // so the dashboard can surface a yellow "Waiting" badge until the
+        // user responds — at which point the next PreToolUse/Stop clears it.
+        const ts = new Date().toISOString();
+        stmts.setSessionAwaitingInput.run(ts, sessionId);
+        broadcast("session_updated", stmts.getSession.get(sessionId));
+        if (mainAgentId) {
+          stmts.setAgentAwaitingInput.run(ts, mainAgentId);
+          broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        }
         summary = msg;
       } else {
         summary = msg;

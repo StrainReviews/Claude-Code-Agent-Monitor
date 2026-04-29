@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { FolderOpen, Bot, Clock, Coins, Cpu } from "lucide-react";
 import { SessionStatusBadge } from "./StatusBadge";
+import { effectiveSessionStatus, isSessionAwaitingInput } from "../lib/types";
 import type { Session } from "../lib/types";
 import { formatDuration, timeAgo } from "../lib/format";
 
@@ -36,6 +37,8 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
   const isActive = session.status === "active";
+  const isWaiting = isSessionAwaitingInput(session);
+  const status = effectiveSessionStatus(session);
   const title = session.name?.trim() || t("session.anonymous");
   const agentCount = session.agent_count ?? 0;
   const model = shortModel(session.model);
@@ -50,7 +53,11 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
     <div
       onClick={handleClick}
       className={`card-hover p-4 cursor-pointer animate-fade-in overflow-hidden ${
-        isActive ? "border-l-2 border-l-emerald-500/50" : ""
+        isWaiting
+          ? "border-l-2 border-l-yellow-500/60"
+          : isActive
+            ? "border-l-2 border-l-emerald-500/50"
+            : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2 mb-3 min-w-0">
@@ -65,7 +72,7 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
             </p>
           </div>
         </div>
-        <SessionStatusBadge status={session.status} />
+        <SessionStatusBadge status={status} />
       </div>
 
       {session.cwd && (

@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { Bot, GitBranch, Clock, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { AgentStatusBadge } from "./StatusBadge";
+import { effectiveAgentStatus, isAgentAwaitingInput } from "../lib/types";
 import type { Agent } from "../lib/types";
 import { formatDuration, timeAgo } from "../lib/format";
 
@@ -19,6 +20,8 @@ interface AgentCardProps {
 export function AgentCard({ agent, label, onClick }: AgentCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
+  const isWaiting = isAgentAwaitingInput(agent);
+  const status = effectiveAgentStatus(agent);
   const isActive = agent.status === "working" || agent.status === "connected";
 
   function handleClick() {
@@ -33,7 +36,11 @@ export function AgentCard({ agent, label, onClick }: AgentCardProps) {
     <div
       onClick={handleClick}
       className={`card-hover p-4 cursor-pointer overflow-hidden ${
-        isActive ? "border-l-2 border-l-emerald-500/50" : ""
+        isWaiting
+          ? "border-l-2 border-l-yellow-500/60"
+          : isActive
+            ? "border-l-2 border-l-emerald-500/50"
+            : ""
       }`}
     >
       <div className="flex items-start justify-between gap-2 mb-3 min-w-0">
@@ -58,7 +65,7 @@ export function AgentCard({ agent, label, onClick }: AgentCardProps) {
             )}
           </div>
         </div>
-        <AgentStatusBadge status={agent.status} />
+        <AgentStatusBadge status={status} />
       </div>
 
       {agent.task && (

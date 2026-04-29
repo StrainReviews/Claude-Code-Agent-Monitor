@@ -3,6 +3,7 @@
   "searchPlaceholder": "Search sessions...",
   "filterAll": "All",
   "filterActive": "Active",
+  "filterWaiting": "Waiting",
   "filterCompleted": "Completed",
   "filterError": "Error",
   "filterAbandoned": "Abandoned",

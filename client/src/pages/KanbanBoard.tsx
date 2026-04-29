@@ -16,13 +16,37 @@ import { eventBus } from "../lib/eventBus";
 import { AgentCard } from "../components/AgentCard";
 import { SessionCard } from "../components/SessionCard";
 import { EmptyState } from "../components/EmptyState";
-import { STATUS_CONFIG, SESSION_STATUS_CONFIG } from "../lib/types";
-import type { Agent, AgentStatus, Session, SessionStatus, WSMessage } from "../lib/types";
+import {
+  STATUS_CONFIG,
+  SESSION_STATUS_CONFIG,
+  isAgentAwaitingInput,
+  isSessionAwaitingInput,
+} from "../lib/types";
+import type {
+  Agent,
+  EffectiveAgentStatus,
+  EffectiveSessionStatus,
+  Session,
+  WSMessage,
+} from "../lib/types";
 
 type BoardView = "agents" | "sessions";
 
-const AGENT_COLUMNS: AgentStatus[] = ["idle", "connected", "working", "completed", "error"];
-const SESSION_COLUMNS: SessionStatus[] = ["active", "completed", "error", "abandoned"];
+const AGENT_COLUMNS: EffectiveAgentStatus[] = [
+  "idle",
+  "connected",
+  "working",
+  "waiting",
+  "completed",
+  "error",
+];
+const SESSION_COLUMNS: EffectiveSessionStatus[] = [
+  "active",
+  "waiting",
+  "completed",
+  "error",
+  "abandoned",
+];
 const COLUMN_PAGE_SIZE = 10;
 const VIEW_STORAGE_KEY = "kanban-board-view";
 
@@ -59,7 +83,14 @@ export function KanbanBoard() {
   }, []);
 
   const loadAgents = useCallback(async () => {
-    const results = await Promise.all(AGENT_COLUMNS.map((status) => api.agents.list({ status })));
+    // The "waiting" column is a UI-only overlay derived from
+    // awaiting_input_since — it lives within agents whose persisted status
+    // is still idle/connected/working. We fetch each persisted-status
+    // column from the API and bucket by *effective* status on the client.
+    const persistedStatuses = AGENT_COLUMNS.filter((s) => s !== "waiting");
+    const results = await Promise.all(
+      persistedStatuses.map((status) => api.agents.list({ status }))
+    );
     setAgents(results.flatMap((r) => r.agents));
   }, []);
 
@@ -69,9 +100,11 @@ export function KanbanBoard() {
     // Wire-limit raised to the server's safety cap (10000); cost
     // computation on the server scales with returned rows, so each
     // column's request stays bounded by how many sessions actually have
-    // that status.
+    // that status. The "waiting" column is derived client-side from the
+    // active set (see grouping below).
+    const persistedStatuses = SESSION_COLUMNS.filter((s) => s !== "waiting");
     const results = await Promise.all(
-      SESSION_COLUMNS.map((status) => api.sessions.list({ status, limit: 10000 }))
+      persistedStatuses.map((status) => api.sessions.list({ status, limit: 10000 }))
     );
     setSessions(results.flatMap((r) => r.sessions));
   }, []);
@@ -100,20 +133,30 @@ export function KanbanBoard() {
     });
   }, [view, loadAgents, loadSessions]);
 
+  // Bucket by effective status: agents/sessions blocked on user input fall
+  // into the "waiting" column instead of their underlying lifecycle column.
+  // This keeps the persisted enum stable while letting the UI surface the
+  // attention-required state in a dedicated column.
   const groupedAgents = AGENT_COLUMNS.reduce(
     (acc, status) => {
-      acc[status] = agents.filter((a) => a.status === status);
+      acc[status] =
+        status === "waiting"
+          ? agents.filter(isAgentAwaitingInput)
+          : agents.filter((a) => a.status === status && !isAgentAwaitingInput(a));
       return acc;
     },
-    {} as Record<AgentStatus, Agent[]>
+    {} as Record<EffectiveAgentStatus, Agent[]>
   );
 
   const groupedSessions = SESSION_COLUMNS.reduce(
     (acc, status) => {
-      acc[status] = sessions.filter((s) => s.status === status);
+      acc[status] =
+        status === "waiting"
+          ? sessions.filter(isSessionAwaitingInput)
+          : sessions.filter((s) => s.status === status && !isSessionAwaitingInput(s));
       return acc;
     },
-    {} as Record<SessionStatus, Session[]>
+    {} as Record<EffectiveSessionStatus, Session[]>
   );
 
   const total = view === "agents" ? agents.length : sessions.length;
@@ -176,7 +219,7 @@ export function KanbanBoard() {
                   labelKey={config.labelKey}
                   color={config.color}
                   dotClass={config.dot}
-                  pulse={status === "working"}
+                  pulse={status === "working" || status === "waiting"}
                   count={items?.length ?? 0}
                   emptyLabel={t("noAgentsInColumn")}
                   remaining={Math.max(0, (items?.length ?? 0) - limit)}
@@ -203,7 +246,7 @@ export function KanbanBoard() {
                   labelKey={config.labelKey}
                   color={config.color}
                   dotClass={config.dot}
-                  pulse={status === "active"}
+                  pulse={status === "active" || status === "waiting"}
                   count={items?.length ?? 0}
                   emptyLabel={t("noSessionsInColumn")}
                   remaining={Math.max(0, (items?.length ?? 0) - limit)}

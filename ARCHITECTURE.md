@@ -215,7 +215,7 @@ sequenceDiagram
     Note over TX: Creates session + main agent<br/>if first contact
 
     TX->>TX: Process by hook_type
-    Note over TX: SessionStart → create/reactivate session,<br/>abandon stale sessions (5+ min idle)<br/>PreToolUse → set agent working<br/>PostToolUse → clear current_tool<br/>Stop → main agent idle (non-tool turns too)<br/>SubagentStop → mark subagent done<br/>SessionEnd → mark all completed<br/>Every event → detect compaction from JSONL,<br/>create Compaction agent + event if new
+    Note over TX: SessionStart → create/reactivate session,<br/>abandon stale sessions (5+ min idle)<br/>PreToolUse → set agent working<br/>PostToolUse → clear current_tool<br/>Stop → main agent idle (non-tool turns too)<br/>SubagentStop → mark subagent done<br/>Notification → if message matches a permission/<br/>input-prompt pattern, stamp `awaiting_input_since`<br/>on session + main agent (cleared by next non-<br/>Notification hook)<br/>SessionEnd → mark all completed<br/>Every event → detect compaction from JSONL,<br/>create Compaction agent + event if new
 
     TX->>TX: insertEvent(...)
     TX->>TX: COMMIT
@@ -402,7 +402,7 @@ graph TD
     DASH --> AC1["AgentCard[]<br/>with collapsible subagent hierarchy"]
     DASH --> EV1["Event rows"]
 
-    KANBAN --> COL["Column x5<br/>(idle/connected/<br/>working/completed/error)"]
+    KANBAN --> COL["Column x6<br/>(idle/connected/<br/>working/waiting/<br/>completed/error)"]
     COL --> AC2["AgentCard[]"]
 
     SESS --> TABLE["Session Table<br/>with filters"]
@@ -620,6 +620,7 @@ erDiagram
         TEXT started_at "ISO 8601"
         TEXT ended_at "ISO 8601 or NULL"
         TEXT metadata "JSON blob"
+        TEXT awaiting_input_since "ISO 8601 or NULL — set by waiting Notifications"
     }
 
     agents {
@@ -635,6 +636,7 @@ erDiagram
         TEXT ended_at "ISO 8601 or NULL"
         TEXT parent_agent_id FK "References agents.id"
         TEXT metadata "JSON blob"
+        TEXT awaiting_input_since "ISO 8601 or NULL — main-agent waiting flag"
     }
 
     events {

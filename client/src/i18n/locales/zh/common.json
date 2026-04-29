@@ -41,6 +41,7 @@
     "idle": "空闲",
     "connected": "已连接",
     "working": "工作中",
+    "waiting": "等待中",
     "completed": "已完成",
     "error": "错误",
     "active": "活跃",

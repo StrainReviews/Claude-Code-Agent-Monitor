@@ -8,6 +8,16 @@ export type SessionStatus = "active" | "completed" | "error" | "abandoned";
 export type AgentStatus = "idle" | "connected" | "working" | "completed" | "error";
 export type AgentType = "main" | "subagent";
 
+/**
+ * UI-only status that overlays the persisted SessionStatus/AgentStatus when
+ * `awaiting_input_since` is set on a session or agent. Renders as a yellow
+ * "Waiting" badge so the dashboard can flag sessions blocked on a Claude Code
+ * permission prompt without changing the underlying lifecycle enum.
+ */
+export const AWAITING_STATUS = "waiting" as const;
+export type EffectiveAgentStatus = AgentStatus | typeof AWAITING_STATUS;
+export type EffectiveSessionStatus = SessionStatus | typeof AWAITING_STATUS;
+
 export interface Session {
   id: string;
   name: string | null;
@@ -20,6 +30,10 @@ export interface Session {
   agent_count?: number;
   last_activity?: string;
   cost?: number;
+  /** ISO timestamp set when Claude Code is blocked waiting for the user
+   * (permission prompt or "waiting for your input" notice). Cleared on the
+   * next non-Notification hook event. Null when the session is not waiting. */
+  awaiting_input_since?: string | null;
 }
 
 export interface Agent {
@@ -36,6 +50,28 @@ export interface Agent {
   updated_at: string;
   parent_agent_id: string | null;
   metadata: string | null;
+  /** Mirrors the parent session: ISO timestamp when set, null otherwise. */
+  awaiting_input_since?: string | null;
+}
+
+/** True when a session is paused on a permission prompt or input request. */
+export function isSessionAwaitingInput(session: Session | undefined | null): boolean {
+  return !!session?.awaiting_input_since && session.status === "active";
+}
+
+/** True when an agent is the one blocked on user input (typically a main agent). */
+export function isAgentAwaitingInput(agent: Agent | undefined | null): boolean {
+  if (!agent?.awaiting_input_since) return false;
+  // Once the agent's lifecycle has ended, the waiting flag is stale; ignore it.
+  return agent.status !== "completed" && agent.status !== "error";
+}
+
+export function effectiveAgentStatus(agent: Agent): EffectiveAgentStatus {
+  return isAgentAwaitingInput(agent) ? AWAITING_STATUS : agent.status;
+}
+
+export function effectiveSessionStatus(session: Session): EffectiveSessionStatus {
+  return isSessionAwaitingInput(session) ? AWAITING_STATUS : session.status;
 }
 
 export interface DashboardEvent {
@@ -363,7 +399,7 @@ export interface SessionDrillIn {
 }
 
 export const STATUS_CONFIG: Record<
-  AgentStatus,
+  EffectiveAgentStatus,
   { labelKey: string; color: string; bg: string; dot: string }
 > = {
   idle: {
@@ -383,6 +419,12 @@ export const STATUS_CONFIG: Record<
     color: "text-emerald-400",
     bg: "bg-emerald-500/10 border-emerald-500/20",
     dot: "bg-emerald-400",
+  },
+  waiting: {
+    labelKey: "common:status.waiting",
+    color: "text-yellow-400",
+    bg: "bg-yellow-500/10 border-yellow-500/20",
+    dot: "bg-yellow-400",
   },
   completed: {
     labelKey: "common:status.completed",
@@ -440,7 +482,7 @@ export interface TranscriptListResult {
 }
 
 export const SESSION_STATUS_CONFIG: Record<
-  SessionStatus,
+  EffectiveSessionStatus,
   { labelKey: string; color: string; bg: string; dot: string }
 > = {
   active: {
@@ -448,6 +490,12 @@ export const SESSION_STATUS_CONFIG: Record<
     color: "text-emerald-400",
     bg: "bg-emerald-500/10 border-emerald-500/20",
     dot: "bg-emerald-400",
+  },
+  waiting: {
+    labelKey: "common:status.waiting",
+    color: "text-yellow-400",
+    bg: "bg-yellow-500/10 border-yellow-500/20",
+    dot: "bg-yellow-400",
   },
   completed: {
     labelKey: "common:status.completed",
@@ -462,9 +510,11 @@ export const SESSION_STATUS_CONFIG: Record<
     dot: "bg-red-400",
   },
   abandoned: {
+    // Muted slate distinguishes "given up / faded out" from yellow Waiting
+    // (attention required) and gray Idle (still connected, just quiet).
     labelKey: "common:status.abandoned",
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10 border-yellow-500/20",
-    dot: "bg-yellow-400",
+    color: "text-slate-400",
+    bg: "bg-slate-500/10 border-slate-500/20",
+    dot: "bg-slate-400",
   },
 };

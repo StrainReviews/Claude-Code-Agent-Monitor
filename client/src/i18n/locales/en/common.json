@@ -41,6 +41,7 @@
     "idle": "Idle",
     "connected": "Connected",
     "working": "Working",
+    "waiting": "Waiting",
     "completed": "Completed",
     "error": "Error",
     "active": "Active",

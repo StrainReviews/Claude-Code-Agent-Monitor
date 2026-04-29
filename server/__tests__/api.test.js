@@ -643,6 +643,64 @@ describe("Hook Event Processing", () => {
     });
     assert.equal(res.status, 200);
     assert.equal(res.body.event.summary, "Task completed successfully");
+
+    // A non-waiting Notification should NOT stamp awaiting_input_since.
+    const sessRes = await fetch("/api/sessions/hook-sess-1");
+    assert.equal(sessRes.body.session.awaiting_input_since, null);
+  });
+
+  it("should mark session and main agent as awaiting input on permission-prompt Notification", async () => {
+    // Bootstrap a fresh session so prior tests don't taint the assertion.
+    await post("/api/hooks/event", {
+      hook_type: "SessionStart",
+      data: { session_id: "hook-sess-wait" },
+    });
+
+    const res = await post("/api/hooks/event", {
+      hook_type: "Notification",
+      data: {
+        session_id: "hook-sess-wait",
+        message: "Claude needs your permission to use Bash",
+      },
+    });
+    assert.equal(res.status, 200);
+
+    const sessRes = await fetch("/api/sessions/hook-sess-wait");
+    assert.ok(
+      sessRes.body.session.awaiting_input_since,
+      "session should be flagged as awaiting input"
+    );
+
+    const agentsRes = await fetch("/api/agents?session_id=hook-sess-wait");
+    const main = agentsRes.body.agents.find((a) => a.type === "main");
+    assert.ok(main.awaiting_input_since, "main agent should be flagged as awaiting input");
+  });
+
+  it("should clear awaiting_input_since when the user resumes (next PreToolUse)", async () => {
+    // Re-arm the waiting state — previous test may have left it set, but be
+    // explicit so this test stands on its own.
+    await post("/api/hooks/event", {
+      hook_type: "Notification",
+      data: {
+        session_id: "hook-sess-wait",
+        message: "Claude is waiting for your input",
+      },
+    });
+
+    const before = await fetch("/api/sessions/hook-sess-wait");
+    assert.ok(before.body.session.awaiting_input_since);
+
+    await post("/api/hooks/event", {
+      hook_type: "PreToolUse",
+      data: { session_id: "hook-sess-wait", tool_name: "Bash" },
+    });
+
+    const after = await fetch("/api/sessions/hook-sess-wait");
+    assert.equal(after.body.session.awaiting_input_since, null);
+
+    const agentsRes = await fetch("/api/agents?session_id=hook-sess-wait");
+    const main = agentsRes.body.agents.find((a) => a.type === "main");
+    assert.equal(main.awaiting_input_since, null);
   });
 
   it("should keep session active and set main agent idle on Stop", async () => {
