@@ -7,9 +7,11 @@ const { Router } = require("express");
 const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 const path = require("path");
-const { stmts, db } = require("../db");
+const dbModule = require("../db");
+const { stmts, db } = dbModule;
 const { broadcast } = require("../websocket");
 const TranscriptCache = require("../lib/transcript-cache");
+const { scanAndImportSubagents } = require("../../scripts/import-history");
 
 const router = Router();
 
@@ -18,12 +20,7 @@ const transcriptCache = new TranscriptCache();
 
 // Scan the nested subagents/ directory next to the main transcript and fill
 // in model + token usage for any subagent row that is still "working" and
-// has no model yet. Subagents write their own JSONL live while they run, so
-// we can discover the model long before SubagentStop fires — this is what
-// makes the dashboard badge appear on an in-flight subagent.
-//
-// Matching: agents.name is the description prefix (truncated at 57 chars, "..."
-// appended). meta.json next to each JSONL carries the full description.
+// has no model yet.
 function backfillWorkingSubagents(sessionId, mainTranscriptPath) {
   if (!mainTranscriptPath) return;
   const subDir = mainTranscriptPath.replace(/\.jsonl$/i, "") + path.sep + "subagents";
@@ -41,7 +38,6 @@ function backfillWorkingSubagents(sessionId, mainTranscriptPath) {
     .all(sessionId);
   if (working.length === 0) return;
 
-  // Build description → jsonl path index from meta files
   const index = [];
   for (const f of files) {
     if (!f.endsWith(".meta.json")) continue;
@@ -57,7 +53,6 @@ function backfillWorkingSubagents(sessionId, mainTranscriptPath) {
   if (index.length === 0) return;
 
   for (const sub of working) {
-    // agent.name is the (possibly truncated) description; strip trailing "..."
     const bare = sub.name.endsWith("...") ? sub.name.slice(0, -3) : sub.name;
     const match =
       index.find((e) => sub.name.startsWith(e.description.slice(0, 57))) ||
@@ -80,6 +75,32 @@ function backfillWorkingSubagents(sessionId, mainTranscriptPath) {
       );
     }
     broadcast("agent_updated", stmts.getAgent.get(sub.id));
+  }
+}
+
+const STALE_MINUTES = (() => {
+  const raw = parseInt(process.env.DASHBOARD_STALE_MINUTES, 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 180;
+})();
+
+const WAITING_INPUT_PATTERN =
+  /\bpermission\b|waiting (?:for )?(?:your )?(?:input|response|reply|approval)|needs?\s+your\s+(?:input|approval|response|attention)|approval\s+(?:needed|required)|awaiting\s+(?:your\s+)?(?:input|approval|response)/i;
+
+function isWaitingForUserMessage(msg) {
+  if (!msg || typeof msg !== "string") return false;
+  return WAITING_INPUT_PATTERN.test(msg);
+}
+
+function clearAwaitingInput(sessionId, mainAgentId, broadcastUpdates) {
+  const cleared = stmts.clearSessionAgentsAwaitingInput.run(sessionId);
+  const sessCleared = stmts.clearSessionAwaitingInput.run(sessionId);
+  if (broadcastUpdates && cleared.changes > 0 && mainAgentId) {
+    const refreshedMain = stmts.getAgent.get(mainAgentId);
+    if (refreshedMain) broadcast("agent_updated", refreshedMain);
+  }
+  if (broadcastUpdates && sessCleared.changes > 0) {
+    const refreshedSess = stmts.getSession.get(sessionId);
+    if (refreshedSess) broadcast("session_updated", refreshedSess);
   }
 }
 
@@ -155,9 +176,22 @@ const processEvent = db.transaction((hookType, data) => {
   let summary = null;
   let agentId = mainAgentId;
 
+  // NOTE: clearing of awaiting_input_since is handled per-case below rather
+  // than blanket-clearing on every non-Notification event. The blanket rule
+  // caused spontaneous waiting → active flips when *any* hook arrived after
+  // a Stop — most commonly SubagentStop for backgrounded subagents, but
+  // also occasionally a late PostToolUse from a background tool. A subagent
+  // or background tool finishing tells us nothing about whether the human
+  // has actually responded, so those events must NOT clear the flag.
+
   switch (hookType) {
     case "PreToolUse": {
       summary = `Using tool: ${toolName}`;
+
+      // PreToolUse means Claude is actively running a tool, ergo the user
+      // has resumed (Stop only fires at end of turn — Claude can't start a
+      // new tool call without fresh user input). Clear waiting now.
+      clearAwaitingInput(sessionId, mainAgentId, true);
 
       // If the tool is Agent, a subagent is being created
       if (toolName === "Agent") {
@@ -229,6 +263,13 @@ const processEvent = db.transaction((hookType, data) => {
     case "PostToolUse": {
       summary = `Tool completed: ${toolName}`;
 
+      // Clear waiting too. The non-obvious case this covers: a permission
+      // Notification fires *between* PreToolUse and PostToolUse (when Claude
+      // Code prompts the user mid-tool). The Notification stamps waiting,
+      // the user approves, the tool completes, PostToolUse arrives. Without
+      // a clear here, we'd be stuck in waiting until the next PreToolUse.
+      clearAwaitingInput(sessionId, mainAgentId, true);
+
       // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
       // backgrounded — it does NOT mean the subagent finished its work.
       // Subagent completion is handled by SubagentStop, not here.
@@ -252,24 +293,44 @@ const processEvent = db.transaction((hookType, data) => {
 
       // Stop means Claude finished its turn, NOT that the session is closed.
       // Session stays active — user can still send more messages.
-      // Main agent goes to "idle" (waiting for user input).
-      // Background subagents may still be running — do NOT complete them here.
-      // They complete individually via SubagentStop, or all at once on SessionEnd.
+      // Background subagents may still be running — do NOT complete them
+      // here. They complete via SubagentStop, or all at once on SessionEnd.
+      //
+      // CRITICAL: do all DB writes BEFORE any broadcast, then broadcast the
+      // final state once. An earlier version broadcast agent_updated twice
+      // (first with status=idle and no flag, then again after the flag was
+      // set) which made the agent flicker out of every Kanban column for a
+      // tick — visible to users as "agent skipped waiting and went to
+      // completed", because the Idle column no longer exists and Waiting
+      // requires the flag.
       const now = new Date().toISOString();
+      const agentMutable =
+        !!mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error";
 
-      // Set main agent to idle (waiting for user), not completed.
-      // For non-tool turns the agent may already be "idle" — still update it
-      // so the timestamp and activity log reflect that a turn completed.
-      if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
-        stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+      if (data.stop_reason === "error") {
+        if (agentMutable) {
+          stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+        }
+        stmts.updateSession.run(null, "error", now, null, sessionId);
+        // Error stop is terminal-ish — drop any waiting flag so the row
+        // lands cleanly in the Error column.
+        clearAwaitingInput(sessionId, mainAgentId, false);
+      } else {
+        if (agentMutable) {
+          stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+        }
+        // Stamp the waiting flag in the same DB pass as the idle update so
+        // the post-write read returns a consistent (idle, awaiting=set)
+        // row. Effective status flips working → waiting in one broadcast.
+        stmts.setSessionAwaitingInput.run(now, sessionId);
+        if (mainAgentId) stmts.setAgentAwaitingInput.run(now, mainAgentId);
+      }
+
+      // Now broadcast — single agent_updated reflecting the final state.
+      broadcast("session_updated", stmts.getSession.get(sessionId));
+      if (mainAgentId) {
         broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
       }
-
-      // Mark error sessions on error stop_reason, but keep normal sessions active
-      if (data.stop_reason === "error") {
-        stmts.updateSession.run(null, "error", now, null, sessionId);
-      }
-      broadcast("session_updated", stmts.getSession.get(sessionId));
       break;
     }
 
@@ -363,17 +424,33 @@ const processEvent = db.transaction((hookType, data) => {
 
     case "SessionStart": {
       summary = data.source === "resume" ? "Session resumed" : "Session started";
+
       // Reactivation is already handled above for non-active sessions.
-      // Set main agent to connected (ready for work).
+      // Promote main agent from idle → connected if needed.
       if (mainAgent && mainAgent.status === "idle") {
         stmts.updateAgent.run(null, "connected", null, null, null, null, mainAgentId);
-        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
       }
+
+      // A just-started or just-resumed session is sitting at a prompt
+      // waiting for the user's first message — Claude Code hasn't done
+      // anything yet. Stamp awaiting_input_since so it lands in Waiting
+      // from the moment the dashboard sees it. UserPromptSubmit (when the
+      // user hits enter) or PreToolUse (when Claude actually runs a tool)
+      // will clear the flag.
+      const sessionStartTs = new Date().toISOString();
+      stmts.setSessionAwaitingInput.run(sessionStartTs, sessionId);
+      if (mainAgentId) stmts.setAgentAwaitingInput.run(sessionStartTs, mainAgentId);
+
+      // Single broadcast pair with the final state — agents and sessions
+      // are now connected/active with the waiting flag set, so WS clients
+      // see the Waiting badge as soon as the SessionStart event lands.
+      broadcast("session_updated", stmts.getSession.get(sessionId));
+      if (mainAgentId) broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
 
       // Clean up orphaned sessions: when a user runs /resume inside a session,
       // the parent session never receives Stop or SessionEnd. Mark any active
-      // session with no events for 5+ minutes as abandoned.
-      const staleSessions = stmts.findStaleSessions.all(sessionId, 5);
+      // session that hasn't seen events for STALE_MINUTES as abandoned.
+      const staleSessions = stmts.findStaleSessions.all(sessionId, STALE_MINUTES);
       const now = new Date().toISOString();
       for (const stale of staleSessions) {
         const staleAgents = stmts.listAgentsBySession.all(stale.id);
@@ -394,6 +471,10 @@ const processEvent = db.transaction((hookType, data) => {
       const endLabel = endSession?.name || `Session ${sessionId.slice(0, 8)}`;
       summary = `Session closed: ${endLabel}`;
 
+      // Session is terminating — drop any waiting flag so the row lands in
+      // the Completed column without a leftover yellow overlay.
+      clearAwaitingInput(sessionId, mainAgentId, false);
+
       // SessionEnd is the definitive signal that the CLI process exited.
       // Mark everything as completed.
       const allAgents = stmts.listAgentsBySession.all(sessionId);
@@ -410,11 +491,41 @@ const processEvent = db.transaction((hookType, data) => {
       break;
     }
 
+    case "UserPromptSubmit": {
+      // User just hit enter on a new prompt. This is the unambiguous
+      // "session resumed" signal — fires before Claude does anything,
+      // unlike PreToolUse which only fires for tool-using turns. Clear
+      // the Waiting flag and promote the main agent to Working so the
+      // dashboard reflects "Claude is now thinking on this" through the
+      // entire response, including text-only replies that emit no
+      // PreToolUse before Stop.
+      summary = "User prompt submitted";
+      clearAwaitingInput(sessionId, mainAgentId, true);
+      if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
+        stmts.updateAgent.run(null, "working", null, null, null, null, mainAgentId);
+        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+      }
+      break;
+    }
+
     case "Notification": {
       const msg = data.message || "Notification received";
       // Tag compaction-related notifications so they show as Compaction events
       if (/compact|compress|context.*(reduc|truncat|summar)/i.test(msg)) {
         eventType = "Compaction";
+        summary = msg;
+      } else if (isWaitingForUserMessage(msg)) {
+        // Claude Code is blocked waiting for the user (permission prompt or
+        // explicit "waiting for input" notice). Stamp session + main agent
+        // so the dashboard can surface a yellow "Waiting" badge until the
+        // user responds — at which point the next PreToolUse/Stop clears it.
+        const ts = new Date().toISOString();
+        stmts.setSessionAwaitingInput.run(ts, sessionId);
+        broadcast("session_updated", stmts.getSession.get(sessionId));
+        if (mainAgentId) {
+          stmts.setAgentAwaitingInput.run(ts, mainAgentId);
+          broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        }
         summary = msg;
       } else {
         summary = msg;
@@ -656,6 +767,31 @@ router.post("/event", (req, res) => {
   }
 
   res.json({ ok: true, event: result });
+
+  // After SubagentStop, scan the session's subagent JSONL files and ingest any
+  // tool calls that aren't yet in the events table. Subagent tool_use blocks
+  // never fire hooks on the parent session — this scan is the only path that
+  // attributes them to the subagent's agent_id.
+  if (hook_type === "SubagentStop" && data.session_id && data.transcript_path) {
+    scanAndImportSubagents(dbModule, data.session_id, data.transcript_path)
+      .then(({ created }) => {
+        if (created > 0) {
+          // Nudge SessionDetail to refetch — the page already debounces
+          // bursts of new_event into a single paginated reload.
+          broadcast("new_event", {
+            session_id: data.session_id,
+            agent_id: null,
+            event_type: "SubagentJsonlImported",
+            tool_name: null,
+            summary: `Imported ${created} subagent record(s) from JSONL`,
+            created_at: new Date().toISOString(),
+          });
+        }
+      })
+      .catch(() => {
+        // non-fatal — partial JSONL during a live run is expected
+      });
+  }
 });
 
 router.transcriptCache = transcriptCache;

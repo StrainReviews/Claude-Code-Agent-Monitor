@@ -199,6 +199,13 @@ function createOpenApiSpec() {
             agent_count: { type: "integer", nullable: true },
             last_activity: { type: "string", format: "date-time", nullable: true },
             cost: { type: "number", nullable: true },
+            awaiting_input_since: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+              description:
+                "ISO timestamp set when Claude Code is blocked waiting for the user (permission prompt or input request). Null when not waiting; cleared on the next non-Notification hook event.",
+            },
           },
         },
         Agent: {
@@ -225,6 +232,13 @@ function createOpenApiSpec() {
               description: "JSON-encoded agent metadata",
             },
             updated_at: { type: "string", format: "date-time" },
+            awaiting_input_since: {
+              type: "string",
+              format: "date-time",
+              nullable: true,
+              description:
+                "ISO timestamp set when this agent is blocked waiting for user input. Cleared on the next non-Notification hook event for the session.",
+            },
           },
         },
         DashboardEvent: {

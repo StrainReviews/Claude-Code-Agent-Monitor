@@ -3,6 +3,7 @@
   "searchPlaceholder": "Tìm phiên...",
   "filterAll": "Tất cả",
   "filterActive": "Đang hoạt động",
+  "filterWaiting": "Đang chờ",
   "filterCompleted": "Hoàn tất",
   "filterError": "Lỗi",
   "filterAbandoned": "Bị bỏ dở",

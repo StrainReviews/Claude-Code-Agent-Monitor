@@ -27,6 +27,7 @@ import { AgentCard } from "../components/AgentCard";
 import { SessionOverview } from "../components/SessionOverview";
 import { ConversationView } from "../components/conversation/ConversationView";
 import { SessionStatusBadge, AgentStatusBadge } from "../components/StatusBadge";
+import { effectiveSessionStatus } from "../lib/types";
 import { EventDetail } from "../components/EventDetail";
 import {
   EventFilters,
@@ -47,14 +48,7 @@ import {
 } from "../lib/event-grouping";
 import type { AgentInfo } from "../lib/event-grouping";
 import { formatDateTime, formatDuration, fmtCostFull, timeAgo } from "../lib/format";
-import type {
-  Session,
-  Agent,
-  DashboardEvent,
-  SessionStatus,
-  CostResult,
-  TranscriptInfo,
-} from "../lib/types";
+import type { Session, Agent, DashboardEvent, CostResult, TranscriptInfo } from "../lib/types";
 
 type DetailTab = "agents" | "conversation" | "timeline";
 
@@ -82,6 +76,12 @@ export function SessionDetail() {
     return new Set<string>();
   });
   const [activeTab, setActiveTab] = useState<DetailTab>("agents");
+  // Keep tabs mounted once visited so switching between them doesn't unmount/
+  // remount their subtrees (which causes a perceptible flash on click).
+  const [visitedTabs, setVisitedTabs] = useState<Set<DetailTab>>(() => new Set(["agents"]));
+  useEffect(() => {
+    setVisitedTabs((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
   const [transcripts, setTranscripts] = useState<TranscriptInfo[]>([]);
   const [pendingTranscriptId, setPendingTranscriptId] = useState<string | null>(null);
   const [transcriptNotFound, setTranscriptNotFound] = useState(false);
@@ -190,22 +190,25 @@ export function SessionDetail() {
         return null;
       };
 
-      // Try matching with currently loaded transcripts
-      let transcriptId = findTranscriptId(transcripts);
+      // Always switch to the conversation tab — the user clicked a leaf agent
+      // and expects to see its conversation. If no exact transcript match is
+      // found, the tab still opens and the not-found banner explains why.
+      setActiveTab("conversation");
+
+      const transcriptId = findTranscriptId(transcripts);
 
       if (transcriptId) {
         setPendingTranscriptId(transcriptId);
-        setActiveTab("conversation");
       } else if (transcripts.length === 0 && id) {
-        // Transcripts not loaded yet — fetch them and retry
+        // Transcripts not loaded yet — fetch them and retry. The tab is
+        // already showing; this just selects the right transcript when ready.
         api.sessions
           .transcripts(id)
           .then((result) => {
+            setTranscripts(result.transcripts);
             const freshId = findTranscriptId(result.transcripts);
             if (freshId) {
-              setTranscripts(result.transcripts);
               setPendingTranscriptId(freshId);
-              setActiveTab("conversation");
             } else {
               setTranscriptNotFound(true);
             }
@@ -214,7 +217,7 @@ export function SessionDetail() {
             setTranscriptNotFound(true);
           });
       } else {
-        // No matching transcript found — show info to user
+        // Transcripts are loaded but no specific match for this agent.
         setTranscriptNotFound(true);
       }
     },
@@ -267,10 +270,28 @@ export function SessionDetail() {
   const agentInfoById = useMemo(() => {
     const map = new Map<string, AgentInfo>();
     for (const a of agents) {
-      map.set(a.id, { type: a.type, subagent_type: a.subagent_type, name: a.name });
+      map.set(a.id, {
+        type: a.type,
+        subagent_type: a.subagent_type,
+        name: a.name,
+        parent_agent_id: a.parent_agent_id,
+      });
     }
     return map;
   }, [agents]);
+
+  // Single-entry session-name lookup so EventDetail can surface the session
+  // label above the raw id, mirroring the agentInfoById pattern. Falls back
+  // to "Session abcdefgh" when session.name is null/empty so the row always
+  // shows *something* identifiable — matches the header's display logic.
+  const sessionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (session?.id) {
+      const label = session.name?.trim() || `Session ${session.id.slice(0, 8)}`;
+      map.set(session.id, label);
+    }
+    return map;
+  }, [session?.id, session?.name]);
 
   // Precompute project per event so flat-row rendering doesn't re-parse JSON.
   const projectByEventId = useMemo(() => {
@@ -419,7 +440,7 @@ export function SessionDetail() {
             <h2 className="text-xl font-semibold text-gray-100">
               {session.name || `${t("defaultName")}${session.id.slice(0, 8)}`}
             </h2>
-            <SessionStatusBadge status={session.status as SessionStatus} />
+            <SessionStatusBadge status={effectiveSessionStatus(session)} />
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
             <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 font-mono bg-surface-2 px-2 py-1 rounded">
@@ -524,8 +545,8 @@ export function SessionDetail() {
         </div>
       )}
 
-      {activeTab === "agents" && (
-        <div>
+      {visitedTabs.has("agents") && (
+        <div hidden={activeTab !== "agents"}>
           <SessionOverview session={session} agents={agents} />
 
           {agents.length === 0 ? (
@@ -573,21 +594,23 @@ export function SessionDetail() {
                     const hasChildren = children.length > 0;
                     const isSubagent = depth > 0;
                     const totalDesc = hasChildren ? countDescendants(agent.id) : 0;
+                    const toggleExpanded = () =>
+                      setExpandedAgents((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(agent.id)) next.delete(agent.id);
+                        else next.add(agent.id);
+                        return next;
+                      });
 
                     return (
                       <div key={agent.id}>
                         <div className="flex items-center gap-1 min-w-0">
                           {hasChildren && (
                             <button
-                              onClick={() =>
-                                setExpandedAgents((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(agent.id)) next.delete(agent.id);
-                                  else next.add(agent.id);
-                                  return next;
-                                })
-                              }
+                              onClick={toggleExpanded}
                               className="p-1 text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+                              aria-label={isExpanded ? "Collapse subagents" : "Expand subagents"}
+                              aria-expanded={isExpanded}
                             >
                               {isExpanded ? (
                                 <ChevronDown className="w-4 h-4" />
@@ -603,8 +626,13 @@ export function SessionDetail() {
                           <div className="flex-1 min-w-0">
                             <AgentCard
                               agent={agent}
+                              session={session ?? undefined}
                               label={compactionLabels.get(agent.id)}
-                              onClick={() => navigateToAgentConversation(agent)}
+                              onClick={
+                                hasChildren
+                                  ? toggleExpanded
+                                  : () => navigateToAgentConversation(agent)
+                              }
                             />
                           </div>
                         </div>
@@ -735,12 +763,14 @@ export function SessionDetail() {
         </div>
       )}
 
-      {activeTab === "conversation" && (
-        <ConversationView sessionId={session.id} initialTranscriptId={pendingTranscriptId} />
+      {visitedTabs.has("conversation") && (
+        <div hidden={activeTab !== "conversation"}>
+          <ConversationView sessionId={session.id} initialTranscriptId={pendingTranscriptId} />
+        </div>
       )}
 
-      {activeTab === "timeline" && (
-        <div>
+      {visitedTabs.has("timeline") && (
+        <div hidden={activeTab !== "timeline"}>
           <div className="mb-3">
             <EventFiltersInfo />
           </div>
@@ -793,7 +823,12 @@ export function SessionDetail() {
               <div className="divide-y divide-border max-h-[600px] overflow-y-auto overflow-x-auto">
                 {grouped
                   ? eventGroups.map((group) => (
-                      <EventGroupRow key={group.key} group={group} agentInfoById={agentInfoById} />
+                      <EventGroupRow
+                        key={group.key}
+                        group={group}
+                        agentInfoById={agentInfoById}
+                        sessionNameById={sessionNameById}
+                      />
                     ))
                   : events.map((event, i) => {
                       const key = event.id ?? i;
@@ -822,9 +857,6 @@ export function SessionDetail() {
                             </div>
                             <AgentStatusBadge status={statusFromEventType(event.event_type)} />
                             {(() => {
-                              const info = event.agent_id
-                                ? agentInfoById.get(event.agent_id)
-                                : undefined;
                               // Session is implicit on this page — project is
                               // still shown so the row identifies the working
                               // directory when you share / search.
@@ -832,7 +864,7 @@ export function SessionDetail() {
                               const origin = buildOriginLabel(
                                 project,
                                 null,
-                                agentOriginLabel(event.agent_id, info)
+                                agentOriginLabel(event.agent_id, agentInfoById)
                               );
                               return (
                                 <span className="text-sm text-gray-300 flex-1 truncate">
@@ -854,7 +886,13 @@ export function SessionDetail() {
                               </span>
                             )}
                           </button>
-                          {isOpen && <EventDetail event={event} />}
+                          {isOpen && (
+                            <EventDetail
+                              event={event}
+                              agentInfoById={agentInfoById}
+                              sessionNameById={sessionNameById}
+                            />
+                          )}
                         </div>
                       );
                     })}

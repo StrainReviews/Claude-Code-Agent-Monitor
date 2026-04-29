@@ -111,9 +111,6 @@ export function fmtCostFull(n: number, decimals = 2): string {
   })}`;
 }
 
-/** Render a raw Anthropic model id (e.g. "claude-haiku-4-5-20251001") as a
- *  short human-friendly label ("Haiku 4.5"). Returns null for null/empty input
- *  so callers can fall back to their existing UI. */
 export function formatModelLabel(raw: string | null | undefined): string | null {
   if (!raw) return null;
   const m = raw.match(/^claude-(opus|sonnet|haiku)-(\d+)-(\d+)/i);
@@ -122,7 +119,6 @@ export function formatModelLabel(raw: string | null | undefined): string | null 
     const family = fam.charAt(0).toUpperCase() + fam.slice(1).toLowerCase();
     return `${family} ${m[2]}.${m[3]}`;
   }
-  // Legacy "claude-3-5-sonnet" / "claude-3-haiku" patterns
   const legacy = raw.match(/^claude-(\d+)-(\d+)?-?(opus|sonnet|haiku)/i);
   if (legacy && legacy[1] && legacy[3]) {
     const fam = legacy[3];
@@ -131,4 +127,17 @@ export function formatModelLabel(raw: string | null | undefined): string | null 
     return `${family} ${legacy[1]}${minor}`;
   }
   return raw;
+}
+
+export function shortModel(model: string | null | undefined): string | null {
+  if (!model) return null;
+  const m = model.match(/claude-([a-z]+-\d+(?:-\d+)?)/i);
+  return m?.[1] ?? model;
+}
+
+export function pathBasename(p: string | null | undefined): string | null {
+  if (!p) return null;
+  const trimmed = p.replace(/\/+$/, "");
+  const idx = trimmed.lastIndexOf("/");
+  return idx === -1 ? trimmed : trimmed.slice(idx + 1) || trimmed;
 }

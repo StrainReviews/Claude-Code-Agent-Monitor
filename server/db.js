@@ -229,13 +229,22 @@ try {
 }
 
 // Migrate: add model column to agents for per-subagent model tracking.
-// Subagents can run on a different model than the main session (e.g. Haiku for
-// quick exploration, Sonnet for mid-tier work, Opus for reasoning). The model
-// is extracted from the subagent transcript on SubagentStop.
 try {
   db.prepare("SELECT model FROM agents LIMIT 1").get();
 } catch {
   db.prepare("ALTER TABLE agents ADD COLUMN model TEXT").run();
+}
+
+// Migrate: add `awaiting_input_since` columns to sessions and agents.
+try {
+  db.prepare("SELECT awaiting_input_since FROM sessions LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE sessions ADD COLUMN awaiting_input_since TEXT").run();
+}
+try {
+  db.prepare("SELECT awaiting_input_since FROM agents LIMIT 1").get();
+} catch {
+  db.prepare("ALTER TABLE agents ADD COLUMN awaiting_input_since TEXT").run();
 }
 
 // Migrate: add compaction baseline columns to token_usage.
@@ -324,11 +333,23 @@ const stmts = {
   reactivateAgent: db.prepare(
     "UPDATE agents SET status = 'connected', ended_at = NULL, current_tool = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
-  // Set or update the model for an agent. Only overwrites when the new value
-  // is non-null. Safe to call repeatedly — later extractions can refine the
-  // primary model (e.g. once more Subagent JSONL lines are written).
   updateAgentModel: db.prepare(
     "UPDATE agents SET model = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
+  setSessionAwaitingInput: db.prepare(
+    "UPDATE sessions SET awaiting_input_since = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
+  clearSessionAwaitingInput: db.prepare(
+    "UPDATE sessions SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
+  ),
+  setAgentAwaitingInput: db.prepare(
+    "UPDATE agents SET awaiting_input_since = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
+  clearAgentAwaitingInput: db.prepare(
+    "UPDATE agents SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND awaiting_input_since IS NOT NULL"
+  ),
+  clearSessionAgentsAwaitingInput: db.prepare(
+    "UPDATE agents SET awaiting_input_since = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND awaiting_input_since IS NOT NULL"
   ),
   // Find the deepest currently-working subagent in a session using a recursive CTE.
   // Used to infer which agent is spawning a new subagent when hook events don't

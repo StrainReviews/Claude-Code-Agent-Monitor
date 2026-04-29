@@ -13,7 +13,8 @@ import { eventBus } from "../lib/eventBus";
 import { SessionStatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { formatDateTime, formatDuration, truncate, fmtCost } from "../lib/format";
-import type { Session, SessionStatus, DashboardEvent } from "../lib/types";
+import { effectiveSessionStatus, isSessionAwaitingInput } from "../lib/types";
+import type { Session, DashboardEvent } from "../lib/types";
 
 const PAGE_SIZE = 10;
 
@@ -34,6 +35,7 @@ export function Sessions() {
   const FILTER_OPTIONS: Array<{ label: string; value: string }> = [
     { label: t("filterAll"), value: "" },
     { label: t("filterActive"), value: "active" },
+    { label: t("filterWaiting"), value: "waiting" },
     { label: t("filterCompleted"), value: "completed" },
     { label: t("filterError"), value: "error" },
     { label: t("filterAbandoned"), value: "abandoned" },
@@ -52,6 +54,22 @@ export function Sessions() {
   // exist in the database.
   const load = useCallback(async () => {
     try {
+      // The "waiting" filter is a UI-only overlay derived from the
+      // awaiting_input_since column — the underlying SessionStatus is
+      // still "active". Map it to a client-side filter on top of the
+      // active set so paging/totals stay consistent with the visible rows.
+      if (filter === "waiting") {
+        const res = await api.sessions.list({
+          status: "active",
+          q: search || undefined,
+          limit: 10000,
+          offset: 0,
+        });
+        const waiting = res.sessions.filter(isSessionAwaitingInput);
+        setTotal(waiting.length);
+        setSessions(waiting.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
+        return;
+      }
       const params: { status?: string; q?: string; limit: number; offset: number } = {
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
@@ -197,7 +215,7 @@ export function Sessions() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <SessionStatusBadge status={session.status as SessionStatus} />
+                      <SessionStatusBadge status={effectiveSessionStatus(session)} />
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-400">
                       {formatDateTime(session.last_activity || session.started_at)}

@@ -8,21 +8,55 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Columns3, ChevronDown } from "lucide-react";
+import { RefreshCw, Columns3, ChevronDown, HelpCircle } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
 import { AgentCard } from "../components/AgentCard";
 import { SessionCard } from "../components/SessionCard";
 import { EmptyState } from "../components/EmptyState";
-import { STATUS_CONFIG, SESSION_STATUS_CONFIG } from "../lib/types";
-import type { Agent, AgentStatus, Session, SessionStatus, WSMessage } from "../lib/types";
+import {
+  STATUS_CONFIG,
+  SESSION_STATUS_CONFIG,
+  isAgentAwaitingInput,
+  isSessionAwaitingInput,
+} from "../lib/types";
+import type {
+  Agent,
+  AgentStatus,
+  EffectiveAgentStatus,
+  EffectiveSessionStatus,
+  Session,
+  WSMessage,
+} from "../lib/types";
 
 type BoardView = "agents" | "sessions";
 
-const AGENT_COLUMNS: AgentStatus[] = ["idle", "connected", "working", "completed", "error"];
-const SESSION_COLUMNS: SessionStatus[] = ["active", "completed", "error", "abandoned"];
+// Persisted statuses we fetch from the API. We MUST fetch `idle` even
+// though it doesn't have its own column: a main agent post-Stop has
+// status="idle" with awaiting_input_since set, and that agent belongs in
+// the Waiting column. Filtering `idle` out of the fetch list (as a prior
+// version did, after we dropped the Idle column) caused those agents to
+// never load on the board even though the session detail page rendered
+// them correctly.
+const AGENT_FETCH_STATUSES: AgentStatus[] = ["idle", "connected", "working", "completed", "error"];
+
+// Columns rendered on the Agents board. Idle and Connected are
+// intentionally absent — with the current state machine, neither is
+// reachable on a live active session: SessionStart immediately stamps
+// the waiting flag (so a fresh agent goes straight to Waiting), and
+// Stop pairs idle with the waiting flag (also Waiting). Both statuses
+// remain valid persisted enum values and are still queryable via
+// /api/agents?status={idle,connected} for legacy / imported data.
+const AGENT_COLUMNS: EffectiveAgentStatus[] = ["working", "waiting", "completed", "error"];
+const SESSION_COLUMNS: EffectiveSessionStatus[] = [
+  "active",
+  "waiting",
+  "completed",
+  "error",
+  "abandoned",
+];
 const COLUMN_PAGE_SIZE = 10;
 const VIEW_STORAGE_KEY = "kanban-board-view";
 
@@ -59,8 +93,19 @@ export function KanbanBoard() {
   }, []);
 
   const loadAgents = useCallback(async () => {
-    const results = await Promise.all(AGENT_COLUMNS.map((status) => api.agents.list({ status })));
-    setAgents(results.flatMap((r) => r.agents));
+    // Fetch every persisted status — including idle, which has no column
+    // of its own but produces Waiting cards via the awaiting_input_since
+    // overlay. Bucketing happens below in `groupedAgents`.
+    //
+    // Also fetch sessions so AgentCard can surface model / cwd / cost on
+    // main-agent cards (they have no task and a generic name on their
+    // own — the session metadata is what makes the card useful).
+    const [agentResults, sessionsRes] = await Promise.all([
+      Promise.all(AGENT_FETCH_STATUSES.map((status) => api.agents.list({ status }))),
+      api.sessions.list({ limit: 10000 }),
+    ]);
+    setAgents(agentResults.flatMap((r) => r.agents));
+    setSessions(sessionsRes.sessions);
   }, []);
 
   const loadSessions = useCallback(async () => {
@@ -69,9 +114,11 @@ export function KanbanBoard() {
     // Wire-limit raised to the server's safety cap (10000); cost
     // computation on the server scales with returned rows, so each
     // column's request stays bounded by how many sessions actually have
-    // that status.
+    // that status. The "waiting" column is derived client-side from the
+    // active set (see grouping below).
+    const persistedStatuses = SESSION_COLUMNS.filter((s) => s !== "waiting");
     const results = await Promise.all(
-      SESSION_COLUMNS.map((status) => api.sessions.list({ status, limit: 10000 }))
+      persistedStatuses.map((status) => api.sessions.list({ status, limit: 10000 }))
     );
     setSessions(results.flatMap((r) => r.sessions));
   }, []);
@@ -93,27 +140,52 @@ export function KanbanBoard() {
   useEffect(() => {
     return eventBus.subscribe((msg: WSMessage) => {
       if (view === "agents") {
-        if (msg.type === "agent_created" || msg.type === "agent_updated") loadAgents();
+        // Agent changes always reload; session changes also reload because
+        // AgentCard surfaces session metadata (cost, cwd, model) and we
+        // want those to track in real time.
+        if (
+          msg.type === "agent_created" ||
+          msg.type === "agent_updated" ||
+          msg.type === "session_updated" ||
+          msg.type === "session_created"
+        ) {
+          loadAgents();
+        }
       } else {
         if (msg.type === "session_created" || msg.type === "session_updated") loadSessions();
       }
     });
   }, [view, loadAgents, loadSessions]);
 
+  // Lookup map for AgentCard's session prop — built once per render of the
+  // agents view rather than walking the array per card.
+  const sessionsById = new Map<string, Session>();
+  for (const s of sessions) sessionsById.set(s.id, s);
+
+  // Bucket by effective status: agents/sessions blocked on user input fall
+  // into the "waiting" column instead of their underlying lifecycle column.
+  // This keeps the persisted enum stable while letting the UI surface the
+  // attention-required state in a dedicated column.
   const groupedAgents = AGENT_COLUMNS.reduce(
     (acc, status) => {
-      acc[status] = agents.filter((a) => a.status === status);
+      acc[status] =
+        status === "waiting"
+          ? agents.filter(isAgentAwaitingInput)
+          : agents.filter((a) => a.status === status && !isAgentAwaitingInput(a));
       return acc;
     },
-    {} as Record<AgentStatus, Agent[]>
+    {} as Record<EffectiveAgentStatus, Agent[]>
   );
 
   const groupedSessions = SESSION_COLUMNS.reduce(
     (acc, status) => {
-      acc[status] = sessions.filter((s) => s.status === status);
+      acc[status] =
+        status === "waiting"
+          ? sessions.filter(isSessionAwaitingInput)
+          : sessions.filter((s) => s.status === status && !isSessionAwaitingInput(s));
       return acc;
     },
-    {} as Record<SessionStatus, Session[]>
+    {} as Record<EffectiveSessionStatus, Session[]>
   );
 
   const total = view === "agents" ? agents.length : sessions.length;
@@ -176,9 +248,10 @@ export function KanbanBoard() {
                   labelKey={config.labelKey}
                   color={config.color}
                   dotClass={config.dot}
-                  pulse={status === "working"}
+                  pulse={status === "working" || status === "waiting"}
                   count={items?.length ?? 0}
                   emptyLabel={t("noAgentsInColumn")}
+                  tooltip={t(`tooltip.agent.${status}`)}
                   remaining={Math.max(0, (items?.length ?? 0) - limit)}
                   onShowMore={() =>
                     setExpanded((prev) => ({
@@ -188,7 +261,11 @@ export function KanbanBoard() {
                   }
                 >
                   {items?.slice(0, limit).map((agent) => (
-                    <AgentCard key={agent.id} agent={agent} />
+                    <AgentCard
+                      key={agent.id}
+                      agent={agent}
+                      session={sessionsById.get(agent.session_id)}
+                    />
                   ))}
                 </Column>
               );
@@ -203,9 +280,10 @@ export function KanbanBoard() {
                   labelKey={config.labelKey}
                   color={config.color}
                   dotClass={config.dot}
-                  pulse={status === "active"}
+                  pulse={status === "active" || status === "waiting"}
                   count={items?.length ?? 0}
                   emptyLabel={t("noSessionsInColumn")}
+                  tooltip={t(`tooltip.session.${status}`)}
                   remaining={Math.max(0, (items?.length ?? 0) - limit)}
                   onShowMore={() =>
                     setExpanded((prev) => ({
@@ -274,6 +352,9 @@ interface ColumnProps {
   pulse: boolean;
   count: number;
   emptyLabel: string;
+  /** Multi-line description rendered in a tooltip when the user hovers
+   *  the column's help icon. Pass an empty string to suppress the icon. */
+  tooltip?: string;
   remaining: number;
   onShowMore: () => void;
   children: React.ReactNode;
@@ -286,6 +367,7 @@ function Column({
   pulse,
   count,
   emptyLabel,
+  tooltip,
   remaining,
   onShowMore,
   children,
@@ -301,6 +383,7 @@ function Column({
         <span className={`text-xs font-semibold uppercase tracking-wider ${color}`}>
           {t(labelKey)}
         </span>
+        {tooltip && <ColumnHelp text={tooltip} />}
         <span className="ml-auto text-[11px] text-gray-600 bg-surface-3 px-2 py-0.5 rounded-full">
           {count}
         </span>
@@ -327,5 +410,42 @@ function Column({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Help icon + tooltip for a Kanban column header. Hover or focus shows a
+ * multi-line description explaining what the column lists and what the
+ * status means in lifecycle terms. Keyboard-focusable for accessibility.
+ */
+function ColumnHelp({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  // Anchor positioning to the column header so the tooltip stays in-page on
+  // the leftmost columns (where a centered tooltip would clip on narrow
+  // viewports). We always anchor left-aligned to the trigger.
+  const triggerRef = useRef<HTMLSpanElement>(null);
+
+  return (
+    <span
+      ref={triggerRef}
+      className="relative inline-flex items-center cursor-help"
+      tabIndex={0}
+      role="img"
+      aria-label={text}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      onFocus={() => setShow(true)}
+      onBlur={() => setShow(false)}
+    >
+      <HelpCircle className="w-3 h-3 text-gray-500 hover:text-gray-300 transition-colors" />
+      {show && (
+        <span
+          role="tooltip"
+          className="absolute left-0 top-full mt-1.5 w-64 px-3 py-2 text-[11px] leading-relaxed text-gray-200 bg-surface-3 border border-border rounded-md shadow-xl z-50 pointer-events-none whitespace-pre-line"
+        >
+          {text}
+        </span>
+      )}
+    </span>
   );
 }
