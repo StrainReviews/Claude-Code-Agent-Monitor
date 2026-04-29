@@ -117,12 +117,11 @@ export function EventGroupRow({
             const sid = first?.session_id;
             const sname = sid ? sessionNameById?.get(sid) : undefined;
             const agentId = first?.agent_id ?? null;
-            const info = agentId ? agentInfoById?.get(agentId) : undefined;
             const project = first ? projectFromEvent(first) : null;
             const origin = buildOriginLabel(
               project,
               sname ?? null,
-              agentOriginLabel(agentId, info)
+              agentOriginLabel(agentId, agentInfoById)
             );
             return (
               <div className="flex-1 min-w-0">

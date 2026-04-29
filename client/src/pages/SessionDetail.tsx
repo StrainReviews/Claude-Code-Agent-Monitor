@@ -267,7 +267,12 @@ export function SessionDetail() {
   const agentInfoById = useMemo(() => {
     const map = new Map<string, AgentInfo>();
     for (const a of agents) {
-      map.set(a.id, { type: a.type, subagent_type: a.subagent_type, name: a.name });
+      map.set(a.id, {
+        type: a.type,
+        subagent_type: a.subagent_type,
+        name: a.name,
+        parent_agent_id: a.parent_agent_id,
+      });
     }
     return map;
   }, [agents]);
@@ -822,9 +827,6 @@ export function SessionDetail() {
                             </div>
                             <AgentStatusBadge status={statusFromEventType(event.event_type)} />
                             {(() => {
-                              const info = event.agent_id
-                                ? agentInfoById.get(event.agent_id)
-                                : undefined;
                               // Session is implicit on this page — project is
                               // still shown so the row identifies the working
                               // directory when you share / search.
@@ -832,7 +834,7 @@ export function SessionDetail() {
                               const origin = buildOriginLabel(
                                 project,
                                 null,
-                                agentOriginLabel(event.agent_id, info)
+                                agentOriginLabel(event.agent_id, agentInfoById)
                               );
                               return (
                                 <span className="text-sm text-gray-300 flex-1 truncate">

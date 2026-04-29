@@ -162,6 +162,7 @@ export function ActivityFeed() {
             type: a.type,
             subagent_type: a.subagent_type,
             name: a.name,
+            parent_agent_id: a.parent_agent_id,
           });
         }
         setAgentInfoById(map);
@@ -371,14 +372,11 @@ export function ActivityFeed() {
 
                           {(() => {
                             const sname = sessionNameById.get(event.session_id);
-                            const info = event.agent_id
-                              ? agentInfoById.get(event.agent_id)
-                              : undefined;
                             const project = projectByEventId.get(event.id) ?? null;
                             const origin = buildOriginLabel(
                               project,
                               sname ?? null,
-                              agentOriginLabel(event.agent_id, info)
+                              agentOriginLabel(event.agent_id, agentInfoById)
                             );
                             return (
                               <div className="flex-1 min-w-0">
