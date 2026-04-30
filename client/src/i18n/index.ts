@@ -41,6 +41,17 @@ import errors_vi from "./locales/vi/errors.json";
 import updates_en from "./locales/en/updates.json";
 import updates_zh from "./locales/zh/updates.json";
 import updates_vi from "./locales/vi/updates.json";
+import common_de from "./locales/de/common.json";
+import nav_de from "./locales/de/nav.json";
+import dashboard_de from "./locales/de/dashboard.json";
+import sessions_de from "./locales/de/sessions.json";
+import activity_de from "./locales/de/activity.json";
+import analytics_de from "./locales/de/analytics.json";
+import workflows_de from "./locales/de/workflows.json";
+import settings_de from "./locales/de/settings.json";
+import kanban_de from "./locales/de/kanban.json";
+import errors_de from "./locales/de/errors.json";
+import updates_de from "./locales/de/updates.json";
 
 i18n
   .use(LanguageDetector)
@@ -86,8 +97,21 @@ i18n
         errors: errors_vi,
         updates: updates_vi,
       },
+      de: {
+        common: common_de,
+        nav: nav_de,
+        dashboard: dashboard_de,
+        sessions: sessions_de,
+        activity: activity_de,
+        analytics: analytics_de,
+        workflows: workflows_de,
+        settings: settings_de,
+        kanban: kanban_de,
+        errors: errors_de,
+        updates: updates_de,
+      },
     },
-    supportedLngs: ["en", "zh", "vi"],
+    supportedLngs: ["en", "zh", "vi", "de"],
     nonExplicitSupportedLngs: true,
     fallbackLng: "en",
     ns: [

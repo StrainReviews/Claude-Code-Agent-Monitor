@@ -29,12 +29,27 @@ jobs:
         run: npm run format:check
 
   # ────────────────────────────────────────────────────────────────
+  #  🌐 i18n Completeness Check                                     #
+  # ────────────────────────────────────────────────────────────────
+  i18n-check:
+    name: "🌐 i18n Completeness"
+    runs-on: ubuntu-latest
+    needs: format
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Check translation completeness
+        run: node scripts/check-i18n-completeness.js
+
+  # ────────────────────────────────────────────────────────────────
   #  🧪 Tests                                                      #
   # ────────────────────────────────────────────────────────────────
   test:
     name: "🧪 Run Tests"
     runs-on: ubuntu-latest
-    needs: format
+    needs: [format, i18n-check]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -128,26 +143,28 @@ jobs:
     name: "🎉 Pipeline Status"
     if: always()
     runs-on: ubuntu-latest
-    needs: [format, test, build, docker]
+    needs: [format, i18n-check, test, build, docker]
     steps:
       - name: Determine overall result
         id: result
         run: |
           # Map each job result
           FORMAT="${{ needs.format.result }}"
+          I18N="${{ needs.i18n-check.result }}"
           TEST="${{ needs.test.result }}"
           BUILD="${{ needs.build.result }}"
           DOCKER="${{ needs.docker.result }}"
 
           echo "format=$FORMAT" >> "$GITHUB_OUTPUT"
+          echo "i18n=$I18N" >> "$GITHUB_OUTPUT"
           echo "test=$TEST" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "docker=$DOCKER" >> "$GITHUB_OUTPUT"
 
           # Overall: fail if any required job failed
-          if [[ "$FORMAT" == "failure" || "$TEST" == "failure" || "$BUILD" == "failure" || "$DOCKER" == "failure" ]]; then
+          if [[ "$FORMAT" == "failure" || "$I18N" == "failure" || "$TEST" == "failure" || "$BUILD" == "failure" || "$DOCKER" == "failure" ]]; then
             echo "overall=failure" >> "$GITHUB_OUTPUT"
-          elif [[ "$FORMAT" == "cancelled" || "$TEST" == "cancelled" || "$BUILD" == "cancelled" || "$DOCKER" == "cancelled" ]]; then
+          elif [[ "$FORMAT" == "cancelled" || "$I18N" == "cancelled" || "$TEST" == "cancelled" || "$BUILD" == "cancelled" || "$DOCKER" == "cancelled" ]]; then
             echo "overall=cancelled" >> "$GITHUB_OUTPUT"
           else
             echo "overall=success" >> "$GITHUB_OUTPUT"
@@ -166,6 +183,7 @@ jobs:
             esac
           }
           echo "format=$(icon ${{ steps.result.outputs.format }})" >> "$GITHUB_OUTPUT"
+          echo "i18n=$(icon ${{ steps.result.outputs.i18n }})" >> "$GITHUB_OUTPUT"
           echo "test=$(icon ${{ steps.result.outputs.test }})" >> "$GITHUB_OUTPUT"
           echo "build=$(icon ${{ steps.result.outputs.build }})" >> "$GITHUB_OUTPUT"
           echo "docker=$(icon ${{ steps.result.outputs.docker }})" >> "$GITHUB_OUTPUT"
@@ -184,6 +202,7 @@ jobs:
           | Stage | Status | Job |
           |-------|--------|-----|
           | Formatting | ${{ steps.icons.outputs.format }} \`${{ steps.result.outputs.format }}\` | \`format\` |
+          | i18n | ${{ steps.icons.outputs.i18n }} \`${{ steps.result.outputs.i18n }}\` | \`i18n-check\` |
           | Tests | ${{ steps.icons.outputs.test }} \`${{ steps.result.outputs.test }}\` | \`test\` |
           | Client Build | ${{ steps.icons.outputs.build }} \`${{ steps.result.outputs.build }}\` | \`build\` |
           | Docker | ${{ steps.icons.outputs.docker }} \`${{ steps.result.outputs.docker }}\` | \`docker\` |

@@ -25,11 +25,13 @@
   "languageNames": {
     "en": "英文",
     "zh": "中文",
-    "vi": "越南语"
+    "vi": "越南语",
+    "de": "德语"
   },
   "languageShort": {
     "en": "EN",
     "zh": "中文",
-    "vi": "VI"
+    "vi": "VI",
+    "de": "DE"
   }
 }

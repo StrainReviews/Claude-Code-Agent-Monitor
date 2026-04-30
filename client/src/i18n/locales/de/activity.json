@@ -1,0 +1,10 @@
+{
+  "title": "Aktivitäts-Feed",
+  "subtitle": "Echtzeit-Stream aller Agent-Ereignisse",
+  "paused": "(pausiert - {{count}} gepuffert)",
+  "resume": "Fortsetzen",
+  "pause": "Pause",
+  "noActivity": "Noch keine Aktivität",
+  "noActivityDesc": "Ereignisse werden hier in Echtzeit gestreamt, während Claude Code Agents arbeiten.",
+  "viewSession": "Session"
+}

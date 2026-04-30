@@ -1,0 +1,180 @@
+{
+  "title": "Workflows",
+  "subtitle": "Agent-Orchestrierung-Intelligenz",
+  "failedLoad": "Workflow-Daten konnten nicht geladen werden",
+  "filteredBy": "Gefiltert nach:",
+  "clearFilter": "Filter löschen",
+  "refreshData": "Daten aktualisieren",
+  "exportJson": "Als JSON exportieren",
+  "allSessions": "Alle Sessions",
+  "activeOnly": "Nur aktive",
+  "completed": "Abgeschlossen",
+  "stats": {
+    "avgAgentDepth": "Durchschn. Agent-Tiefe",
+    "avgSubagentsPerSession": "Durchschn. Subagents / Session",
+    "agentSuccessRate": "Agent-Erfolgsrate",
+    "mostCommonFlow": "Häufigster Ablauf",
+    "avgCompactions": "Durchschn. Compactions",
+    "avgDuration": "Durchschn. Dauer"
+  },
+  "orchestration": {
+    "title": "Agent-Orchestrierung-Graph",
+    "subtitle": "Aggregierte Spawning-Muster über alle Sessions – Knoten anklicken zum Filtern",
+    "sessions": "Sessions",
+    "mainAgent": "Haupt-Agent",
+    "compactions": "Compactions",
+    "noData": "Keine Orchestrierungsdaten",
+    "noDataDesc": "Agent-Spawning-Daten werden hier angezeigt, sobald Sessions mit Subagents aufgezeichnet wurden.",
+    "legend": "Legende",
+    "edgeWeight": "Kantengewicht = Häufigkeit",
+    "count": "Anzahl",
+    "otherTypes": "{{count}} weitere Typen",
+    "ariaLabel": "Agent-Orchestrierung als gerichteter azyklischer Graph (DAG)",
+    "layers": {
+      "origin": "Ursprung",
+      "mainAgent": "Haupt-Agent",
+      "subagentTypes": "Subagent-Typen",
+      "compactions": "Compactions",
+      "outcomes": "Ergebnisse"
+    }
+  },
+  "toolFlow": {
+    "title": "Tool-Ausführungsfluss",
+    "subtitle": "Wie Tools miteinander verkettet werden – gerichteter Fluss im Sankey-Stil",
+    "noData": "Keine Tool-Flussdaten",
+    "transitionCount_one": "{{count}} Übergang",
+    "transitionCount_other": "{{count}} Übergänge"
+  },
+  "pipeline": {
+    "title": "Agent-Pipeline-Graph",
+    "subtitle": "Gerichteter Workflow – welche Agent-Typen nacheinander ausgeführt werden, mit Häufigkeitsangaben",
+    "noData": "Noch keine Pipeline-Daten",
+    "noDataDesc": "Gerichtete Workflow-Kanten erscheinen, sobald Agent-Typen über mehrere Sessions hinweg nacheinander ausgeführt werden.",
+    "legend": "Legende",
+    "legendDesc": "A läuft vor B (beschriftete Anzahl)",
+    "frequency": "Häufigkeit",
+    "meaning": "Bedeutung",
+    "times": " mal",
+    "ranAfter": " lief nach ",
+    "spawns": " Spawns",
+    "spawned": "Gespawnt",
+    "inSessions": "In Sessions",
+    "ariaLabel": "Agent-Pipeline-Graph"
+  },
+  "effectiveness": {
+    "title": "Subagent-Effektivität",
+    "subtitle": "Leistungsmetriken pro Agent-Typ",
+    "success": "Erfolg",
+    "sessions": "Sessions",
+    "avgDuration": "Durchschn. Dauer",
+    "weeklyActivity": "Wöchentliche Aktivität",
+    "noData": "Keine Subagent-Daten verfügbar",
+    "successRateAria": "Erfolgsrate: {{rate}}%",
+    "weeklyActivityAria": "Wöchentliche Aktivität Sparkline",
+    "sessionCount_one": "{{count}} Session",
+    "sessionCount_other": "{{count}} Sessions"
+  },
+  "patterns": {
+    "title": "Erkannte Workflow-Muster",
+    "subtitle": "Häufige Agent-Orchestrierungssequenzen",
+    "noData": "Noch keine Muster erkannt",
+    "noDataDesc": "Muster erscheinen, sobald mehrere Sessions dieselbe Agent-Sequenz verwenden.",
+    "solo": "Solo (keine Subagents)",
+    "label": "Workflow-Muster"
+  },
+  "modelDelegation": {
+    "title": "Modelldelegationsfluss",
+    "subtitle": "Wie Modelle durch Agent-Hierarchien geleitet werden",
+    "mainModels": "HAUPTMODELLE",
+    "subagentModels": "SUBAGENT-MODELLE",
+    "noData": "Keine Modelldelegationsdaten verfügbar",
+    "agentsCount_one": "{{count}} Agent",
+    "agentsCount_other": "{{count}} Agents",
+    "tokensCount": "{{tokens}} Token",
+    "sessionsCount_one": "{{count}} Session",
+    "sessionsCount_other": "{{count}} Sessions",
+    "ariaLabel": "Flussdiagramm der Modelldelegation"
+  },
+  "errorPropagation": {
+    "title": "Fehlerausbreitungskarte",
+    "subtitle": "Wo sich Fehler in der Agent-Hierarchietiefe häufen",
+    "noErrors": "Keine Fehler aufgezeichnet",
+    "allSuccess": "Alle Sessions wurden erfolgreich abgeschlossen",
+    "sessionsHadErrors": " Sessions hatten Fehler",
+    "sessionsErrorSummary": "{{errorSessions}} von {{totalSessions}} Sessions hatten Fehler",
+    "agentErrors": " Fehler auf Agent-Ebene in der gesamten Hierarchie",
+    "sessionErrorsOnly": "Nur Fehler auf Session-Ebene",
+    "errorsByDepth": "Fehler nach Hierarchietiefe",
+    "errorProneTypes": "Fehleranfällige Agent-Typen",
+    "apiSessionErrors": "API- und Session-Fehler",
+    "depthLabels": {
+      "sessionMain": "Session / Haupt",
+      "directSubagent": "Direkter Subagent",
+      "nested": "Verschachtelt (Tiefe 2)",
+      "deep": "Tief (Tiefe 3+)"
+    }
+  },
+  "concurrency": {
+    "title": "Agent-Parallelitäts-Zeitleiste",
+    "subtitle": "Parallele Agent-Ausführungsmuster – zeigt, wie sich Agents zeitlich überschneiden",
+    "noData": "Keine Parallelitätsdaten",
+    "noDataDesc": "Parallelitätsdaten werden angezeigt, sobald Sessions mit Subagents aufgezeichnet wurden.",
+    "sessions": "Sessions",
+    "timing": "Zeitmessung",
+    "max": " max",
+    "sessionInfo_one": "{{count}} Session – aktiv {{from}}%–{{to}}% der Session",
+    "sessionInfo_other": "{{count}} Sessions – aktiv {{from}}%–{{to}}% der Session"
+  },
+  "complexity": {
+    "title": "Session-Komplexitätsstreuung",
+    "subtitle": "Dauer vs. Agent-Anzahl vs. Token – Blasengröße = Token-Verbrauch",
+    "noData": "Keine Session-Komplexitätsdaten",
+    "noDataDesc": "Sessions werden hier angezeigt, sobald sie mit Agent-Aktivität abgeschlossen sind.",
+    "duration": "Dauer",
+    "agentCount": "Agent-Anzahl",
+    "ariaLabel": "Streudiagramm der Session-Komplexität",
+    "tooltip": {
+      "duration": "Dauer:",
+      "agents": "Agents:",
+      "subagents": "Subagents:",
+      "tokens": "Token:",
+      "model": "Modell:"
+    }
+  },
+  "compaction": {
+    "title": "Compaction-Auswirkungsanalyse",
+    "subtitle": "Kontextkomprimierungsereignisse und Token-Wiederherstellung",
+    "noData": "Keine Compactions aufgezeichnet",
+    "totalCompactions": "Compactions gesamt",
+    "tokensRecovered": "Wiederhergestellte Token",
+    "distribution": "Compaction-Verteilung über Sessions",
+    "hadCompactions": " Sessions ({{pct}}%) hatten Compactions",
+    "ariaLabel": "Compaction-Anzahl pro Session"
+  },
+  "drillIn": {
+    "title": "Session-Detailansicht",
+    "subtitle": "Wählen Sie eine Session aus dem Streudiagramm oder verwenden Sie das Dropdown-Menü",
+    "searchPlaceholder": "Sessions suchen...",
+    "noSessionSelected": "Keine Session ausgewählt",
+    "noSessionDesc": "Suchen und wählen Sie oben eine Session aus, oder klicken Sie auf eine Blase im Streudiagramm, um Agent-Baum, Tool-Zeitleiste und Ereignisfolge zu untersuchen.",
+    "failedLoad": "Session konnte nicht geladen werden",
+    "loading": "Laden...",
+    "loadMore": "Mehr laden",
+    "noMatch": "Keine Sessions entsprechen Ihrer Suche.",
+    "notFound": "Keine Sessions gefunden.",
+    "unknownModel": "Unbekanntes Modell",
+    "closePanel": "Detailansicht schließen",
+    "close": "Schließen",
+    "tabs": {
+      "agentTree": "Agent-Baum",
+      "toolTimeline": "Tool-Zeitleiste",
+      "eventSequence": "Ereignisfolge"
+    },
+    "noAgentTree": "Keine Agent-Baumdaten verfügbar.",
+    "noToolEvents": "Keine Tool-Ereignisse aufgezeichnet.",
+    "noEvents": "Keine Ereignisse für diese Session aufgezeichnet.",
+    "showingOf": "100 von {{total}} Ereignissen angezeigt",
+    "sessionInfo": " Session(s) – aktiv {{from}}%–{{to}}% der Session",
+    "sortedByCompaction": " Session(s) (sortiert nach Compaction-Anzahl)"
+  }
+}

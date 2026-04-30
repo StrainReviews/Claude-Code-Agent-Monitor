@@ -1,0 +1,31 @@
+{
+  "notFound": {
+    "code": "404",
+    "title": "Seite nicht gefunden",
+    "description": "Die angeforderte Route existiert nicht. Verwenden Sie die Navigation, um zu einer gültigen Seite zurückzukehren.",
+    "goDashboard": "Zum Dashboard",
+    "goBack": "Zurück"
+  },
+  "notifications": {
+    "newSession": "Neue Session",
+    "sessionDefault": "Session ",
+    "sessionError": "Session-Fehler",
+    "subagentSpawned": "Subagent gestartet",
+    "finishedResponding": "Claude hat geantwortet",
+    "readyForInput": "Bereit zur Eingabe",
+    "sessionCompleted": "Session abgeschlossen",
+    "sessionClosed": "Session geschlossen",
+    "defaultTitle": "Claude Code",
+    "defaultBody": "Benachrichtigung"
+  },
+  "toolLegend": {
+    "read": "Read",
+    "write": "Write",
+    "edit": "Edit",
+    "bash": "Bash",
+    "grep": "Grep",
+    "glob": "Glob",
+    "agent": "Agent",
+    "other": "Sonstige"
+  }
+}

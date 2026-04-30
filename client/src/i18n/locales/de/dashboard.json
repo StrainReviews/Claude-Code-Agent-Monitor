@@ -1,0 +1,22 @@
+{
+  "title": "Dashboard",
+  "subtitle": "Echtzeit-Übersicht über die Aktivität der Claude Code Agents",
+  "totalSessions": "Sessions insgesamt",
+  "activeAgents": "Aktive Agents",
+  "activeSubagents": "Aktive Subagents",
+  "eventsToday": "Ereignisse heute",
+  "totalEvents": "Ereignisse insgesamt",
+  "totalCost": "Gesamtkosten",
+  "viewBoard": "Board ansehen",
+  "viewAll": "Alle anzeigen",
+  "activeAgentsSection": "Aktive Agents",
+  "recentActivity": "Neueste Aktivität",
+  "noAgents": "Keine aktiven Agents",
+  "noAgentsDesc": "Agents werden hier angezeigt, wenn eine Claude Code Session läuft.",
+  "noActivity": "Noch keine Aktivität",
+  "noActivityDesc": "Ereignisse von Claude Code Sessions werden hier in Echtzeit übertragen.",
+  "failedConnect": "Verbindung zum Server fehlgeschlagen",
+  "failedLoad": "Daten konnten nicht geladen werden",
+  "activeTrend": " aktiv",
+  "totalTrend": " gesamt"
+}

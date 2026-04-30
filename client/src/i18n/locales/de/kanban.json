@@ -1,0 +1,41 @@
+{
+  "title": "Kanban Board",
+  "subtitle": "Kanban-Ansicht aller Agents nach Status",
+  "subtitleSessions": "Kanban-Ansicht aller Sessions nach Status",
+  "viewToggle": {
+    "agents": "Agents",
+    "sessions": "Sessions"
+  },
+  "noAgents": "Noch keine Agents erfasst",
+  "noAgentsDesc": "Starte eine Claude Code Session mit installierten Hooks, damit hier Agents angezeigt werden.",
+  "agentCount": "{{count}} Agent erfasst",
+  "agentCount_plural": "{{count}} Agents erfasst",
+  "noAgentsInColumn": "Keine Agents",
+  "noSessions": "Noch keine Sessions erfasst",
+  "noSessionsDesc": "Starte eine Claude Code Session mit installierten Hooks, damit hier Sessions angezeigt werden.",
+  "sessionCount": "{{count}} Session erfasst",
+  "sessionCount_plural": "{{count}} Sessions erfasst",
+  "noSessionsInColumn": "Keine Sessions",
+  "ran": "lief ",
+  "running": "läuft ",
+  "session": {
+    "anonymous": "Unbenannte Session",
+    "agentSummary_one": "{{count}} Agent",
+    "agentSummary_other": "{{count}} Agents"
+  },
+  "tooltip": {
+    "agent": {
+      "working": "Agent führt gerade aktiv einen Tool-Aufruf aus.\n\nEintritt bei PreToolUse oder UserPromptSubmit, Austritt bei Stop (Zug beendet).",
+      "waiting": "Agent hat seinen Zug beendet und wartet auf den Benutzer — entweder wartet Claude auf die nächste Nachricht oder hat um Erlaubnis für ein Tool gebeten.\n\nWird beim nächsten PreToolUse / PostToolUse oder bei Session-Ende zurückgesetzt.",
+      "completed": "Agent wurde für diese Session vollständig beendet — typischerweise weil SessionEnd ausgelöst wurde oder, bei Subagents, SubagentStop verarbeitet wurde.\n\nEs wird keine weitere Aktivität für diesen Agent aufgezeichnet.",
+      "error": "Agent hat einen Fehler festgestellt und wird nicht fortfahren. Bei Haupt-Agents kommt dies von einem Stop mit stop_reason=error; bei Subagents von einem fehlgeschlagenen Lauf."
+    },
+    "session": {
+      "active": "Session ist mitten im Zug — Claude läuft gerade und der Benutzer blockiert nichts. Von Natur aus kurz: eine Session wechselt während Tool-Aufrufen in Aktiv und am Zugende zurück in Wartend.",
+      "waiting": "Session wartet auf den Benutzer. Entweder hat Claude seinen Zug beendet (häufigster Fall) oder eine Berechtigungsabfrage ist erschienen und blockiert, bis der Benutzer antwortet.\n\nHier findest du Sessions, die auf deine Antwort warten.",
+      "completed": "Session wurde vollständig geschlossen — SessionEnd wurde ausgelöst (CLI sauber beendet) oder der Benutzer hat sie explizit geschlossen.\n\nAlle Agents dieser Session sind ebenfalls abgeschlossen.",
+      "error": "Session wurde mit einem Fehler beendet — Claude hat stop_reason=error zurückgegeben, ein nicht behebbarer Fehler ist aufgetreten oder ein vorgelagerter API-Fehler hat den Lauf beendet.",
+      "abandoned": "Session wurde ohne sauberes SessionEnd inaktiv. Als abgebrochen markiert nach mehr als 5 Minuten ohne Aktivität (verwaist durch /resume, Netzwerkabbruch oder Beendigung der CLI). Unterschied zu Completed: Es wurde kein echtes Exit-Signal empfangen."
+    }
+  }
+}

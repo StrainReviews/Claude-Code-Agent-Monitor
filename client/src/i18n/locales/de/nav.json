@@ -1,0 +1,37 @@
+{
+  "brand": "Agent Dashboard",
+  "brandSub": "Claude Code Monitor",
+  "dashboard": "Dashboard",
+  "agentBoard": "Kanban Board",
+  "sessions": "Sessions",
+  "activityFeed": "Aktivitäts-Feed",
+  "analytics": "Analytik",
+  "workflows": "Workflows",
+  "settings": "Einstellungen",
+  "language": "Sprache",
+  "github": "GitHub",
+  "website": "Webseite",
+  "expand": "Seitenleiste erweitern",
+  "collapse": "Seitenleiste einklappen",
+  "collapseShort": "Einklappen",
+  "live": "Live",
+  "disconnected": "Getrennt",
+  "checkForUpdates": "Auf Updates prüfen",
+  "checkingForUpdates": "Suche nach Updates...",
+  "updateAvailable": "Update verfügbar",
+  "upToDate": "Auf dem neuesten Stand",
+  "checkFailed": "Update-Prüfung fehlgeschlagen",
+  "switchLanguage": "Zu {{language}} wechseln",
+  "languageNames": {
+    "en": "English",
+    "zh": "Chinese",
+    "vi": "Vietnamese",
+    "de": "Deutsch"
+  },
+  "languageShort": {
+    "en": "EN",
+    "zh": "中文",
+    "vi": "VI",
+    "de": "DE"
+  }
+}
