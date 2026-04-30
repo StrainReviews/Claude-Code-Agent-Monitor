@@ -298,6 +298,13 @@ const stmts = {
   reactivateSession: db.prepare(
     "UPDATE sessions SET status = 'active', ended_at = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
+  // Updates session.model only when the new value differs from what's stored,
+  // so the broadcast/refresh path stays quiet across the common no-op case.
+  // Used by the hook ingestor to keep the displayed model in sync after the
+  // user invokes /model mid-session.
+  updateSessionModel: db.prepare(
+    "UPDATE sessions SET model = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND COALESCE(model, '') != ?"
+  ),
 
   getAgent: db.prepare("SELECT * FROM agents WHERE id = ?"),
   listAgents: db.prepare("SELECT * FROM agents ORDER BY started_at DESC LIMIT ? OFFSET ?"),

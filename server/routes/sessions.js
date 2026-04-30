@@ -579,7 +579,10 @@ router.get("/:id/transcript", async (req, res) => {
       }
       // If we exhausted the stream without hitting limit, hasMore stays false
     } else if (beforeLine !== null) {
-      // History mode: collect messages with line < beforeLine using a sliding window
+      // History mode: collect messages with line < beforeLine using a sliding window.
+      // hasMore here means "more *older* messages exist before what we're returning"
+      // — the only way to know that is if we shifted any out of the window
+      // (total > limit). Hitting the boundary tells us nothing about older history.
       for await (const line of rl) {
         lineNum++;
         if (!line.trim()) continue;
@@ -591,8 +594,7 @@ router.get("/:id/transcript", async (req, res) => {
         }
         if (entry.type !== "user" && entry.type !== "assistant") continue;
         if (lineNum >= beforeLine) {
-          // We've reached the boundary — stop reading
-          hasMore = true; // there are more messages at or after beforeLine
+          // Reached the boundary — stop reading
           rl.close();
           rl.removeAllListeners();
           break;
@@ -607,7 +609,6 @@ router.get("/:id/transcript", async (req, res) => {
           messages.shift();
         }
       }
-      // total is the count of messages before beforeLine; if we shifted, there are more
       if (total > limit) hasMore = true;
     } else if (offset > 0) {
       // Legacy offset pagination: skip `offset` valid messages, then collect `limit`

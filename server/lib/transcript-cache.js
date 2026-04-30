@@ -48,6 +48,7 @@ class TranscriptCache {
           turnDurations: result?.turnDurations ? [...result.turnDurations] : null,
           thinkingBlockCount: result?.thinkingBlockCount || 0,
           usageExtras: result ? this._cloneUsageExtras(result.usageExtras) : null,
+          latestModel: result?.latestModel || null,
           result,
         });
         return result;
@@ -73,6 +74,7 @@ class TranscriptCache {
             turnDurations: hasTurnDurations ? merged.turnDurations : null,
             thinkingBlockCount: merged.thinkingBlockCount || 0,
             usageExtras: hasUsageExtras ? merged.usageExtras : null,
+            latestModel: merged.latestModel || null,
           };
           if (
             !result.tokensByModel &&
@@ -80,7 +82,8 @@ class TranscriptCache {
             !result.errors &&
             !result.turnDurations &&
             !result.thinkingBlockCount &&
-            !result.usageExtras
+            !result.usageExtras &&
+            !result.latestModel
           ) {
             this._set(key, {
               mtimeMs: stat.mtimeMs,
@@ -92,6 +95,7 @@ class TranscriptCache {
               turnDurations: null,
               thinkingBlockCount: 0,
               usageExtras: null,
+              latestModel: null,
               result: null,
             });
             return null;
@@ -106,6 +110,7 @@ class TranscriptCache {
             turnDurations: result.turnDurations ? [...result.turnDurations] : null,
             thinkingBlockCount: result.thinkingBlockCount || 0,
             usageExtras: this._cloneUsageExtras(result.usageExtras),
+            latestModel: result.latestModel || null,
             result,
           });
           return result;
@@ -133,6 +138,7 @@ class TranscriptCache {
         turnDurations: result?.turnDurations ? [...result.turnDurations] : null,
         thinkingBlockCount: result?.thinkingBlockCount || 0,
         usageExtras: result ? this._cloneUsageExtras(result.usageExtras) : null,
+        latestModel: result?.latestModel || null,
         result,
       });
       return result;
@@ -179,6 +185,11 @@ class TranscriptCache {
     const turnDurations = [];
     let thinkingBlockCount = 0;
     const usageExtras = { service_tiers: new Set(), speeds: new Set(), inference_geos: new Set() };
+    // Track the model of the most recent assistant entry encountered in this
+    // content block. JSONL is append-only and parsed in file order, so the
+    // last value seen here is the user's *current* model — used downstream to
+    // keep session.model in sync when the user invokes /model mid-session.
+    let latestModel = null;
 
     for (const line of content.split("\n")) {
       if (!line) continue;
@@ -229,6 +240,7 @@ class TranscriptCache {
 
         const model = msg.model;
         if (!model || model === "<synthetic>" || !msg.usage) continue;
+        latestModel = model;
         if (!tokensByModel[model]) {
           tokensByModel[model] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
         }
@@ -268,7 +280,8 @@ class TranscriptCache {
       !hasErrors &&
       !hasTurnDurations &&
       !thinkingBlockCount &&
-      !hasUsageExtras
+      !hasUsageExtras &&
+      !latestModel
     )
       return null;
 
@@ -287,6 +300,7 @@ class TranscriptCache {
       turnDurations: hasTurnDurations ? turnDurations : null,
       thinkingBlockCount,
       usageExtras: serializedExtras,
+      latestModel,
     };
   }
 
@@ -350,7 +364,20 @@ class TranscriptCache {
       };
     }
 
-    return { tokensByModel, compaction, errors, turnDurations, thinkingBlockCount, usageExtras };
+    // JSONL is append-only and parsed in order, so the incremental block's
+    // latestModel (when present) is the newest reading — fall back to the
+    // previously-cached value when the new chunk had no assistant entries.
+    const latestModel = (incremental && incremental.latestModel) || cached.latestModel || null;
+
+    return {
+      tokensByModel,
+      compaction,
+      errors,
+      turnDurations,
+      thinkingBlockCount,
+      usageExtras,
+      latestModel,
+    };
   }
 
   _cloneTokens(tokensByModel) {

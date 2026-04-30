@@ -468,7 +468,20 @@ const processEvent = db.transaction((hookType, data) => {
   if (data.transcript_path) {
     const result = transcriptCache.extract(data.transcript_path);
     if (result) {
-      const { tokensByModel, compaction } = result;
+      const { tokensByModel, compaction, latestModel } = result;
+
+      // Keep session.model in sync with the user's *current* model — the
+      // transcript's most recent assistant entry is the source of truth, since
+      // the /model command rewrites future entries but leaves session.model
+      // (set at session creation) alone. The prepared statement is a no-op
+      // when the value is unchanged, so we only broadcast on real flips.
+      if (latestModel) {
+        const upd = stmts.updateSessionModel.run(latestModel, sessionId, latestModel);
+        if (upd.changes > 0) {
+          const refreshed = stmts.getSession.get(sessionId);
+          if (refreshed) broadcast("session_updated", refreshed);
+        }
+      }
 
       // Register compaction agents and events.
       // Each isCompactSummary entry in the JSONL = one compaction that occurred.
