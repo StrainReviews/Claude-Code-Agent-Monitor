@@ -40,7 +40,15 @@ const db = new Database(DB_PATH);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 db.pragma("busy_timeout = 5000");
-db.pragma("wal_checkpoint(TRUNCATE)");
+// Conditional WAL checkpoint: only run if WAL file exists and is > 1 MB.
+// Use PASSIVE mode to avoid blocking active readers.
+const walPath = DB_PATH + '-wal';
+if (fs.existsSync(walPath)) {
+  const walSize = fs.statSync(walPath).size;
+  if (walSize > 1024 * 1024) {
+    db.pragma('wal_checkpoint(PASSIVE)');
+  }
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (

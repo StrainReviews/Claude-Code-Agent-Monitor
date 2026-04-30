@@ -159,24 +159,37 @@ if (require.main === module) {
     // 1. Stale session cleanup
     const stale = cleanupDb.stmts.findStaleSessions.all("__periodic__", STALE_MINUTES);
     const now = new Date().toISOString();
-    for (const s of stale) {
-      const agents = cleanupDb.stmts.listAgentsBySession.all(s.id);
-      for (const agent of agents) {
-        if (agent.status !== "completed" && agent.status !== "error") {
-          cleanupDb.stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
-          broadcast("agent_updated", cleanupDb.stmts.getAgent.get(agent.id));
+    // Collect broadcast payloads so we can fire them after the transaction commits
+    const broadcasts = [];
+    const sweepTransaction = cleanupDb.db.transaction(() => {
+      for (const s of stale) {
+        const agents = cleanupDb.stmts.listAgentsBySession.all(s.id);
+        for (const agent of agents) {
+          if (agent.status !== "completed" && agent.status !== "error") {
+            cleanupDb.stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
+            broadcasts.push({ type: "agent_updated", id: agent.id });
+          }
         }
-      }
-      cleanupDb.stmts.updateSession.run(null, "abandoned", now, null, s.id);
-      broadcast("session_updated", cleanupDb.stmts.getSession.get(s.id));
+        cleanupDb.stmts.updateSession.run(null, "abandoned", now, null, s.id);
+        broadcasts.push({ type: "session_updated", id: s.id });
 
-      // Evict transcript cache for abandoned sessions to bound memory growth
-      const tpRow = cleanupDb.db
-        .prepare(
-          "SELECT json_extract(data, '$.transcript_path') as tp FROM events WHERE session_id = ? AND json_extract(data, '$.transcript_path') IS NOT NULL LIMIT 1"
-        )
-        .get(s.id);
-      if (tpRow?.tp) transcriptCache.invalidate(tpRow.tp);
+        // Evict transcript cache for abandoned sessions to bound memory growth
+        const tpRow = cleanupDb.db
+          .prepare(
+            "SELECT json_extract(data, '$.transcript_path') as tp FROM events WHERE session_id = ? AND json_extract(data, '$.transcript_path') IS NOT NULL LIMIT 1"
+          )
+          .get(s.id);
+        if (tpRow?.tp) transcriptCache.invalidate(tpRow.tp);
+      }
+    });
+    sweepTransaction();
+    // Broadcast after transaction commits so clients see consistent state
+    for (const b of broadcasts) {
+      if (b.type === "agent_updated") {
+        broadcast("agent_updated", cleanupDb.stmts.getAgent.get(b.id));
+      } else {
+        broadcast("session_updated", cleanupDb.stmts.getSession.get(b.id));
+      }
     }
 
     // 2. Scan active sessions for new compaction entries

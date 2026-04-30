@@ -387,50 +387,51 @@ function importCompactions(dbModule, sessionId, mainAgentId, compactions) {
   const insertEvent = db.prepare(
     "INSERT INTO events (session_id, agent_id, event_type, tool_name, summary, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
   );
+  const updateAgentTimestamps = db.prepare(
+    "UPDATE agents SET started_at = ?, ended_at = ?, updated_at = ? WHERE id = ?"
+  );
   let created = 0;
-  for (let i = 0; i < compactions.length; i++) {
-    const c = compactions[i];
-    if (!c.uuid) continue;
-    const compactId = `${sessionId}-compact-${c.uuid}`;
-    if (stmts.getAgent.get(compactId)) continue;
+  const runImport = db.transaction(() => {
+    for (let i = 0; i < compactions.length; i++) {
+      const c = compactions[i];
+      if (!c.uuid) continue;
+      const compactId = `${sessionId}-compact-${c.uuid}`;
+      if (stmts.getAgent.get(compactId)) continue;
 
-    const ts = c.timestamp || new Date().toISOString();
-    stmts.insertAgent.run(
-      compactId,
-      sessionId,
-      "Context Compaction",
-      "subagent",
-      "compaction",
-      "completed",
-      "Automatic conversation context compression",
-      mainAgentId,
-      null
-    );
-    db.prepare("UPDATE agents SET started_at = ?, ended_at = ?, updated_at = ? WHERE id = ?").run(
-      ts,
-      ts,
-      ts,
-      compactId
-    );
+      const ts = c.timestamp || new Date().toISOString();
+      stmts.insertAgent.run(
+        compactId,
+        sessionId,
+        "Context Compaction",
+        "subagent",
+        "compaction",
+        "completed",
+        "Automatic conversation context compression",
+        mainAgentId,
+        null
+      );
+      updateAgentTimestamps.run(ts, ts, ts, compactId);
 
-    const summary = `Context compacted — conversation history compressed (#${i + 1})`;
-    insertEvent.run(
-      sessionId,
-      compactId,
-      "Compaction",
-      null,
-      summary,
-      JSON.stringify({
-        uuid: c.uuid,
-        timestamp: ts,
-        compaction_number: i + 1,
-        total_compactions: compactions.length,
-        imported: true,
-      }),
-      ts
-    );
-    created++;
-  }
+      const summary = `Context compacted — conversation history compressed (#${i + 1})`;
+      insertEvent.run(
+        sessionId,
+        compactId,
+        "Compaction",
+        null,
+        summary,
+        JSON.stringify({
+          uuid: c.uuid,
+          timestamp: ts,
+          compaction_number: i + 1,
+          total_compactions: compactions.length,
+          imported: true,
+        }),
+        ts
+      );
+      created++;
+    }
+  });
+  runImport();
   return created;
 }
 
@@ -655,6 +656,11 @@ function importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) {
   if (!subData) return 0;
   const { db, stmts } = dbModule;
 
+  // Wrap all reads + writes in a single transaction so we acquire the DB lock
+  // only once. Without this, each individual db.prepare().run() acquires and
+  // releases separately, causing SQLITE_BUSY collisions with concurrent
+  // processEvent transactions under high hook traffic.
+  return db.transaction(() => {
   const jsonlSubId = `${sessionId}-jsonl-${subData.agentId}`;
   const liveSub = findLiveSubagentForJsonl(dbModule, sessionId, subData);
   const targetAgentId = liveSub ? liveSub.id : jsonlSubId;
@@ -786,6 +792,7 @@ function importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) {
   }
 
   return created;
+  })();
 }
 
 /**

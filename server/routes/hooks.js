@@ -93,20 +93,20 @@ function isWaitingForUserMessage(msg) {
   return WAITING_INPUT_PATTERN.test(msg);
 }
 
-function clearAwaitingInput(sessionId, mainAgentId, broadcastUpdates) {
+function clearAwaitingInput(sessionId, mainAgentId, broadcastUpdates, pendingBroadcasts) {
   const cleared = stmts.clearSessionAgentsAwaitingInput.run(sessionId);
   const sessCleared = stmts.clearSessionAwaitingInput.run(sessionId);
   if (broadcastUpdates && cleared.changes > 0 && mainAgentId) {
     const refreshedMain = stmts.getAgent.get(mainAgentId);
-    if (refreshedMain) broadcast("agent_updated", refreshedMain);
+    if (refreshedMain) pendingBroadcasts.push(["agent_updated", refreshedMain]);
   }
   if (broadcastUpdates && sessCleared.changes > 0) {
     const refreshedSess = stmts.getSession.get(sessionId);
-    if (refreshedSess) broadcast("session_updated", refreshedSess);
+    if (refreshedSess) pendingBroadcasts.push(["session_updated", refreshedSess]);
   }
 }
 
-function ensureSession(sessionId, data) {
+function ensureSession(sessionId, data, pendingBroadcasts) {
   let session = stmts.getSession.get(sessionId);
   if (!session) {
     stmts.insertSession.run(
@@ -118,7 +118,7 @@ function ensureSession(sessionId, data) {
       null
     );
     session = stmts.getSession.get(sessionId);
-    broadcast("session_created", session);
+    pendingBroadcasts.push(["session_created", session]);
 
     // Create main agent for new session
     const mainAgentId = `${sessionId}-main`;
@@ -134,7 +134,7 @@ function ensureSession(sessionId, data) {
       null,
       null
     );
-    broadcast("agent_created", stmts.getAgent.get(mainAgentId));
+    pendingBroadcasts.push(["agent_created", stmts.getAgent.get(mainAgentId)]);
   }
   return session;
 }
@@ -143,11 +143,81 @@ function getMainAgent(sessionId) {
   return stmts.getAgent.get(`${sessionId}-main`);
 }
 
-const processEvent = db.transaction((hookType, data) => {
+const processEvent = (hookType, data) => {
   const sessionId = data.session_id;
   if (!sessionId) return null;
 
-  const session = ensureSession(sessionId, data);
+  // ── Phase 1: Disk I/O and preparation OUTSIDE any transaction ──
+  // Extract transcript data (heavy disk I/O — reads JSONL files from disk).
+  // This is the main bottleneck that was holding the EXCLUSIVE lock for >100ms.
+  let transcriptResult = null;
+  if (data.transcript_path) {
+    transcriptResult = transcriptCache.extract(data.transcript_path);
+  }
+
+  // Extract subagent summary (disk I/O) for SubagentStop events.
+  let subagentSummaryResult = null;
+  if (hookType === "SubagentStop" && data.agent_transcript_path) {
+    subagentSummaryResult = transcriptCache.extractSubagentSummary(data.agent_transcript_path);
+  }
+
+  // ── Phase 2: Dedup queries OUTSIDE the transaction ──
+  // A short race-condition window is acceptable — duplicates are caught
+  // by the dedup index and result in a harmless INSERT failure at worst.
+
+  // Pre-check which compaction entries already exist
+  const existingCompactIds = new Set();
+  if (transcriptResult && transcriptResult.compaction) {
+    for (const entry of transcriptResult.compaction.entries) {
+      const compactId = `${sessionId}-compact-${entry.uuid}`;
+      if (stmts.getAgent.get(compactId)) {
+        existingCompactIds.add(compactId);
+      }
+    }
+  }
+
+  // Pre-check which API errors already exist
+  const existingApiErrors = new Set();
+  if (transcriptResult && transcriptResult.errors) {
+    for (const apiErr of transcriptResult.errors) {
+      const existing = db
+        .prepare(
+          `SELECT 1 FROM events WHERE session_id = ? AND event_type = 'APIError'
+           AND summary = ? LIMIT 1`
+        )
+        .get(sessionId, `${apiErr.type}: ${apiErr.message}`);
+      if (existing) {
+        existingApiErrors.add(`${apiErr.type}: ${apiErr.message}`);
+      }
+    }
+  }
+
+  // Pre-check which turn duration events already exist
+  const existingTurnDurations = new Set();
+  if (transcriptResult && transcriptResult.turnDurations) {
+    for (const td of transcriptResult.turnDurations) {
+      const tdTs = td.timestamp || new Date().toISOString();
+      const existing = db
+        .prepare(
+          "SELECT 1 FROM events WHERE session_id = ? AND event_type = 'TurnDuration' AND created_at = ? LIMIT 1"
+        )
+        .get(sessionId, tdTs);
+      if (existing) {
+        existingTurnDurations.add(tdTs);
+      }
+    }
+  }
+
+  // ── Phase 3: Short write transaction for all DB mutations ──
+  // All broadcast() calls are deferred to Phase 4 to keep the EXCLUSIVE
+  // lock duration minimal (<5ms). Reads that must follow a write (e.g.
+  // getAgent after updateAgent) still happen inside to guarantee consistency,
+  // but their results are stashed in pendingBroadcasts for later emission.
+  const pendingBroadcasts = [];
+  let shouldScheduleBackfill = false;
+
+  const result = db.transaction(() => {
+  const session = ensureSession(sessionId, data, pendingBroadcasts);
   let mainAgent = getMainAgent(sessionId);
   const mainAgentId = mainAgent?.id ?? null;
 
@@ -164,12 +234,12 @@ const processEvent = db.transaction((hookType, data) => {
     session.status !== "active" && isNonTerminalEvent && (!isStopLike || isImportedOrAbandoned);
   if (needsReactivation) {
     stmts.reactivateSession.run(sessionId);
-    broadcast("session_updated", stmts.getSession.get(sessionId));
+    pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
 
     if (mainAgent && mainAgent.status !== "working" && mainAgent.status !== "connected") {
       stmts.reactivateAgent.run(mainAgentId);
       mainAgent = stmts.getAgent.get(mainAgentId);
-      broadcast("agent_updated", mainAgent);
+      pendingBroadcasts.push(["agent_updated", mainAgent]);
     }
   }
 
@@ -193,7 +263,7 @@ const processEvent = db.transaction((hookType, data) => {
       // PreToolUse means Claude is actively running a tool, ergo the user
       // has resumed (Stop only fires at end of turn — Claude can't start a
       // new tool call without fresh user input). Clear waiting now.
-      clearAwaitingInput(sessionId, mainAgentId, true);
+      clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
 
       // If the tool is Agent, a subagent is being created
       if (toolName === "Agent") {
@@ -233,7 +303,7 @@ const processEvent = db.transaction((hookType, data) => {
           parentId,
           input.metadata ? JSON.stringify(input.metadata) : null
         );
-        broadcast("agent_created", stmts.getAgent.get(subId));
+        pendingBroadcasts.push(["agent_created", stmts.getAgent.get(subId)]);
         agentId = subId;
         summary = `Subagent spawned: ${subName}`;
       }
@@ -257,7 +327,7 @@ const processEvent = db.transaction((hookType, data) => {
           mainAgent.status === "idle")
       ) {
         stmts.updateAgent.run(null, "working", null, toolName, null, null, mainAgentId);
-        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
       }
       break;
     }
@@ -270,7 +340,7 @@ const processEvent = db.transaction((hookType, data) => {
       // Code prompts the user mid-tool). The Notification stamps waiting,
       // the user approves, the tool completes, PostToolUse arrives. Without
       // a clear here, we'd be stuck in waiting until the next PreToolUse.
-      clearAwaitingInput(sessionId, mainAgentId, true);
+      clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
 
       // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
       // backgrounded — it does NOT mean the subagent finished its work.
@@ -280,7 +350,7 @@ const processEvent = db.transaction((hookType, data) => {
       // Skip if idle (waiting for subagents) or already completed.
       if (mainAgent && mainAgent.status === "working") {
         stmts.updateAgent.run(null, null, null, null, null, null, mainAgentId);
-        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
       }
       break;
     }
@@ -316,7 +386,7 @@ const processEvent = db.transaction((hookType, data) => {
         stmts.updateSession.run(null, "error", now, null, sessionId);
         // Error stop is terminal-ish — drop any waiting flag so the row
         // lands cleanly in the Error column.
-        clearAwaitingInput(sessionId, mainAgentId, false);
+        clearAwaitingInput(sessionId, mainAgentId, false, pendingBroadcasts);
       } else {
         if (agentMutable) {
           stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
@@ -328,10 +398,11 @@ const processEvent = db.transaction((hookType, data) => {
         if (mainAgentId) stmts.setAgentAwaitingInput.run(now, mainAgentId);
       }
 
-      // Now broadcast — single agent_updated reflecting the final state.
-      broadcast("session_updated", stmts.getSession.get(sessionId));
+      // Read final state for broadcast — still inside transaction for
+      // consistency, but the broadcast itself is deferred to Phase 4.
+      pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
       if (mainAgentId) {
-        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
       }
       break;
     }
@@ -385,8 +456,7 @@ const processEvent = db.transaction((hookType, data) => {
           matchingSub.id
         );
 
-        // Extract the subagent's model + per-model tokens from its OWN
-        // transcript (agent_transcript_path, added in Claude Code 2.0.42).
+        // Apply pre-extracted subagent summary (disk I/O happened in Phase 1).
         // The main session transcript (transcript_path) only contains
         // main-agent messages — subagent API calls live in a separate JSONL
         // under subagents/. Without this read the dashboard would continue to
@@ -396,25 +466,22 @@ const processEvent = db.transaction((hookType, data) => {
         // record sets (different source files, different API calls on
         // Anthropic's side) so additive summation in getTokensBySession is
         // correct — no subtraction needed to "pull Haiku out of Opus".
-        if (data.agent_transcript_path) {
-          const summaryResult = transcriptCache.extractSubagentSummary(data.agent_transcript_path);
-          if (summaryResult) {
-            stmts.updateAgentModel.run(summaryResult.primaryModel, matchingSub.id);
-            for (const [model, tokens] of Object.entries(summaryResult.tokensByModel)) {
-              stmts.replaceSubagentTokens.run(
-                matchingSub.id,
-                sessionId,
-                model,
-                tokens.input,
-                tokens.output,
-                tokens.cacheRead,
-                tokens.cacheWrite
-              );
-            }
+        if (subagentSummaryResult) {
+          stmts.updateAgentModel.run(subagentSummaryResult.primaryModel, matchingSub.id);
+          for (const [model, tokens] of Object.entries(subagentSummaryResult.tokensByModel)) {
+            stmts.replaceSubagentTokens.run(
+              matchingSub.id,
+              sessionId,
+              model,
+              tokens.input,
+              tokens.output,
+              tokens.cacheRead,
+              tokens.cacheWrite
+            );
           }
         }
 
-        broadcast("agent_updated", stmts.getAgent.get(matchingSub.id));
+        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(matchingSub.id)]);
         agentId = matchingSub.id;
         summary = `Subagent completed: ${matchingSub.name}`;
 
@@ -443,11 +510,10 @@ const processEvent = db.transaction((hookType, data) => {
       stmts.setSessionAwaitingInput.run(sessionStartTs, sessionId);
       if (mainAgentId) stmts.setAgentAwaitingInput.run(sessionStartTs, mainAgentId);
 
-      // Single broadcast pair with the final state — agents and sessions
-      // are now connected/active with the waiting flag set, so WS clients
-      // see the Waiting badge as soon as the SessionStart event lands.
-      broadcast("session_updated", stmts.getSession.get(sessionId));
-      if (mainAgentId) broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+      // Read final state for broadcast — still inside transaction for
+      // consistency, but the broadcast itself is deferred to Phase 4.
+      pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
+      if (mainAgentId) pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
 
       // Clean up orphaned sessions: when a user runs /resume inside a session,
       // the parent session never receives Stop or SessionEnd. Mark any active
@@ -459,11 +525,11 @@ const processEvent = db.transaction((hookType, data) => {
         for (const agent of staleAgents) {
           if (agent.status !== "completed" && agent.status !== "error") {
             stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
-            broadcast("agent_updated", stmts.getAgent.get(agent.id));
+            pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(agent.id)]);
           }
         }
         stmts.updateSession.run(null, "abandoned", now, null, stale.id);
-        broadcast("session_updated", stmts.getSession.get(stale.id));
+        pendingBroadcasts.push(["session_updated", stmts.getSession.get(stale.id)]);
       }
       break;
     }
@@ -475,7 +541,7 @@ const processEvent = db.transaction((hookType, data) => {
 
       // Session is terminating — drop any waiting flag so the row lands in
       // the Completed column without a leftover yellow overlay.
-      clearAwaitingInput(sessionId, mainAgentId, false);
+      clearAwaitingInput(sessionId, mainAgentId, false, pendingBroadcasts);
 
       // SessionEnd is the definitive signal that the CLI process exited.
       // Mark everything as completed.
@@ -484,11 +550,11 @@ const processEvent = db.transaction((hookType, data) => {
       for (const agent of allAgents) {
         if (agent.status !== "completed" && agent.status !== "error") {
           stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
-          broadcast("agent_updated", stmts.getAgent.get(agent.id));
+          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(agent.id)]);
         }
       }
       stmts.updateSession.run(null, "completed", now, null, sessionId);
-      broadcast("session_updated", stmts.getSession.get(sessionId));
+      pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
 
       break;
     }
@@ -502,10 +568,10 @@ const processEvent = db.transaction((hookType, data) => {
       // entire response, including text-only replies that emit no
       // PreToolUse before Stop.
       summary = "User prompt submitted";
-      clearAwaitingInput(sessionId, mainAgentId, true);
+      clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
       if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
         stmts.updateAgent.run(null, "working", null, null, null, null, mainAgentId);
-        broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
       }
       break;
     }
@@ -523,10 +589,10 @@ const processEvent = db.transaction((hookType, data) => {
         // user responds — at which point the next PreToolUse/Stop clears it.
         const ts = new Date().toISOString();
         stmts.setSessionAwaitingInput.run(ts, sessionId);
-        broadcast("session_updated", stmts.getSession.get(sessionId));
+        pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
         if (mainAgentId) {
           stmts.setAgentAwaitingInput.run(ts, mainAgentId);
-          broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
         }
         summary = msg;
       } else {
@@ -540,27 +606,18 @@ const processEvent = db.transaction((hookType, data) => {
     }
   }
 
-  // Extract token usage from transcript on every event that provides transcript_path.
-  // Claude Code hooks don't include usage/model in stdin — the transcript JSONL is
-  // the only reliable source. Uses replaceTokenUsage with compaction-aware logic:
-  // when the JSONL total drops (compaction rewrote it), the old value rolls into
-  // a baseline column so effective_total = current_jsonl + baseline. This ensures
-  // tokens from before compaction are never lost.
-  //
-  // Also detects compaction events (isCompactSummary in JSONL) and creates a
-  // Compaction agent + event so the dashboard shows when context was compressed.
-  if (data.transcript_path) {
-    const result = transcriptCache.extract(data.transcript_path);
-    if (result) {
-      const { tokensByModel, compaction } = result;
+  // Apply pre-extracted transcript data (disk I/O happened in Phase 1).
+  // Only DB writes remain here — the heavy JSONL parsing is already done.
+  if (transcriptResult) {
+      const { tokensByModel, compaction } = transcriptResult;
 
       // Register compaction agents and events.
       // Each isCompactSummary entry in the JSONL = one compaction that occurred.
-      // Deduplicate by uuid so we only create once per compaction.
+      // Deduplicate using pre-checked existingCompactIds set (Phase 2).
       if (compaction) {
         for (const entry of compaction.entries) {
           const compactId = `${sessionId}-compact-${entry.uuid}`;
-          if (stmts.getAgent.get(compactId)) continue;
+          if (existingCompactIds.has(compactId)) continue;
 
           const ts = entry.timestamp || new Date().toISOString();
           stmts.insertAgent.run(
@@ -575,7 +632,7 @@ const processEvent = db.transaction((hookType, data) => {
             null
           );
           stmts.updateAgent.run(null, "completed", null, null, ts, null, compactId);
-          broadcast("agent_created", stmts.getAgent.get(compactId));
+          pendingBroadcasts.push(["agent_created", stmts.getAgent.get(compactId)]);
 
           const compactSummary = `Context compacted — conversation history compressed (#${compaction.entries.indexOf(entry) + 1})`;
           stmts.insertEvent.run(
@@ -591,14 +648,14 @@ const processEvent = db.transaction((hookType, data) => {
               total_compactions: compaction.count,
             })
           );
-          broadcast("new_event", {
+          pendingBroadcasts.push(["new_event", {
             session_id: sessionId,
             agent_id: compactId,
             event_type: "Compaction",
             tool_name: null,
             summary: compactSummary,
             created_at: ts,
-          });
+          }]);
         }
       }
 
@@ -629,66 +686,43 @@ const processEvent = db.transaction((hookType, data) => {
         }
       }
 
-      // Defer subagent model backfill — throttled to once per 30s per session
-      // to avoid flooding the event loop with filesystem scans under high
-      // hook traffic (400+ events/5min during active Claude sessions).
-      // Wrapped in try/catch because the deferred write can hit SQLITE_BUSY
-      // if a processEvent transaction is in flight.
+      // Flag backfill for scheduling AFTER the transaction releases the lock.
       if (data.transcript_path && !_backfillThrottle.has(sessionId)) {
-        _backfillThrottle.add(sessionId);
-        setTimeout(() => {
-          _backfillThrottle.delete(sessionId);
-          try {
-            backfillWorkingSubagents(sessionId, data.transcript_path);
-          } catch {
-            // SQLITE_BUSY — will retry on next throttle window
-          }
-        }, 30_000);
+        shouldScheduleBackfill = true;
       }
 
       // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)
-      if (result.errors) {
-        for (const apiErr of result.errors) {
-          // Deduplicate: check if we already recorded this error (same type+message+timestamp)
-          const errKey = `${apiErr.type}:${apiErr.timestamp || ""}`;
-          const existing = db
-            .prepare(
-              `SELECT 1 FROM events WHERE session_id = ? AND event_type = 'APIError'
-               AND summary = ? LIMIT 1`
-            )
-            .get(sessionId, `${apiErr.type}: ${apiErr.message}`);
-          if (existing) continue;
+      // Dedup using pre-checked existingApiErrors set (Phase 2).
+      if (transcriptResult.errors) {
+        for (const apiErr of transcriptResult.errors) {
+          const errSummary = `${apiErr.type}: ${apiErr.message}`;
+          if (existingApiErrors.has(errSummary)) continue;
 
           stmts.insertEvent.run(
             sessionId,
             mainAgentId,
             "APIError",
             null,
-            `${apiErr.type}: ${apiErr.message}`,
+            errSummary,
             JSON.stringify(apiErr)
           );
-          broadcast("new_event", {
+          pendingBroadcasts.push(["new_event", {
             session_id: sessionId,
             agent_id: mainAgentId,
             event_type: "APIError",
             tool_name: null,
-            summary: `${apiErr.type}: ${apiErr.message}`,
+            summary: errSummary,
             created_at: apiErr.timestamp || new Date().toISOString(),
-          });
+          }]);
         }
       }
 
-      // Register turn duration events from transcript
-      if (result.turnDurations) {
-        for (const td of result.turnDurations) {
+      // Register turn duration events from transcript.
+      // Dedup using pre-checked existingTurnDurations set (Phase 2).
+      if (transcriptResult.turnDurations) {
+        for (const td of transcriptResult.turnDurations) {
           const tdTs = td.timestamp || new Date().toISOString();
-          // Deduplicate by checking if we already have this turn duration event
-          const existing = db
-            .prepare(
-              "SELECT 1 FROM events WHERE session_id = ? AND event_type = 'TurnDuration' AND created_at = ? LIMIT 1"
-            )
-            .get(sessionId, tdTs);
-          if (existing) continue;
+          if (existingTurnDurations.has(tdTs)) continue;
 
           const tdSummary = `Turn completed in ${(td.durationMs / 1000).toFixed(1)}s`;
           stmts.insertEvent.run(
@@ -699,43 +733,36 @@ const processEvent = db.transaction((hookType, data) => {
             tdSummary,
             JSON.stringify({ durationMs: td.durationMs })
           );
-          broadcast("new_event", {
+          pendingBroadcasts.push(["new_event", {
             session_id: sessionId,
             agent_id: mainAgentId,
             event_type: "TurnDuration",
             tool_name: null,
             summary: tdSummary,
             created_at: tdTs,
-          });
+          }]);
         }
       }
 
       // Update session metadata with enriched data (thinking blocks, usage extras)
-      if (result.usageExtras || result.thinkingBlockCount > 0) {
+      if (transcriptResult.usageExtras || transcriptResult.thinkingBlockCount > 0) {
         const session = stmts.getSession.get(sessionId);
         if (session) {
           const meta = session.metadata ? JSON.parse(session.metadata) : {};
-          if (result.usageExtras) {
-            meta.usage_extras = result.usageExtras;
+          if (transcriptResult.usageExtras) {
+            meta.usage_extras = transcriptResult.usageExtras;
           }
-          if (result.thinkingBlockCount > 0) {
-            meta.thinking_blocks = (meta.thinking_blocks || 0) + result.thinkingBlockCount;
+          if (transcriptResult.thinkingBlockCount > 0) {
+            meta.thinking_blocks = (meta.thinking_blocks || 0) + transcriptResult.thinkingBlockCount;
           }
-          if (result.turnDurations) {
-            meta.turn_count = (meta.turn_count || 0) + result.turnDurations.length;
-            const totalMs = result.turnDurations.reduce((s, t) => s + t.durationMs, 0);
+          if (transcriptResult.turnDurations) {
+            meta.turn_count = (meta.turn_count || 0) + transcriptResult.turnDurations.length;
+            const totalMs = transcriptResult.turnDurations.reduce((s, t) => s + t.durationMs, 0);
             meta.total_turn_duration_ms = (meta.total_turn_duration_ms || 0) + totalMs;
           }
           stmts.updateSession.run(null, null, null, JSON.stringify(meta), sessionId);
         }
       }
-    }
-  }
-
-  // Evict transcript from cache on SessionEnd — session is done, no more reads expected.
-  // Must happen after token extraction above to avoid re-populating the cache.
-  if (hookType === "SessionEnd" && data.transcript_path) {
-    transcriptCache.invalidate(data.transcript_path);
   }
 
   // Bump session updated_at on every event
@@ -751,7 +778,7 @@ const processEvent = db.transaction((hookType, data) => {
     // created_at uses default
   );
 
-  const event = {
+  return {
     session_id: sessionId,
     agent_id: agentId,
     event_type: eventType,
@@ -759,9 +786,41 @@ const processEvent = db.transaction((hookType, data) => {
     summary,
     created_at: new Date().toISOString(),
   };
-  broadcast("new_event", event);
-  return event;
-});
+  })();
+
+  // ── Phase 4: Post-transaction broadcasts and cleanup (no lock held) ──
+  // Drain all deferred broadcasts now that the EXCLUSIVE lock is released.
+  for (const [type, payload] of pendingBroadcasts) {
+    broadcast(type, payload);
+  }
+  broadcast("new_event", result);
+
+  // Defer subagent model backfill — throttled to once per 30s per session
+  // to avoid flooding the event loop with filesystem scans under high
+  // hook traffic (400+ events/5min during active Claude sessions).
+  // Scheduled outside the transaction so the EXCLUSIVE lock is not held
+  // while the timer is registered, and the deferred callback itself does
+  // not compete with an in-flight transaction.
+  if (shouldScheduleBackfill) {
+    _backfillThrottle.add(sessionId);
+    setTimeout(() => {
+      _backfillThrottle.delete(sessionId);
+      try {
+        backfillWorkingSubagents(sessionId, data.transcript_path);
+      } catch {
+        // SQLITE_BUSY — will retry on next throttle window
+      }
+    }, 30_000);
+  }
+
+  // Evict transcript from cache on SessionEnd — session is done, no more reads expected.
+  // Must happen after token extraction above to avoid re-populating the cache.
+  if (hookType === "SessionEnd" && data.transcript_path) {
+    transcriptCache.invalidate(data.transcript_path);
+  }
+
+  return result;
+};
 
 router.post("/event", (req, res) => {
   const { hook_type, data } = req.body;
@@ -784,25 +843,32 @@ router.post("/event", (req, res) => {
   // tool calls that aren't yet in the events table. Subagent tool_use blocks
   // never fire hooks on the parent session — this scan is the only path that
   // attributes them to the subagent's agent_id.
+  //
+  // Delayed by 5 seconds to avoid colliding with the processEvent transaction
+  // that likely follows immediately (the next hook event). Without this delay
+  // the many unprotected DB writes inside scanAndImportSubagents would race
+  // with the EXCLUSIVE lock held by processEvent, causing SQLITE_BUSY errors.
   if (hook_type === "SubagentStop" && data.session_id && data.transcript_path) {
-    scanAndImportSubagents(dbModule, data.session_id, data.transcript_path)
-      .then(({ created }) => {
-        if (created > 0) {
-          // Nudge SessionDetail to refetch — the page already debounces
-          // bursts of new_event into a single paginated reload.
-          broadcast("new_event", {
-            session_id: data.session_id,
-            agent_id: null,
-            event_type: "SubagentJsonlImported",
-            tool_name: null,
-            summary: `Imported ${created} subagent record(s) from JSONL`,
-            created_at: new Date().toISOString(),
-          });
-        }
-      })
-      .catch(() => {
-        // non-fatal — partial JSONL during a live run is expected
-      });
+    setTimeout(() => {
+      scanAndImportSubagents(dbModule, data.session_id, data.transcript_path)
+        .then(({ created }) => {
+          if (created > 0) {
+            // Nudge SessionDetail to refetch — the page already debounces
+            // bursts of new_event into a single paginated reload.
+            broadcast("new_event", {
+              session_id: data.session_id,
+              agent_id: null,
+              event_type: "SubagentJsonlImported",
+              tool_name: null,
+              summary: `Imported ${created} subagent record(s) from JSONL`,
+              created_at: new Date().toISOString(),
+            });
+          }
+        })
+        .catch(() => {
+          // non-fatal — partial JSONL during a live run is expected
+        });
+    }, 5000);
   }
 });
 
