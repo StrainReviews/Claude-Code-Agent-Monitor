@@ -609,7 +609,14 @@ const processEvent = (hookType, data) => {
   // Apply pre-extracted transcript data (disk I/O happened in Phase 1).
   // Only DB writes remain here — the heavy JSONL parsing is already done.
   if (transcriptResult) {
-      const { tokensByModel, compaction } = transcriptResult;
+      const { tokensByModel, compaction, latestModel } = transcriptResult;
+
+      if (latestModel) {
+        const upd = stmts.updateSessionModel.run(latestModel, sessionId, latestModel);
+        if (upd.changes > 0) {
+          pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
+        }
+      }
 
       // Register compaction agents and events.
       // Each isCompactSummary entry in the JSONL = one compaction that occurred.

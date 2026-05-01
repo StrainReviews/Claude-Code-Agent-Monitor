@@ -268,6 +268,9 @@ export function ConversationView({ sessionId, initialTranscriptId }: Conversatio
       });
 
       if (result.messages.length === 0) {
+        // Nothing older exists — clear hasMore so the hint stops showing
+        // even if the server still claims more is available.
+        setHasMore(false);
         setLoadingHistory(false);
         return;
       }

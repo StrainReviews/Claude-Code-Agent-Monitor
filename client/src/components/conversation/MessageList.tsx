@@ -8,11 +8,22 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 import { useState, useMemo } from "react";
-import { ChevronDown, ChevronRight, Bot, User, Brain, ScrollText } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Bot,
+  User,
+  Brain,
+  ScrollText,
+  Terminal,
+  Info,
+  AlertTriangle,
+} from "lucide-react";
 import type { TranscriptMessage, TranscriptContent } from "../../lib/types";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { MarkdownContent } from "./MarkdownContent";
 import { fmt } from "../../lib/format";
+import { parseTuiSegments, stripAnsi, hasTuiTags, type TuiSegment } from "./tuiSegments";
 
 interface MessageListProps {
   messages: TranscriptMessage[];
@@ -33,23 +44,6 @@ function buildToolResultMap(messages: TranscriptMessage[]): Map<string, Transcri
   return map;
 }
 
-/**
- * Detect and format command messages.
- * Converts <command-message>X</command-message><command-name>/X</command-name><command-args>Y</command-args>
- * into /X Y format.
- */
-function formatCommandMessage(text: string): { isCommand: boolean; display: string } {
-  const cmdMatch = text.match(
-    /<command-message>([^<]*)<\/command-message>\s*<command-name>([^<]*)<\/command-name>\s*(?:<command-args>([^<]*)<\/command-args>)?/
-  );
-  if (cmdMatch) {
-    const name = cmdMatch[2] ?? cmdMatch[1] ?? "";
-    const args = cmdMatch[3] ?? "";
-    return { isCommand: true, display: args ? `${name} ${args}` : name };
-  }
-  return { isCommand: false, display: text };
-}
-
 /** Detect if text is skill loading content (starts with "Base directory for this skill:") */
 function isSkillContent(text: string): boolean {
   return text.startsWith("Base directory for this skill:");
@@ -66,6 +60,96 @@ function formatLocalTime(iso: string): string {
     return new Date(iso).toLocaleTimeString();
   } catch {
     return "";
+  }
+}
+
+/** Compact pill for /command invocations parsed out of TUI markup. */
+function CommandPill({ display }: { display: string }) {
+  return (
+    <div className="inline-flex items-center gap-2 text-sm text-emerald-300 font-mono bg-emerald-500/10 border border-emerald-500/20 rounded-md px-3 py-1.5 max-w-full">
+      <span className="text-emerald-500/70">›</span>
+      <span className="break-all">{display}</span>
+    </div>
+  );
+}
+
+/** Terminal-style fenced block for stdout/stderr captured from local commands. */
+function TerminalBlock({ text, stream }: { text: string; stream: "stdout" | "stderr" }) {
+  const cleaned = stripAnsi(text).replace(/^\n+|\n+$/g, "");
+  const isErr = stream === "stderr";
+  const accent = isErr
+    ? "border-red-500/30 bg-red-950/30 text-red-200/90"
+    : "border-surface-3 bg-surface-4/60 text-gray-200";
+  const labelColor = isErr ? "text-red-300/80" : "text-gray-400";
+  return (
+    <div className={`rounded-lg border ${accent} overflow-hidden`}>
+      <div
+        className={`flex items-center gap-1.5 px-3 py-1 text-[10px] uppercase tracking-wider border-b border-current/10 ${labelColor}`}
+      >
+        <Terminal className="w-3 h-3" />
+        <span>{stream}</span>
+      </div>
+      <pre className="px-3 py-2 text-xs font-mono whitespace-pre-wrap break-words leading-relaxed max-h-96 overflow-y-auto">
+        {cleaned}
+      </pre>
+    </div>
+  );
+}
+
+/** Subtle inline note for the local-command-caveat banner. */
+function CaveatBlock({ text }: { text: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-amber-500/15 bg-amber-500/[0.05] px-3 py-1.5 text-[11px] text-amber-200/70">
+      <Info className="w-3.5 h-3.5 mt-px flex-shrink-0 opacity-60" />
+      <span className="leading-relaxed italic">{stripAnsi(text).trim()}</span>
+    </div>
+  );
+}
+
+/** Render a single segment produced by parseTuiSegments. */
+function renderSegment(seg: TuiSegment, key: number): React.ReactNode {
+  switch (seg.kind) {
+    case "command":
+      return <CommandPill key={key} display={seg.display} />;
+    case "stdout":
+      return <TerminalBlock key={key} text={seg.text} stream="stdout" />;
+    case "stderr":
+      return <TerminalBlock key={key} text={seg.text} stream="stderr" />;
+    case "caveat":
+      return <CaveatBlock key={key} text={seg.text} />;
+    case "system-reminder":
+      return (
+        <CollapsibleBlock
+          key={key}
+          text={seg.text}
+          icon={<AlertTriangle className="w-3.5 h-3.5 text-amber-400/70 flex-shrink-0" />}
+          title="System reminder"
+          borderClass="border-amber-500/20"
+          bgClass="bg-amber-500/5"
+          textClass="text-amber-300/80"
+        />
+      );
+    case "persisted-output":
+      return (
+        <CollapsibleBlock
+          key={key}
+          text={seg.text}
+          icon={<ScrollText className="w-3.5 h-3.5 text-violet-400/60 flex-shrink-0" />}
+          title="Persisted output"
+          borderClass="border-violet-500/20"
+          bgClass="bg-violet-500/5"
+          textClass="text-violet-300/80"
+        />
+      );
+    case "text": {
+      const cleaned = stripAnsi(seg.text);
+      if (!cleaned.trim()) return null;
+      return (
+        <div key={key} className="min-w-0">
+          <MarkdownContent text={cleaned} />
+        </div>
+      );
+    }
   }
 }
 
@@ -233,23 +317,21 @@ export function MessageList({ messages, loading }: MessageListProps) {
                     );
                   }
 
-                  // Detect command messages, format for display
-                  const { isCommand, display } = formatCommandMessage(block.text);
-                  if (isCommand) {
+                  // Mixed TUI markup: caveat / command / stdout / stderr / system-reminder
+                  // can appear inline (sometimes interleaved with prose). Parse the text
+                  // into segments and render each with the appropriate visual treatment.
+                  if (hasTuiTags(block.text)) {
+                    const segments = parseTuiSegments(block.text);
                     return (
-                      <div
-                        key={bIdx}
-                        className="inline-flex items-center gap-2 text-sm text-emerald-300 font-mono bg-emerald-500/10 border border-emerald-500/20 rounded-md px-3 py-1.5 max-w-full"
-                      >
-                        <span className="text-emerald-500/70">›</span>
-                        <span className="break-all">{display}</span>
+                      <div key={bIdx} className="space-y-2 min-w-0">
+                        {segments.map((s, sIdx) => renderSegment(s, sIdx))}
                       </div>
                     );
                   }
 
                   return (
                     <div key={bIdx} className="min-w-0">
-                      <MarkdownContent text={block.text} />
+                      <MarkdownContent text={stripAnsi(block.text)} />
                     </div>
                   );
                 }

@@ -853,7 +853,7 @@ export function Analytics() {
         <div className="card p-5 lg:col-span-2">
           <h3 className="text-sm font-medium text-gray-300 mb-4">{t("eventActivity")}</h3>
           <div className="overflow-x-auto">
-            <div className="min-w-max">
+            <div className="w-fit min-w-max mx-auto">
               <Heatmap weeks={weeks} />
             </div>
           </div>
