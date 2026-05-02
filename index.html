@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Page Metadata -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -70,6 +71,7 @@
       }
     </script>
 
+    <!-- Assets -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -77,6 +79,8 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     />
     <link rel="stylesheet" href="wiki/style.css?v=1" />
+
+    <!-- Global page styles -->
     <style>
       :root {
         --sidebar-expanded: 260px;
@@ -187,8 +191,6 @@
         font-size: 13px;
       }
 
-      /* Custom sidebar tooltip (floating, appended to body to escape
-         .sidebar overflow:hidden clipping). Only shown when collapsed. */
       .ccam-side-tip {
         position: fixed;
         top: 0;
@@ -518,19 +520,20 @@
         }
       }
 
-      /* Keep long inline code from overflowing card containers. */
       #update-notifier .feature-card code,
       #update-notifier .api-table code {
         word-break: break-word;
         overflow-wrap: anywhere;
       }
     </style>
+
     <!-- Mermaid: deferred (3.2 MB bundle) so it doesn't render-block first
          paint. wiki/script.js is also deferred below; deferred scripts run
          in document order, so the mermaid global is ready when script.js
          calls mermaid.initialize. -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" defer></script>
   </head>
+
   <body>
     <div class="wiki-layout">
       <div id="sidebar-scrim" class="sidebar-scrim" aria-hidden="true"></div>
