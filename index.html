@@ -4540,30 +4540,25 @@ npm run install-hooks</code></pre>
       (function () {
         var carousel = document.getElementById("feature-carousel");
         if (!carousel) return;
-
         var viewport = carousel.querySelector(".carousel-viewport");
         var track = carousel.querySelector(".carousel-track");
         var cards = Array.prototype.slice.call(track.querySelectorAll(".feature-card"));
         var dotsContainer = document.getElementById("carousel-dots");
         var prevBtn = carousel.querySelector(".carousel-prev");
         var nextBtn = carousel.querySelector(".carousel-next");
-
         var currentPage = 0;
         var autoInterval = null;
         var AUTO_DELAY = 2500;
         var GAP = 12;
-
         function getPerPage() {
           var w = viewport.offsetWidth;
           if (w <= 700) return 1;
           if (w <= 1000) return 2;
           return 3;
         }
-
         function getTotalPages() {
           return Math.ceil(cards.length / getPerPage());
         }
-
         function sizeCards() {
           var perPage = getPerPage();
           var vpWidth = viewport.offsetWidth;
@@ -4575,7 +4570,6 @@ npm run install-hooks</code></pre>
             cards[i].style.marginLeft = "0";
           }
         }
-
         function buildDots() {
           dotsContainer.innerHTML = "";
           var total = getTotalPages();
@@ -4591,7 +4585,6 @@ npm run install-hooks</code></pre>
             dotsContainer.appendChild(dot);
           }
         }
-
         function updatePosition() {
           var perPage = getPerPage();
           var vpWidth = viewport.offsetWidth;
@@ -4602,22 +4595,18 @@ npm run install-hooks</code></pre>
           if (maxOffset < 0) maxOffset = 0;
           if (offset > maxOffset) offset = maxOffset;
           track.style.transform = "translateX(-" + offset + "px)";
-
           var dots = dotsContainer.querySelectorAll(".carousel-dot");
           for (var i = 0; i < dots.length; i++) {
             dots[i].classList.toggle("active", i === currentPage);
           }
         }
-
         function goTo(page) {
           var total = getTotalPages();
           currentPage = ((page % total) + total) % total;
           updatePosition();
         }
-
         function next() { goTo(currentPage + 1); }
         function prev() { goTo(currentPage - 1); }
-
         function startAuto() {
           stopAuto();
           autoInterval = setInterval(next, AUTO_DELAY);
@@ -4626,7 +4615,6 @@ npm run install-hooks</code></pre>
           if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
         }
         function resetAuto() { stopAuto(); startAuto(); }
-
         function layout() {
           if (currentPage >= getTotalPages()) currentPage = getTotalPages() - 1;
           if (currentPage < 0) currentPage = 0;
@@ -4634,12 +4622,10 @@ npm run install-hooks</code></pre>
           buildDots();
           updatePosition();
         }
-
         prevBtn.addEventListener("click", function () { prev(); resetAuto(); });
         nextBtn.addEventListener("click", function () { next(); resetAuto(); });
         carousel.addEventListener("mouseenter", stopAuto);
         carousel.addEventListener("mouseleave", startAuto);
-
         var touchStartX = 0;
         carousel.addEventListener("touchstart", function (e) {
           touchStartX = e.changedTouches[0].screenX;
@@ -4650,19 +4636,16 @@ npm run install-hooks</code></pre>
           if (Math.abs(diff) > 50) { if (diff > 0) next(); else prev(); }
           startAuto();
         }, { passive: true });
-
         carousel.setAttribute("tabindex", "0");
         carousel.addEventListener("keydown", function (e) {
           if (e.key === "ArrowRight") { next(); resetAuto(); }
           if (e.key === "ArrowLeft") { prev(); resetAuto(); }
         });
-
         var resizeTimer;
         window.addEventListener("resize", function () {
           clearTimeout(resizeTimer);
           resizeTimer = setTimeout(layout, 100);
         });
-
         layout();
         startAuto();
       })();
@@ -4672,14 +4655,11 @@ npm run install-hooks</code></pre>
         const btn = document.getElementById("sidebar-toggle");
         const scrim = document.getElementById("sidebar-scrim");
         if (!btn) return;
-
         const key = "wiki-sidebar-collapsed";
         const COLLAPSE_WIDTH = 1460;
-
         function shouldAutoCollapse() {
           return window.innerWidth <= COLLAPSE_WIDTH;
         }
-
         function applyCollapsed(collapsed) {
           document.body.classList.toggle("sidebar-collapsed", collapsed);
           btn.setAttribute("aria-expanded", String(!collapsed));
@@ -4689,7 +4669,6 @@ npm run install-hooks</code></pre>
             scrim.setAttribute("aria-hidden", String(collapsed || !isMobile));
           }
         }
-
         // On load: auto-collapse if narrow, otherwise respect saved preference
         if (shouldAutoCollapse()) {
           applyCollapsed(true);
@@ -4697,7 +4676,6 @@ npm run install-hooks</code></pre>
           var saved = localStorage.getItem(key);
           applyCollapsed(saved === "1");
         }
-
         btn.addEventListener("click", function () {
           var next = !document.body.classList.contains("sidebar-collapsed");
           applyCollapsed(next);
@@ -4705,14 +4683,12 @@ npm run install-hooks</code></pre>
             localStorage.setItem(key, next ? "1" : "0");
           }
         });
-
         if (scrim) {
           scrim.addEventListener("click", function () {
             applyCollapsed(true);
             localStorage.setItem(key, "1");
           });
         }
-
         window.addEventListener("resize", function () {
           if (shouldAutoCollapse()) {
             applyCollapsed(true);
