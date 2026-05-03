@@ -392,3 +392,56 @@ document.querySelectorAll(".diagram-toggle").forEach((toggle) => {
     toggle.textContent = isOpen ? "Show diagram" : "Hide diagram";
   });
 });
+
+/* ─── Lightbox for Screenshots ──────────────────────────────────────────── */
+(function () {
+  const overlay = document.createElement("div");
+  overlay.className = "lightbox-overlay";
+  overlay.setAttribute("aria-hidden", "true");
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "lightbox-close";
+  closeBtn.innerHTML = "&times;";
+  closeBtn.setAttribute("aria-label", "Close full screen");
+
+  const img = document.createElement("img");
+  img.className = "lightbox-image";
+  img.setAttribute("alt", "Enlarged screenshot");
+
+  overlay.appendChild(closeBtn);
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
+
+  function closeLightbox() {
+    overlay.classList.remove("active");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = ""; // restore scrolling
+    setTimeout(() => {
+      img.src = "";
+    }, 300);
+  }
+
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay || e.target === closeBtn) {
+      closeLightbox();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("active")) {
+      closeLightbox();
+    }
+  });
+
+  document
+    .querySelectorAll(".screenshot-card img, .hero-gallery img, .screenshot-gallery img")
+    .forEach((thumbnail) => {
+      thumbnail.addEventListener("click", () => {
+        img.src = thumbnail.src;
+        img.alt = thumbnail.alt;
+        overlay.classList.add("active");
+        overlay.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden"; // prevent background scrolling
+      });
+    });
+})();
