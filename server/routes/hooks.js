@@ -217,398 +217,398 @@ const processEvent = (hookType, data) => {
   let shouldScheduleBackfill = false;
 
   const result = db.transaction(() => {
-  const session = ensureSession(sessionId, data, pendingBroadcasts);
-  let mainAgent = getMainAgent(sessionId);
-  const mainAgentId = mainAgent?.id ?? null;
+    const session = ensureSession(sessionId, data, pendingBroadcasts);
+    let mainAgent = getMainAgent(sessionId);
+    const mainAgentId = mainAgent?.id ?? null;
 
-  // Reactivate non-active sessions when we receive hook events proving the session is alive.
-  // - Work events (PreToolUse, PostToolUse, Notification, SessionStart) always reactivate.
-  // - Stop/SubagentStop reactivate only if session is completed/abandoned — this handles
-  //   sessions imported as "completed" before the server started, where the first hook event
-  //   might be a Stop. For error sessions, Stop should NOT reactivate (the error is intentional).
-  // - SessionEnd never reactivates.
-  const isNonTerminalEvent = hookType !== "SessionEnd";
-  const isStopLike = hookType === "Stop" || hookType === "SubagentStop";
-  const isImportedOrAbandoned = session.status === "completed" || session.status === "abandoned";
-  const needsReactivation =
-    session.status !== "active" && isNonTerminalEvent && (!isStopLike || isImportedOrAbandoned);
-  if (needsReactivation) {
-    stmts.reactivateSession.run(sessionId);
-    pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
-
-    if (mainAgent && mainAgent.status !== "working" && mainAgent.status !== "connected") {
-      stmts.reactivateAgent.run(mainAgentId);
-      mainAgent = stmts.getAgent.get(mainAgentId);
-      pendingBroadcasts.push(["agent_updated", mainAgent]);
-    }
-  }
-
-  let eventType = hookType;
-  let toolName = data.tool_name || null;
-  let summary = null;
-  let agentId = mainAgentId;
-
-  // NOTE: clearing of awaiting_input_since is handled per-case below rather
-  // than blanket-clearing on every non-Notification event. The blanket rule
-  // caused spontaneous waiting → active flips when *any* hook arrived after
-  // a Stop — most commonly SubagentStop for backgrounded subagents, but
-  // also occasionally a late PostToolUse from a background tool. A subagent
-  // or background tool finishing tells us nothing about whether the human
-  // has actually responded, so those events must NOT clear the flag.
-
-  switch (hookType) {
-    case "PreToolUse": {
-      summary = `Using tool: ${toolName}`;
-
-      // PreToolUse means Claude is actively running a tool, ergo the user
-      // has resumed (Stop only fires at end of turn — Claude can't start a
-      // new tool call without fresh user input). Clear waiting now.
-      clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
-
-      // If the tool is Agent, a subagent is being created
-      if (toolName === "Agent") {
-        const input = data.tool_input || {};
-        const subId = uuidv4();
-        // Use description, then type, then first line of prompt, then fallback
-        const rawName =
-          input.description ||
-          input.subagent_type ||
-          (input.prompt ? input.prompt.split("\n")[0].slice(0, 60) : null) ||
-          "Subagent";
-        const subName = rawName.length > 60 ? rawName.slice(0, 57) + "..." : rawName;
-
-        // Infer which agent is spawning this subagent.
-        // Hook events don't carry an explicit agent ID, so we use a heuristic:
-        //   - If the main agent is actively working, it's the one spawning (common case).
-        //   - If the main agent is idle/connected (waiting for user or subagent results),
-        //     the spawn must come from an already-running subagent — pick the deepest
-        //     working subagent (most recently nested active agent).
-        //   - Fallback to main if nothing else matches.
-        let parentId = mainAgentId;
-        if (mainAgent && mainAgent.status !== "working") {
-          const deepest = stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
-          if (deepest) {
-            parentId = deepest.id;
-          }
-        }
-
-        stmts.insertAgent.run(
-          subId,
-          sessionId,
-          subName,
-          "subagent",
-          input.subagent_type || null,
-          "working",
-          input.prompt ? input.prompt.slice(0, 500) : null,
-          parentId,
-          input.metadata ? JSON.stringify(input.metadata) : null
-        );
-        pendingBroadcasts.push(["agent_created", stmts.getAgent.get(subId)]);
-        agentId = subId;
-        summary = `Subagent spawned: ${subName}`;
-      }
-
-      // Update main agent status to "working" — but only when main is the likely
-      // actor. When main is idle and working subagents exist, PreToolUse events
-      // come from subagents, not main. Incorrectly promoting main to "working"
-      // would break parent inference for nested agent spawning.
-      //
-      // Heuristic: main is idle + working subagents exist → subagent is the actor.
-      //            main is connected/working/idle with no subagents → main is the actor.
-      const subagentIsActor =
-        mainAgent &&
-        mainAgent.status === "idle" &&
-        !!stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
-      if (
-        mainAgent &&
-        !subagentIsActor &&
-        (mainAgent.status === "working" ||
-          mainAgent.status === "connected" ||
-          mainAgent.status === "idle")
-      ) {
-        stmts.updateAgent.run(null, "working", null, toolName, null, null, mainAgentId);
-        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
-      }
-      break;
-    }
-
-    case "PostToolUse": {
-      summary = `Tool completed: ${toolName}`;
-
-      // Clear waiting too. The non-obvious case this covers: a permission
-      // Notification fires *between* PreToolUse and PostToolUse (when Claude
-      // Code prompts the user mid-tool). The Notification stamps waiting,
-      // the user approves, the tool completes, PostToolUse arrives. Without
-      // a clear here, we'd be stuck in waiting until the next PreToolUse.
-      clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
-
-      // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
-      // backgrounded — it does NOT mean the subagent finished its work.
-      // Subagent completion is handled by SubagentStop, not here.
-
-      // Only clear current_tool on the main agent if it's actively working.
-      // Skip if idle (waiting for subagents) or already completed.
-      if (mainAgent && mainAgent.status === "working") {
-        stmts.updateAgent.run(null, null, null, null, null, null, mainAgentId);
-        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
-      }
-      break;
-    }
-
-    case "Stop": {
-      const session = stmts.getSession.get(sessionId);
-      const sessionLabel = session?.name || `Session ${sessionId.slice(0, 8)}`;
-      summary =
-        data.stop_reason === "error"
-          ? `Error in ${sessionLabel}`
-          : `${sessionLabel} — ready for input`;
-
-      // Stop means Claude finished its turn, NOT that the session is closed.
-      // Session stays active — user can still send more messages.
-      // Background subagents may still be running — do NOT complete them
-      // here. They complete via SubagentStop, or all at once on SessionEnd.
-      //
-      // CRITICAL: do all DB writes BEFORE any broadcast, then broadcast the
-      // final state once. An earlier version broadcast agent_updated twice
-      // (first with status=idle and no flag, then again after the flag was
-      // set) which made the agent flicker out of every Kanban column for a
-      // tick — visible to users as "agent skipped waiting and went to
-      // completed", because the Idle column no longer exists and Waiting
-      // requires the flag.
-      const now = new Date().toISOString();
-      const agentMutable =
-        !!mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error";
-
-      if (data.stop_reason === "error") {
-        if (agentMutable) {
-          stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
-        }
-        stmts.updateSession.run(null, "error", now, null, sessionId);
-        // Error stop is terminal-ish — drop any waiting flag so the row
-        // lands cleanly in the Error column.
-        clearAwaitingInput(sessionId, mainAgentId, false, pendingBroadcasts);
-      } else {
-        if (agentMutable) {
-          stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
-        }
-        // Stamp the waiting flag in the same DB pass as the idle update so
-        // the post-write read returns a consistent (idle, awaiting=set)
-        // row. Effective status flips working → waiting in one broadcast.
-        stmts.setSessionAwaitingInput.run(now, sessionId);
-        if (mainAgentId) stmts.setAgentAwaitingInput.run(now, mainAgentId);
-      }
-
-      // Read final state for broadcast — still inside transaction for
-      // consistency, but the broadcast itself is deferred to Phase 4.
+    // Reactivate non-active sessions when we receive hook events proving the session is alive.
+    // - Work events (PreToolUse, PostToolUse, Notification, SessionStart) always reactivate.
+    // - Stop/SubagentStop reactivate only if session is completed/abandoned — this handles
+    //   sessions imported as "completed" before the server started, where the first hook event
+    //   might be a Stop. For error sessions, Stop should NOT reactivate (the error is intentional).
+    // - SessionEnd never reactivates.
+    const isNonTerminalEvent = hookType !== "SessionEnd";
+    const isStopLike = hookType === "Stop" || hookType === "SubagentStop";
+    const isImportedOrAbandoned = session.status === "completed" || session.status === "abandoned";
+    const needsReactivation =
+      session.status !== "active" && isNonTerminalEvent && (!isStopLike || isImportedOrAbandoned);
+    if (needsReactivation) {
+      stmts.reactivateSession.run(sessionId);
       pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
-      if (mainAgentId) {
-        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+
+      if (mainAgent && mainAgent.status !== "working" && mainAgent.status !== "connected") {
+        stmts.reactivateAgent.run(mainAgentId);
+        mainAgent = stmts.getAgent.get(mainAgentId);
+        pendingBroadcasts.push(["agent_updated", mainAgent]);
       }
-      break;
     }
 
-    case "SubagentStop": {
-      summary = `Subagent completed`;
-      const subagents = stmts.listAgentsBySession.all(sessionId);
-      let matchingSub = null;
+    let eventType = hookType;
+    let toolName = data.tool_name || null;
+    let summary = null;
+    let agentId = mainAgentId;
 
-      // Try to identify which subagent stopped using available data.
-      // SubagentStop provides: agent_type (e.g. "Explore", "test-engineer"),
-      // agent_id (Claude's internal ID), description, last_assistant_message.
-      const subDesc = data.description || data.agent_type || data.subagent_type || null;
-      if (subDesc) {
-        const namePrefix = subDesc.length > 57 ? subDesc.slice(0, 57) : subDesc;
-        matchingSub = subagents.find(
-          (a) => a.type === "subagent" && a.status === "working" && a.name.startsWith(namePrefix)
-        );
+    // NOTE: clearing of awaiting_input_since is handled per-case below rather
+    // than blanket-clearing on every non-Notification event. The blanket rule
+    // caused spontaneous waiting → active flips when *any* hook arrived after
+    // a Stop — most commonly SubagentStop for backgrounded subagents, but
+    // also occasionally a late PostToolUse from a background tool. A subagent
+    // or background tool finishing tells us nothing about whether the human
+    // has actually responded, so those events must NOT clear the flag.
+
+    switch (hookType) {
+      case "PreToolUse": {
+        summary = `Using tool: ${toolName}`;
+
+        // PreToolUse means Claude is actively running a tool, ergo the user
+        // has resumed (Stop only fires at end of turn — Claude can't start a
+        // new tool call without fresh user input). Clear waiting now.
+        clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
+
+        // If the tool is Agent, a subagent is being created
+        if (toolName === "Agent") {
+          const input = data.tool_input || {};
+          const subId = uuidv4();
+          // Use description, then type, then first line of prompt, then fallback
+          const rawName =
+            input.description ||
+            input.subagent_type ||
+            (input.prompt ? input.prompt.split("\n")[0].slice(0, 60) : null) ||
+            "Subagent";
+          const subName = rawName.length > 60 ? rawName.slice(0, 57) + "..." : rawName;
+
+          // Infer which agent is spawning this subagent.
+          // Hook events don't carry an explicit agent ID, so we use a heuristic:
+          //   - If the main agent is actively working, it's the one spawning (common case).
+          //   - If the main agent is idle/connected (waiting for user or subagent results),
+          //     the spawn must come from an already-running subagent — pick the deepest
+          //     working subagent (most recently nested active agent).
+          //   - Fallback to main if nothing else matches.
+          let parentId = mainAgentId;
+          if (mainAgent && mainAgent.status !== "working") {
+            const deepest = stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
+            if (deepest) {
+              parentId = deepest.id;
+            }
+          }
+
+          stmts.insertAgent.run(
+            subId,
+            sessionId,
+            subName,
+            "subagent",
+            input.subagent_type || null,
+            "working",
+            input.prompt ? input.prompt.slice(0, 500) : null,
+            parentId,
+            input.metadata ? JSON.stringify(input.metadata) : null
+          );
+          pendingBroadcasts.push(["agent_created", stmts.getAgent.get(subId)]);
+          agentId = subId;
+          summary = `Subagent spawned: ${subName}`;
+        }
+
+        // Update main agent status to "working" — but only when main is the likely
+        // actor. When main is idle and working subagents exist, PreToolUse events
+        // come from subagents, not main. Incorrectly promoting main to "working"
+        // would break parent inference for nested agent spawning.
+        //
+        // Heuristic: main is idle + working subagents exist → subagent is the actor.
+        //            main is connected/working/idle with no subagents → main is the actor.
+        const subagentIsActor =
+          mainAgent &&
+          mainAgent.status === "idle" &&
+          !!stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
+        if (
+          mainAgent &&
+          !subagentIsActor &&
+          (mainAgent.status === "working" ||
+            mainAgent.status === "connected" ||
+            mainAgent.status === "idle")
+        ) {
+          stmts.updateAgent.run(null, "working", null, toolName, null, null, mainAgentId);
+          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+        }
+        break;
       }
 
-      // Try matching by agent_type against stored subagent_type
-      if (!matchingSub && data.agent_type) {
-        matchingSub = subagents.find(
-          (a) =>
-            a.type === "subagent" && a.status === "working" && a.subagent_type === data.agent_type
-        );
+      case "PostToolUse": {
+        summary = `Tool completed: ${toolName}`;
+
+        // Clear waiting too. The non-obvious case this covers: a permission
+        // Notification fires *between* PreToolUse and PostToolUse (when Claude
+        // Code prompts the user mid-tool). The Notification stamps waiting,
+        // the user approves, the tool completes, PostToolUse arrives. Without
+        // a clear here, we'd be stuck in waiting until the next PreToolUse.
+        clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
+
+        // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
+        // backgrounded — it does NOT mean the subagent finished its work.
+        // Subagent completion is handled by SubagentStop, not here.
+
+        // Only clear current_tool on the main agent if it's actively working.
+        // Skip if idle (waiting for subagents) or already completed.
+        if (mainAgent && mainAgent.status === "working") {
+          stmts.updateAgent.run(null, null, null, null, null, null, mainAgentId);
+          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+        }
+        break;
       }
 
-      if (!matchingSub) {
-        const prompt = data.prompt ? data.prompt.slice(0, 500) : null;
-        if (prompt) {
+      case "Stop": {
+        const session = stmts.getSession.get(sessionId);
+        const sessionLabel = session?.name || `Session ${sessionId.slice(0, 8)}`;
+        summary =
+          data.stop_reason === "error"
+            ? `Error in ${sessionLabel}`
+            : `${sessionLabel} — ready for input`;
+
+        // Stop means Claude finished its turn, NOT that the session is closed.
+        // Session stays active — user can still send more messages.
+        // Background subagents may still be running — do NOT complete them
+        // here. They complete via SubagentStop, or all at once on SessionEnd.
+        //
+        // CRITICAL: do all DB writes BEFORE any broadcast, then broadcast the
+        // final state once. An earlier version broadcast agent_updated twice
+        // (first with status=idle and no flag, then again after the flag was
+        // set) which made the agent flicker out of every Kanban column for a
+        // tick — visible to users as "agent skipped waiting and went to
+        // completed", because the Idle column no longer exists and Waiting
+        // requires the flag.
+        const now = new Date().toISOString();
+        const agentMutable =
+          !!mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error";
+
+        if (data.stop_reason === "error") {
+          if (agentMutable) {
+            stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+          }
+          stmts.updateSession.run(null, "error", now, null, sessionId);
+          // Error stop is terminal-ish — drop any waiting flag so the row
+          // lands cleanly in the Error column.
+          clearAwaitingInput(sessionId, mainAgentId, false, pendingBroadcasts);
+        } else {
+          if (agentMutable) {
+            stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+          }
+          // Stamp the waiting flag in the same DB pass as the idle update so
+          // the post-write read returns a consistent (idle, awaiting=set)
+          // row. Effective status flips working → waiting in one broadcast.
+          stmts.setSessionAwaitingInput.run(now, sessionId);
+          if (mainAgentId) stmts.setAgentAwaitingInput.run(now, mainAgentId);
+        }
+
+        // Read final state for broadcast — still inside transaction for
+        // consistency, but the broadcast itself is deferred to Phase 4.
+        pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
+        if (mainAgentId) {
+          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+        }
+        break;
+      }
+
+      case "SubagentStop": {
+        summary = `Subagent completed`;
+        const subagents = stmts.listAgentsBySession.all(sessionId);
+        let matchingSub = null;
+
+        // Try to identify which subagent stopped using available data.
+        // SubagentStop provides: agent_type (e.g. "Explore", "test-engineer"),
+        // agent_id (Claude's internal ID), description, last_assistant_message.
+        const subDesc = data.description || data.agent_type || data.subagent_type || null;
+        if (subDesc) {
+          const namePrefix = subDesc.length > 57 ? subDesc.slice(0, 57) : subDesc;
           matchingSub = subagents.find(
-            (a) => a.type === "subagent" && a.status === "working" && a.task === prompt
+            (a) => a.type === "subagent" && a.status === "working" && a.name.startsWith(namePrefix)
           );
         }
-      }
 
-      // Fallback: oldest working subagent
-      if (!matchingSub) {
-        matchingSub = subagents.find((a) => a.type === "subagent" && a.status === "working");
-      }
+        // Try matching by agent_type against stored subagent_type
+        if (!matchingSub && data.agent_type) {
+          matchingSub = subagents.find(
+            (a) =>
+              a.type === "subagent" && a.status === "working" && a.subagent_type === data.agent_type
+          );
+        }
 
-      if (matchingSub) {
-        stmts.updateAgent.run(
-          null,
-          "completed",
-          null,
-          null,
-          new Date().toISOString(),
-          null,
-          matchingSub.id
-        );
-
-        // Apply pre-extracted subagent summary (disk I/O happened in Phase 1).
-        // The main session transcript (transcript_path) only contains
-        // main-agent messages — subagent API calls live in a separate JSONL
-        // under subagents/. Without this read the dashboard would continue to
-        // show every subagent as running on the main session's model.
-        //
-        // Main-session token_usage and subagent_token_usage are disjoint
-        // record sets (different source files, different API calls on
-        // Anthropic's side) so additive summation in getTokensBySession is
-        // correct — no subtraction needed to "pull Haiku out of Opus".
-        if (subagentSummaryResult) {
-          stmts.updateAgentModel.run(subagentSummaryResult.primaryModel, matchingSub.id);
-          for (const [model, tokens] of Object.entries(subagentSummaryResult.tokensByModel)) {
-            stmts.replaceSubagentTokens.run(
-              matchingSub.id,
-              sessionId,
-              model,
-              tokens.input,
-              tokens.output,
-              tokens.cacheRead,
-              tokens.cacheWrite
+        if (!matchingSub) {
+          const prompt = data.prompt ? data.prompt.slice(0, 500) : null;
+          if (prompt) {
+            matchingSub = subagents.find(
+              (a) => a.type === "subagent" && a.status === "working" && a.task === prompt
             );
           }
         }
 
-        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(matchingSub.id)]);
-        agentId = matchingSub.id;
-        summary = `Subagent completed: ${matchingSub.name}`;
+        // Fallback: oldest working subagent
+        if (!matchingSub) {
+          matchingSub = subagents.find((a) => a.type === "subagent" && a.status === "working");
+        }
 
-        // Session stays active — SubagentStop just means one subagent finished,
-        // the session is not over until the user explicitly closes it.
+        if (matchingSub) {
+          stmts.updateAgent.run(
+            null,
+            "completed",
+            null,
+            null,
+            new Date().toISOString(),
+            null,
+            matchingSub.id
+          );
+
+          // Apply pre-extracted subagent summary (disk I/O happened in Phase 1).
+          // The main session transcript (transcript_path) only contains
+          // main-agent messages — subagent API calls live in a separate JSONL
+          // under subagents/. Without this read the dashboard would continue to
+          // show every subagent as running on the main session's model.
+          //
+          // Main-session token_usage and subagent_token_usage are disjoint
+          // record sets (different source files, different API calls on
+          // Anthropic's side) so additive summation in getTokensBySession is
+          // correct — no subtraction needed to "pull Haiku out of Opus".
+          if (subagentSummaryResult) {
+            stmts.updateAgentModel.run(subagentSummaryResult.primaryModel, matchingSub.id);
+            for (const [model, tokens] of Object.entries(subagentSummaryResult.tokensByModel)) {
+              stmts.replaceSubagentTokens.run(
+                matchingSub.id,
+                sessionId,
+                model,
+                tokens.input,
+                tokens.output,
+                tokens.cacheRead,
+                tokens.cacheWrite
+              );
+            }
+          }
+
+          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(matchingSub.id)]);
+          agentId = matchingSub.id;
+          summary = `Subagent completed: ${matchingSub.name}`;
+
+          // Session stays active — SubagentStop just means one subagent finished,
+          // the session is not over until the user explicitly closes it.
+        }
+        break;
       }
-      break;
-    }
 
-    case "SessionStart": {
-      summary = data.source === "resume" ? "Session resumed" : "Session started";
+      case "SessionStart": {
+        summary = data.source === "resume" ? "Session resumed" : "Session started";
 
-      // Reactivation is already handled above for non-active sessions.
-      // Promote main agent from idle → connected if needed.
-      if (mainAgent && mainAgent.status === "idle") {
-        stmts.updateAgent.run(null, "connected", null, null, null, null, mainAgentId);
+        // Reactivation is already handled above for non-active sessions.
+        // Promote main agent from idle → connected if needed.
+        if (mainAgent && mainAgent.status === "idle") {
+          stmts.updateAgent.run(null, "connected", null, null, null, null, mainAgentId);
+        }
+
+        // A just-started or just-resumed session is sitting at a prompt
+        // waiting for the user's first message — Claude Code hasn't done
+        // anything yet. Stamp awaiting_input_since so it lands in Waiting
+        // from the moment the dashboard sees it. UserPromptSubmit (when the
+        // user hits enter) or PreToolUse (when Claude actually runs a tool)
+        // will clear the flag.
+        const sessionStartTs = new Date().toISOString();
+        stmts.setSessionAwaitingInput.run(sessionStartTs, sessionId);
+        if (mainAgentId) stmts.setAgentAwaitingInput.run(sessionStartTs, mainAgentId);
+
+        // Read final state for broadcast — still inside transaction for
+        // consistency, but the broadcast itself is deferred to Phase 4.
+        pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
+        if (mainAgentId) pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+
+        // Clean up orphaned sessions: when a user runs /resume inside a session,
+        // the parent session never receives Stop or SessionEnd. Mark any active
+        // session that hasn't seen events for STALE_MINUTES as abandoned.
+        const staleSessions = stmts.findStaleSessions.all(sessionId, STALE_MINUTES);
+        const now = new Date().toISOString();
+        for (const stale of staleSessions) {
+          const staleAgents = stmts.listAgentsBySession.all(stale.id);
+          for (const agent of staleAgents) {
+            if (agent.status !== "completed" && agent.status !== "error") {
+              stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
+              pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(agent.id)]);
+            }
+          }
+          stmts.updateSession.run(null, "abandoned", now, null, stale.id);
+          pendingBroadcasts.push(["session_updated", stmts.getSession.get(stale.id)]);
+        }
+        break;
       }
 
-      // A just-started or just-resumed session is sitting at a prompt
-      // waiting for the user's first message — Claude Code hasn't done
-      // anything yet. Stamp awaiting_input_since so it lands in Waiting
-      // from the moment the dashboard sees it. UserPromptSubmit (when the
-      // user hits enter) or PreToolUse (when Claude actually runs a tool)
-      // will clear the flag.
-      const sessionStartTs = new Date().toISOString();
-      stmts.setSessionAwaitingInput.run(sessionStartTs, sessionId);
-      if (mainAgentId) stmts.setAgentAwaitingInput.run(sessionStartTs, mainAgentId);
+      case "SessionEnd": {
+        const endSession = stmts.getSession.get(sessionId);
+        const endLabel = endSession?.name || `Session ${sessionId.slice(0, 8)}`;
+        summary = `Session closed: ${endLabel}`;
 
-      // Read final state for broadcast — still inside transaction for
-      // consistency, but the broadcast itself is deferred to Phase 4.
-      pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
-      if (mainAgentId) pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+        // Session is terminating — drop any waiting flag so the row lands in
+        // the Completed column without a leftover yellow overlay.
+        clearAwaitingInput(sessionId, mainAgentId, false, pendingBroadcasts);
 
-      // Clean up orphaned sessions: when a user runs /resume inside a session,
-      // the parent session never receives Stop or SessionEnd. Mark any active
-      // session that hasn't seen events for STALE_MINUTES as abandoned.
-      const staleSessions = stmts.findStaleSessions.all(sessionId, STALE_MINUTES);
-      const now = new Date().toISOString();
-      for (const stale of staleSessions) {
-        const staleAgents = stmts.listAgentsBySession.all(stale.id);
-        for (const agent of staleAgents) {
+        // SessionEnd is the definitive signal that the CLI process exited.
+        // Mark everything as completed.
+        const allAgents = stmts.listAgentsBySession.all(sessionId);
+        const now = new Date().toISOString();
+        for (const agent of allAgents) {
           if (agent.status !== "completed" && agent.status !== "error") {
             stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
             pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(agent.id)]);
           }
         }
-        stmts.updateSession.run(null, "abandoned", now, null, stale.id);
-        pendingBroadcasts.push(["session_updated", stmts.getSession.get(stale.id)]);
-      }
-      break;
-    }
-
-    case "SessionEnd": {
-      const endSession = stmts.getSession.get(sessionId);
-      const endLabel = endSession?.name || `Session ${sessionId.slice(0, 8)}`;
-      summary = `Session closed: ${endLabel}`;
-
-      // Session is terminating — drop any waiting flag so the row lands in
-      // the Completed column without a leftover yellow overlay.
-      clearAwaitingInput(sessionId, mainAgentId, false, pendingBroadcasts);
-
-      // SessionEnd is the definitive signal that the CLI process exited.
-      // Mark everything as completed.
-      const allAgents = stmts.listAgentsBySession.all(sessionId);
-      const now = new Date().toISOString();
-      for (const agent of allAgents) {
-        if (agent.status !== "completed" && agent.status !== "error") {
-          stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
-          pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(agent.id)]);
-        }
-      }
-      stmts.updateSession.run(null, "completed", now, null, sessionId);
-      pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
-
-      break;
-    }
-
-    case "UserPromptSubmit": {
-      // User just hit enter on a new prompt. This is the unambiguous
-      // "session resumed" signal — fires before Claude does anything,
-      // unlike PreToolUse which only fires for tool-using turns. Clear
-      // the Waiting flag and promote the main agent to Working so the
-      // dashboard reflects "Claude is now thinking on this" through the
-      // entire response, including text-only replies that emit no
-      // PreToolUse before Stop.
-      summary = "User prompt submitted";
-      clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
-      if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
-        stmts.updateAgent.run(null, "working", null, null, null, null, mainAgentId);
-        pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
-      }
-      break;
-    }
-
-    case "Notification": {
-      const msg = data.message || "Notification received";
-      // Tag compaction-related notifications so they show as Compaction events
-      if (/compact|compress|context.*(reduc|truncat|summar)/i.test(msg)) {
-        eventType = "Compaction";
-        summary = msg;
-      } else if (isWaitingForUserMessage(msg)) {
-        // Claude Code is blocked waiting for the user (permission prompt or
-        // explicit "waiting for input" notice). Stamp session + main agent
-        // so the dashboard can surface a yellow "Waiting" badge until the
-        // user responds — at which point the next PreToolUse/Stop clears it.
-        const ts = new Date().toISOString();
-        stmts.setSessionAwaitingInput.run(ts, sessionId);
+        stmts.updateSession.run(null, "completed", now, null, sessionId);
         pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
-        if (mainAgentId) {
-          stmts.setAgentAwaitingInput.run(ts, mainAgentId);
+
+        break;
+      }
+
+      case "UserPromptSubmit": {
+        // User just hit enter on a new prompt. This is the unambiguous
+        // "session resumed" signal — fires before Claude does anything,
+        // unlike PreToolUse which only fires for tool-using turns. Clear
+        // the Waiting flag and promote the main agent to Working so the
+        // dashboard reflects "Claude is now thinking on this" through the
+        // entire response, including text-only replies that emit no
+        // PreToolUse before Stop.
+        summary = "User prompt submitted";
+        clearAwaitingInput(sessionId, mainAgentId, true, pendingBroadcasts);
+        if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
+          stmts.updateAgent.run(null, "working", null, null, null, null, mainAgentId);
           pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
         }
-        summary = msg;
-      } else {
-        summary = msg;
+        break;
       }
-      break;
+
+      case "Notification": {
+        const msg = data.message || "Notification received";
+        // Tag compaction-related notifications so they show as Compaction events
+        if (/compact|compress|context.*(reduc|truncat|summar)/i.test(msg)) {
+          eventType = "Compaction";
+          summary = msg;
+        } else if (isWaitingForUserMessage(msg)) {
+          // Claude Code is blocked waiting for the user (permission prompt or
+          // explicit "waiting for input" notice). Stamp session + main agent
+          // so the dashboard can surface a yellow "Waiting" badge until the
+          // user responds — at which point the next PreToolUse/Stop clears it.
+          const ts = new Date().toISOString();
+          stmts.setSessionAwaitingInput.run(ts, sessionId);
+          pendingBroadcasts.push(["session_updated", stmts.getSession.get(sessionId)]);
+          if (mainAgentId) {
+            stmts.setAgentAwaitingInput.run(ts, mainAgentId);
+            pendingBroadcasts.push(["agent_updated", stmts.getAgent.get(mainAgentId)]);
+          }
+          summary = msg;
+        } else {
+          summary = msg;
+        }
+        break;
+      }
+
+      default: {
+        summary = `Event: ${hookType}`;
+      }
     }
 
-    default: {
-      summary = `Event: ${hookType}`;
-    }
-  }
-
-  // Apply pre-extracted transcript data (disk I/O happened in Phase 1).
-  // Only DB writes remain here — the heavy JSONL parsing is already done.
-  if (transcriptResult) {
+    // Apply pre-extracted transcript data (disk I/O happened in Phase 1).
+    // Only DB writes remain here — the heavy JSONL parsing is already done.
+    if (transcriptResult) {
       const { tokensByModel, compaction, latestModel } = transcriptResult;
 
       if (latestModel) {
@@ -655,14 +655,17 @@ const processEvent = (hookType, data) => {
               total_compactions: compaction.count,
             })
           );
-          pendingBroadcasts.push(["new_event", {
-            session_id: sessionId,
-            agent_id: compactId,
-            event_type: "Compaction",
-            tool_name: null,
-            summary: compactSummary,
-            created_at: ts,
-          }]);
+          pendingBroadcasts.push([
+            "new_event",
+            {
+              session_id: sessionId,
+              agent_id: compactId,
+              event_type: "Compaction",
+              tool_name: null,
+              summary: compactSummary,
+              created_at: ts,
+            },
+          ]);
         }
       }
 
@@ -713,14 +716,17 @@ const processEvent = (hookType, data) => {
             errSummary,
             JSON.stringify(apiErr)
           );
-          pendingBroadcasts.push(["new_event", {
-            session_id: sessionId,
-            agent_id: mainAgentId,
-            event_type: "APIError",
-            tool_name: null,
-            summary: errSummary,
-            created_at: apiErr.timestamp || new Date().toISOString(),
-          }]);
+          pendingBroadcasts.push([
+            "new_event",
+            {
+              session_id: sessionId,
+              agent_id: mainAgentId,
+              event_type: "APIError",
+              tool_name: null,
+              summary: errSummary,
+              created_at: apiErr.timestamp || new Date().toISOString(),
+            },
+          ]);
         }
       }
 
@@ -740,14 +746,17 @@ const processEvent = (hookType, data) => {
             tdSummary,
             JSON.stringify({ durationMs: td.durationMs })
           );
-          pendingBroadcasts.push(["new_event", {
-            session_id: sessionId,
-            agent_id: mainAgentId,
-            event_type: "TurnDuration",
-            tool_name: null,
-            summary: tdSummary,
-            created_at: tdTs,
-          }]);
+          pendingBroadcasts.push([
+            "new_event",
+            {
+              session_id: sessionId,
+              agent_id: mainAgentId,
+              event_type: "TurnDuration",
+              tool_name: null,
+              summary: tdSummary,
+              created_at: tdTs,
+            },
+          ]);
         }
       }
 
@@ -760,7 +769,8 @@ const processEvent = (hookType, data) => {
             meta.usage_extras = transcriptResult.usageExtras;
           }
           if (transcriptResult.thinkingBlockCount > 0) {
-            meta.thinking_blocks = (meta.thinking_blocks || 0) + transcriptResult.thinkingBlockCount;
+            meta.thinking_blocks =
+              (meta.thinking_blocks || 0) + transcriptResult.thinkingBlockCount;
           }
           if (transcriptResult.turnDurations) {
             meta.turn_count = (meta.turn_count || 0) + transcriptResult.turnDurations.length;
@@ -770,29 +780,29 @@ const processEvent = (hookType, data) => {
           stmts.updateSession.run(null, null, null, JSON.stringify(meta), sessionId);
         }
       }
-  }
+    }
 
-  // Bump session updated_at on every event
-  stmts.touchSession.run(sessionId);
+    // Bump session updated_at on every event
+    stmts.touchSession.run(sessionId);
 
-  stmts.insertEvent.run(
-    sessionId,
-    agentId,
-    eventType,
-    toolName,
-    summary,
-    JSON.stringify(data)
-    // created_at uses default
-  );
+    stmts.insertEvent.run(
+      sessionId,
+      agentId,
+      eventType,
+      toolName,
+      summary,
+      JSON.stringify(data)
+      // created_at uses default
+    );
 
-  return {
-    session_id: sessionId,
-    agent_id: agentId,
-    event_type: eventType,
-    tool_name: toolName,
-    summary,
-    created_at: new Date().toISOString(),
-  };
+    return {
+      session_id: sessionId,
+      agent_id: agentId,
+      event_type: eventType,
+      tool_name: toolName,
+      summary,
+      created_at: new Date().toISOString(),
+    };
   })();
 
   // ── Phase 4: Post-transaction broadcasts and cleanup (no lock held) ──

@@ -15,7 +15,25 @@
     "patternPlaceholder": "claude-opus-4%",
     "namePlaceholder": "Claude Opus 4",
     "validationRequired": "Muster und Anzeigename sind erforderlich",
-    "lastUpdated": "Zuletzt aktualisiert: "
+    "lastUpdated": "Zuletzt aktualisiert: ",
+    "tooltip": {
+      "title": "So funktioniert die Modell-Preisgestaltung",
+      "howItWorks": "So funktioniert es",
+      "howItWorksBody": "Wenn eine Session Token-Nutzung meldet, findet das Dashboard die erste Preisregel, deren Muster mit der Modell-ID übereinstimmt, und multipliziert (Eingabe-Token / 1M) und (Ausgabe-Token / 1M) mit den unten angegebenen Preisen zur Kostenberechnung. Regeln werden von oben nach unten ausgewertet — der erste Treffer gewinnt.",
+      "patternsTitle": "Mustersyntax",
+      "patternsBody": "Muster sind SQL-ähnliche Platzhalter. % ist ein Wildcard, der beliebige Zeichen matcht. Beispiel: claude-opus-4-7% matcht jede Modell-ID, die mit claude-opus-4-7 beginnt (z.B. claude-opus-4-7, claude-opus-4-7-20260101). claude-%-haiku matcht jede Haiku-Variante. Eine exakte ID wie claude-sonnet-4-6 matcht nur sich selbst.",
+      "manualUpdates": "Preise müssen manuell aktualisiert werden",
+      "manualUpdatesBody": "Anthropic veröffentlicht Preisänderungen auf ihrer Website — es gibt keinen Live-Feed. Wenn ein neues Modell erscheint oder sich Preise ändern, bearbeiten Sie die passende Regel (oder fügen Sie eine neue oberhalb der Auffangregel hinzu), damit neu erfasste Sessions korrekt bepreist werden. Bereits gespeicherte Sessions behalten den Preis, der zum Zeitpunkt der Erfassung angewendet wurde."
+    }
+  },
+  "claudeHome": {
+    "title": "CLAUDE_HOME",
+    "description": "Stammverzeichnis für Claude Code Session-Daten. Eine Änderung aktualisiert den Scan-Pfad für Transkripte und Importe sofort.",
+    "save": "Speichern",
+    "saving": "Speichern...",
+    "current": "Aktuell:",
+    "placeholder": "/pfad/zu/claude-home",
+    "saveFailed": "CLAUDE_HOME konnte nicht aktualisiert werden"
   },
   "hooks": {
     "title": "Hook-Konfiguration",
@@ -77,6 +95,8 @@
     "dropzoneSub": "Akzeptiert .jsonl, .meta.json, .zip, .tar, .tar.gz, .tgz, .gz",
     "filesSelected": "{{count}} Datei(en) ausgewählt",
     "clearSelection": "Löschen",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
     "progress": {
       "scan": "Verzeichnis wird gescannt...",
       "extract": "Archive werden extrahiert ({{processed}}/{{total}})...",
