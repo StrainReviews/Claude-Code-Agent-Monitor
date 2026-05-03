@@ -270,11 +270,11 @@ export function ImportHistory() {
                       >
                         {copied ? (
                           <>
-                            <Check className="w-3 h-3" /> Copied
+                            <Check className="w-3 h-3" /> {t("import.copied")}
                           </>
                         ) : (
                           <>
-                            <Copy className="w-3 h-3" /> Copy
+                            <Copy className="w-3 h-3" /> {t("import.copy")}
                           </>
                         )}
                       </button>

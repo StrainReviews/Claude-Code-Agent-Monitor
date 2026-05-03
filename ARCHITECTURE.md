@@ -22,7 +22,7 @@ Architectural overview and technical reference for the Agent Dashboard system, c
 ![better--sqlite3](https://img.shields.io/badge/better--sqlite3-11.7-003B57?style=flat-square&logo=sqlite&logoColor=white)
 ![React Router](https://img.shields.io/badge/React_Router-6.28-CA4245?style=flat-square&logo=reactrouter&logoColor=white)
 ![Lucide](https://img.shields.io/badge/Lucide_Icons-0.474-F56565?style=flat-square&logo=lucide&logoColor=white)
-![D3.js](https://img.shields.io/badge/D3.js-7-F9A03C?style=flat-square&logo=d3dotjs&logoColor=white)
+![D3.js](https://img.shields.io/badge/D3.js-7-F9A03C?style=flat-square&logo=d3&logoColor=white)
 ![PostCSS](https://img.shields.io/badge/PostCSS-8.5-DD3A0A?style=flat-square&logo=postcss&logoColor=white)
 ![Autoprefixer](https://img.shields.io/badge/Autoprefixer-10.4-DD3735?style=flat-square&logo=autoprefixer&logoColor=white)
 ![ESLint](https://img.shields.io/badge/ESLint-8.44-4B32C3?style=flat-square&logo=eslint&logoColor=white)
@@ -568,8 +568,8 @@ graph TD
 | `OrchestrationDAG` | Horizontal DAG of aggregate spawning patterns | Custom DAG layout, capped at top 7 subagent types with overflow node |
 | `ToolExecutionFlow` | Tool-to-tool transition Sankey diagram | `d3-sankey` |
 | `AgentCollaborationNetwork` | Agent pipeline graph with directed edges | `d3-force` with arrowheads and frequency labels |
-| `SubagentEffectiveness` | Scorecard grid with success rate rings | SVG arc rendering, day-of-week sparklines (Mon-Sun) with labels and tooltips (max 3 per row) |
-| `WorkflowPatterns` | Common orchestration sequences | Pattern detection from event data |
+| `SubagentEffectiveness` | Scorecard grid with success rate rings | SVG arc rendering, day-of-week sparklines (Mon-Sun). Per-bar tooltip is rendered through `createPortal` to `document.body` and positioned with viewport-clamped fixed coordinates so it escapes the card's `overflow:hidden` (and any `hover:translate` containing block) and is never clipped by the card edge — fixes Sun/Sat/Mon/Fri visibility |
+| `WorkflowPatterns` | Common orchestration sequences | Pattern detection from event data; clicking a row expands an inline detail panel with the full step chain, a stats grid, a deterministic narrative (shape buckets: solo / two-step / short / long; loop detection; frequency bucket: dominant > 50% / common > 25% / regular > 10% / niche), and a practical suggestion bucket. All copy is i18n-driven (`workflows.patterns.detail.*`) |
 | `ModelDelegationFlow` | Model routing through agent hierarchies | Hierarchical layout |
 | `ErrorPropagationMap` | Error clustering by hierarchy depth with API/session event errors | Pure React horizontal bars (replaced D3 bar chart), `eventErrors` support for API and session-level errors |
 | `ConcurrencyTimeline` | Swim-lane parallel agent execution | Time-scaled horizontal bars |
@@ -578,6 +578,26 @@ graph TD
 | `SessionDrillIn` | Per-session agent tree, tool timeline, events | Searchable dropdown with pagination, 3 tabs |
 
 **Cross-filtering:** Clicking nodes in the OrchestrationDAG filters data in other sections. **JSON export:** All workflow data can be exported as JSON from the page header.
+
+### Tooltip rendering strategy
+
+Every chart in the Workflows page follows a single, deterministic tooltip pattern designed to avoid the failure modes of naive React tooltips (laggy mousemove re-renders, sticky tooltips after D3 re-renders, clipping by parent `overflow:hidden`):
+
+- **One DOM-ref tooltip element per chart.** Each chart owns a single `<div ref={tipRef}>` that lives at the bottom of its render tree. D3 mouse handlers mutate that element's content imperatively (`textContent`, `appendChild`, inline `style`), so hovering never triggers a React re-render of the SVG.
+- **No `mousemove` follow.** The tooltip is positioned once on `mouseenter` from the hovered element's `getBoundingClientRect()`, with viewport clamping (8 px margin) and an automatic flip below → above when there's no room. Position never updates as the cursor moves, which removes per-pixel state churn.
+- **Container-level `mouseleave` fallback.** The chart's outer wrapper also calls `hideTip()` on leave. If a node-level handler is missed because D3 destroyed the element under the cursor on data refresh, the wrapper guarantees dismissal.
+- **Re-render safety.** Each chart's render effect ends with `hideTip()` so any stale tooltip from before a websocket-driven refresh is cleared the moment new data arrives.
+- **Fade transitions.** Tooltips stay in the DOM with `opacity: 0` and `pointer-events: none`, transitioning over 120 ms — show/hide feels smooth instead of flickering, and the element never intercepts pointer events that would prevent `mouseleave` from firing on the chart.
+- **Portal escape for clipped containers.** `SubagentEffectiveness` cards use `overflow:hidden` plus a hover `translate` (which becomes the fixed-position containing block), so its sparkline tooltip is rendered with `react-dom.createPortal(…, document.body)` rather than as a child of the card. Coordinates are computed from the bar's bounding rect and clamped to the viewport, so the tooltip is visible on every day of the week regardless of the card's screen position.
+
+### Structured info popovers
+
+Two classes of explanatory popover sit on top of the chart layer, both i18n-driven:
+
+- **Stat-card popovers** (`WorkflowStats.tsx`). Each of the six headline cards (Avg Agent Depth, Avg Subagents/Session, Agent Success Rate, Most Common Flow, Avg Compactions, Avg Duration) carries an info `i` icon at the bottom-right of the card. Hovering it opens a fixed-positioned, viewport-clamped popover with three sections: a value+label header, a "How it's calculated" paragraph (`workflows.stats.tooltip.calc.*`), and a "What this number means" paragraph that renders `"{value} {phrase} means {interpretation}"`. The interpretation comes from a deterministic, value-bucket function (`interp*`) — pure rule-based mapping with no AI generation, so the same input always yields the same explanation across all three locales.
+- **Chart-section popovers** (`Workflows.tsx → ChartInfoPopover`). The `i` icon next to each section title (1–11) opens a structured "What this shows / How to read it / Why it matters" popover sourced from `workflows.chartInfo.<sectionKey>.*`. Each of the 11 charts has its own three-paragraph entry, fully translated to en/vi/zh.
+
+Both popover classes use the same fixed-position + viewport-clamp algorithm: anchor right of the icon (or center for chart-section popovers), clamp to a viewport margin, and flip above when there isn't enough room below. They are never clipped by the sidebar, the right edge of the screen, or any ancestor's `overflow:hidden`.
 
 ---
 
@@ -596,6 +616,8 @@ flowchart LR
 ```
 
 See [docs/I18N.md](docs/I18N.md) for resource strategy, key naming conventions, localization tests, troubleshooting, and rollout checklists.
+
+**Coverage scope.** The translation layer extends end-to-end through the Workflows tooltip surfaces — `workflows.stats.tooltip.*` (calculation copy, deterministic value-bucket interpretations, metric phrases), `workflows.chartInfo.*` (per-chart "What / How to read / Why" entries for all 11 sections), `workflows.{orchestration,toolFlow,pipeline,modelDelegation,concurrency}.tooltip.*` (per-graph hover content), and `workflows.patterns.detail.*` (Workflow Patterns expansion narrative + suggestion buckets) — plus the Settings additions: `settings.pricing.tooltip.*` (pricing rule lookup, `%` wildcard syntax, manual-update reminder), `settings.claudeHome.*` (CLAUDE_HOME panel labels), and the full `settings.import.*` block (now translated to vi/zh, where the panel previously fell back to English).
 
 ---
 

@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import * as d3 from "d3";
 import type { ModelDelegationData } from "../../lib/types";
@@ -81,6 +81,9 @@ interface EdgeDatum {
   targetId: string;
 }
 
+type ShowTipFn = (node: NodeDatum, anchor: SVGGraphicsElement) => void;
+type HideTipFn = () => void;
+
 // ── D3 chart renderer ─────────────────────────────────────────────────────────
 
 const NODE_W = 160;
@@ -95,7 +98,9 @@ function renderFlow(
   mainNodes: NodeDatum[],
   subNodes: NodeDatum[],
   edges: EdgeDatum[],
-  t: (key: string, options?: Record<string, unknown>) => string
+  t: (key: string, options?: Record<string, unknown>) => string,
+  showTip: ShowTipFn,
+  hideTip: HideTipFn
 ): void {
   const allNodes = [...mainNodes, ...subNodes];
 
@@ -173,7 +178,14 @@ function renderFlow(
   // Draw nodes
   allNodes.forEach((node) => {
     const colors = FAMILY_COLORS[node.family];
-    const ng = g.append("g").attr("transform", `translate(${node.x},${node.y})`);
+    const ng = g
+      .append("g")
+      .attr("transform", `translate(${node.x},${node.y})`)
+      .style("cursor", "default")
+      .on("mouseenter", function () {
+        showTip(node, this as SVGGraphicsElement);
+      })
+      .on("mouseleave", () => hideTip());
 
     // Border glow rect (slightly larger)
     ng.append("rect")
@@ -259,8 +271,41 @@ export interface ModelDelegationFlowProps {
 export function ModelDelegationFlow({ data }: ModelDelegationFlowProps) {
   const { t } = useTranslation("workflows");
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
 
   const hasData = data.mainModels.length > 0 || data.subagentModels.length > 0;
+  const totalAgents = countTotalAgents(data);
+
+  const hideTip = useCallback(() => {
+    const tip = tipRef.current;
+    if (tip) tip.style.opacity = "0";
+  }, []);
+
+  const showTip = useCallback(
+    (node: NodeDatum, anchor: SVGGraphicsElement) => {
+      const tip = tipRef.current;
+      if (!tip) return;
+      buildModelDelegationTooltip(tip, node, totalAgents, t);
+      const r = anchor.getBoundingClientRect();
+      tip.style.opacity = "0";
+      tip.style.display = "block";
+      const tipW = tip.offsetWidth || 280;
+      const tipH = tip.offsetHeight || 160;
+
+      const margin = 8;
+      let left = r.left + r.width / 2 - tipW / 2;
+      if (left < margin) left = margin;
+      if (left + tipW > window.innerWidth - margin) left = window.innerWidth - tipW - margin;
+      let top = r.top - tipH - 10;
+      if (top < margin) top = r.bottom + 10;
+
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+      tip.style.opacity = "1";
+    },
+    [totalAgents, t]
+  );
 
   useEffect(() => {
     if (!svgRef.current || !hasData) return;
@@ -302,8 +347,9 @@ export function ModelDelegationFlow({ data }: ModelDelegationFlowProps) {
       });
     });
 
-    renderFlow(svgRef.current, mainNodes, subNodes, edges, t);
-  }, [data, hasData, t]);
+    renderFlow(svgRef.current, mainNodes, subNodes, edges, t, showTip, hideTip);
+    hideTip();
+  }, [data, hasData, t, showTip, hideTip]);
 
   if (!hasData) {
     return (
@@ -326,7 +372,7 @@ export function ModelDelegationFlow({ data }: ModelDelegationFlowProps) {
   }
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div ref={containerRef} className="w-full overflow-x-auto relative" onMouseLeave={hideTip}>
       <svg
         ref={svgRef}
         className="w-full"
@@ -334,6 +380,109 @@ export function ModelDelegationFlow({ data }: ModelDelegationFlowProps) {
         aria-label={t("modelDelegation.ariaLabel")}
         role="img"
       />
+      <div
+        ref={tipRef}
+        role="tooltip"
+        aria-hidden="true"
+        className="fixed z-50 px-3 py-2 rounded-lg shadow-2xl pointer-events-none"
+        style={{
+          display: "none",
+          opacity: 0,
+          left: 0,
+          top: 0,
+          background: "#12121f",
+          border: "1px solid #2a2a4a",
+          color: "#e2e8f0",
+          minWidth: 240,
+          maxWidth: 320,
+          transition: "opacity 120ms ease-out",
+        }}
+      />
     </div>
   );
+}
+
+// ── Tooltip helpers ───────────────────────────────────────────────────────────
+
+function countTotalAgents(data: ModelDelegationData): number {
+  const mainSum = data.mainModels.reduce((s, m) => s + m.agent_count, 0);
+  const subSum = data.subagentModels.reduce((s, m) => s + m.agent_count, 0);
+  return mainSum + subSum;
+}
+
+type TFn = (key: string, options?: Record<string, unknown>) => string;
+
+function describeFamily(family: NodeDatum["family"], t: TFn): string {
+  switch (family) {
+    case "opus":
+      return t("modelDelegation.tooltip.family.opus");
+    case "sonnet":
+      return t("modelDelegation.tooltip.family.sonnet");
+    case "haiku":
+      return t("modelDelegation.tooltip.family.haiku");
+    case "other":
+      return t("modelDelegation.tooltip.family.other");
+  }
+}
+
+function buildModelDelegationTooltip(
+  el: HTMLDivElement,
+  node: NodeDatum,
+  totalAgents: number,
+  t: TFn
+) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+
+  const sharePct = totalAgents > 0 ? `${((node.agentCount / totalAgents) * 100).toFixed(1)}%` : "—";
+  const sideLabel =
+    node.side === "main"
+      ? t("modelDelegation.tooltip.mainModel")
+      : t("modelDelegation.tooltip.subagentModel");
+
+  const title = document.createElement("p");
+  title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0";
+  title.textContent = node.label;
+  el.appendChild(title);
+
+  const subtitle = document.createElement("p");
+  subtitle.style.cssText =
+    "font-size:10px;color:#64748b;margin:2px 0 8px;text-transform:uppercase;letter-spacing:0.05em";
+  subtitle.textContent = `${sideLabel} · ${node.family}`;
+  el.appendChild(subtitle);
+
+  const addRow = (label: string, value: string) => {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;justify-content:space-between;gap:16px;font-size:11px;line-height:1.6";
+    const lbl = document.createElement("span");
+    lbl.style.color = "#64748b";
+    lbl.textContent = label;
+    const val = document.createElement("span");
+    val.style.cssText = "color:#cbd5e1;font-weight:500;font-variant-numeric:tabular-nums";
+    val.textContent = value;
+    row.appendChild(lbl);
+    row.appendChild(val);
+    el.appendChild(row);
+  };
+
+  addRow(t("modelDelegation.tooltip.agentRuns"), node.agentCount.toLocaleString());
+  addRow(t("modelDelegation.tooltip.shareOfAll"), sharePct);
+  if (node.side === "main") {
+    addRow(t("modelDelegation.tooltip.sessionsOnModel"), String(node.sessionCount));
+  }
+  addRow(t("modelDelegation.tooltip.totalTokens"), node.totalTokens.toLocaleString());
+
+  const desc = document.createElement("p");
+  desc.style.cssText =
+    "font-size:11px;color:#94a3b8;line-height:1.45;border-top:1px solid #2a2a4a;padding-top:8px;margin:8px 0 0";
+  desc.textContent = describeFamily(node.family, t);
+  el.appendChild(desc);
+
+  const hint = document.createElement("p");
+  hint.style.cssText = "font-size:11px;color:#64748b;line-height:1.45;margin:6px 0 0";
+  hint.textContent =
+    node.side === "main"
+      ? t("modelDelegation.tooltip.lines.main")
+      : t("modelDelegation.tooltip.lines.sub");
+  el.appendChild(hint);
 }

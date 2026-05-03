@@ -15,7 +15,25 @@
     "patternPlaceholder": "claude-opus-4%",
     "namePlaceholder": "Claude Opus 4",
     "validationRequired": "模式和显示名称为必填项",
-    "lastUpdated": "最后更新："
+    "lastUpdated": "最后更新：",
+    "tooltip": {
+      "title": "模型定价的工作原理",
+      "howItWorks": "工作原理",
+      "howItWorksBody": "当一个会话上报使用量时，仪表盘会查找第一个模式与 model id 匹配的定价规则，将（输入 token / 100 万）和（输出 token / 100 万）分别乘以下方的费率以计算费用。规则按从上到下的顺序匹配——首条匹配的规则生效。",
+      "patternsTitle": "模式语法",
+      "patternsBody": "模式采用 SQL 风格的通配。% 可匹配任意字符。例如：claude-opus-4-7% 匹配以 claude-opus-4-7 开头的所有 model id（如 claude-opus-4-7、claude-opus-4-7-20260101）。claude-%-haiku 匹配任意 haiku 变体。像 claude-sonnet-4-6 这样的精确 id 只匹配自身。",
+      "manualUpdates": "你必须手动更新价格",
+      "manualUpdatesBody": "Anthropic 在其官网公布价格变动——并没有实时数据源。当新模型发布或费率调整时，请编辑对应的规则（或在通用规则之上添加新规则），以便后续记录的会话能正确计费。已经存储的会话仍保留入库时使用的价格。"
+    }
+  },
+  "claudeHome": {
+    "title": "CLAUDE_HOME",
+    "description": "Claude Code 会话数据的根目录。修改此项会立即更新 transcript 与导入的扫描路径。",
+    "save": "保存",
+    "saving": "保存中...",
+    "current": "当前：",
+    "placeholder": "/path/to/claude-home",
+    "saveFailed": "更新 CLAUDE_HOME 失败"
   },
   "hooks": {
     "title": "钩子配置",
@@ -42,6 +60,67 @@
     "testBody": "通知功能正常！",
     "sendTest": "发送测试通知",
     "disabledInfo": "通知已禁用 - 启用以获取会话事件提醒"
+  },
+  "import": {
+    "title": "导入历史",
+    "description": "将已有的 Claude Code 会话导入仪表盘。Token 数、按模型计费、上下文压缩、Subagent、工具调用与各轮耗时都会从原始 JSONL transcript 重新构建——与实时会话的采集方式完全一致。",
+    "accuracyNote": "重复导入是安全的。会话按 session ID 去重，压缩基线确保 Token 总数不会重复计算。",
+    "supportedFiles": "支持的输入：.jsonl, .meta.json, .zip, .tar, .tar.gz, .tgz, .gz",
+    "instructions": "如何收集你的历史",
+    "stepLocate": "1. 找到你的 Claude Code 历史",
+    "stepLocateBody": "每个 Claude Code 会话都以 JSONL transcript 的形式保存在 projects 文件夹下。每个子目录以会话启动时的工作目录命名（斜杠替换为短横线）。",
+    "stepArchive": "2. 打包以便迁移（可选）",
+    "stepArchiveBody": "若需从其他机器迁移历史，请先压缩整个文件夹，再通过任意方式（AirDrop、scp、U 盘、云存储）拷贝过来：",
+    "stepChoose": "3. 在下方选择导入模式",
+    "stepChooseBody": "重新扫描默认位置、指向你提取历史所在的任意文件夹，或直接上传文件 / 归档。",
+    "stepVerify": "4. 校验 Token 与费用",
+    "stepVerifyBody": "导入完成后打开 Analytics → Cost 核对明细。同一会话再次导入始终安全。",
+    "defaultLocation": "本机默认位置",
+    "locationFound": "已找到文件夹",
+    "locationMissing": "未找到文件夹",
+    "projectsLabel": "项目",
+    "jsonlLabel": "个 JSONL 文件",
+    "modeRescan": "重新扫描默认文件夹",
+    "modeRescanDesc": "重新读取 ~/.claude/projects 并导入新增内容。",
+    "modeFolder": "扫描文件夹",
+    "modeFolderDesc": "扫描本机任意目录中的 JSONL transcript（递归子目录）。",
+    "modeUpload": "上传文件",
+    "modeUploadDesc": "将 JSONL 文件或归档（.zip / .tar.gz）直接拖拽到浏览器中。",
+    "folderPlaceholder": "/绝对路径/到/claude-history",
+    "folderHelper": "绝对路径。会展开 ~。子目录会被递归扫描。",
+    "runRescan": "立即重新扫描",
+    "runScan": "扫描文件夹",
+    "runUpload": "上传并导入",
+    "dropzoneHint": "拖拽文件到这里，或点击选择",
+    "dropzoneSub": "支持 .jsonl, .meta.json, .zip, .tar, .tar.gz, .tgz, .gz",
+    "filesSelected": "已选择 {{count}} 个文件",
+    "clearSelection": "清空",
+    "copy": "复制",
+    "copied": "已复制",
+    "progress": {
+      "scan": "正在扫描目录...",
+      "extract": "正在解压（{{processed}}/{{total}}）...",
+      "parse": "正在解析 transcript（{{processed}}/{{total}}）...",
+      "complete": "导入完成",
+      "error": "导入失败"
+    },
+    "result": {
+      "imported": "已导入：{{count}}",
+      "backfilled": "已补全已有会话：{{count}}",
+      "skipped": "已是最新：{{count}}",
+      "errors": "错误：{{count}}",
+      "filesScanned": "已扫描文件数：{{count}}",
+      "title": "上次导入结果"
+    },
+    "errors": {
+      "noFiles": "未选择任何文件",
+      "noJsonl": "上传内容中未找到 .jsonl 文件",
+      "pathRequired": "请填写路径",
+      "pathInvalid": "路径必须为绝对路径",
+      "pathNotFound": "路径不存在",
+      "pathNotDir": "路径不是目录",
+      "generic": "导入失败：{{message}}"
+    }
   },
   "data": {
     "title": "数据管理",

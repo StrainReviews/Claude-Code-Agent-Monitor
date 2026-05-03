@@ -43,11 +43,7 @@ interface DAGEdge {
   targetNode?: DAGNode;
 }
 
-interface TooltipState {
-  x: number;
-  y: number;
-  node: DAGNode;
-}
+type TFn = (key: string, options?: Record<string, unknown>) => string;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -398,8 +394,49 @@ function buildGraph(
 export function OrchestrationDAG({ data, onNodeClick, selectedNode }: OrchestrationDAGProps) {
   const { t } = useTranslation("workflows");
   const svgRef = useRef<SVGSVGElement>(null);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
+
+  // Imperative tooltip helpers — bypass React entirely so hover never re-renders the chart.
+  const hideTip = useCallback(() => {
+    const tip = tipRef.current;
+    if (tip) tip.style.opacity = "0";
+  }, []);
+
+  const showTipForNode = useCallback(
+    (node: DAGNode, anchorEl: SVGGElement) => {
+      const tip = tipRef.current;
+      const container = containerRef.current;
+      if (!tip || !container) return;
+
+      // Build content
+      buildDAGTooltipContent(tip, node, t);
+
+      // Anchor the tooltip above the hovered node, clamped to the viewport.
+      const nodeRect = anchorEl.getBoundingClientRect();
+      // Show first so we can measure
+      tip.style.opacity = "0";
+      tip.style.display = "block";
+      const tipW = tip.offsetWidth || 260;
+      const tipH = tip.offsetHeight || 160;
+
+      const margin = 8;
+      // Default: center horizontally above the node
+      let left = nodeRect.left + nodeRect.width / 2 - tipW / 2;
+      // Clamp to viewport horizontally
+      if (left < margin) left = margin;
+      if (left + tipW > window.innerWidth - margin) left = window.innerWidth - tipW - margin;
+      // Vertical: prefer above the node, flip below if no space
+      let top = nodeRect.top - tipH - 10;
+      if (top < margin) top = nodeRect.bottom + 10;
+
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+      tip.style.opacity = "1";
+    },
+    [t]
+  );
 
   const layerLabels = [
     t("orchestration.layers.origin"),
@@ -596,16 +633,13 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
         handleNodeClick(d);
       })
       .on("mouseenter", (event: MouseEvent, d: DAGNode) => {
-        setTooltip({ x: event.clientX, y: event.clientY, node: d });
+        showTipForNode(d, event.currentTarget as SVGGElement);
         d3.select(event.currentTarget as SVGGElement)
           .select("rect.node-bg")
           .attr("stroke-opacity", 0.9);
       })
-      .on("mousemove", (event: MouseEvent) => {
-        setTooltip((prev) => prev && { ...prev, x: event.clientX, y: event.clientY });
-      })
       .on("mouseleave", (event: MouseEvent, d: DAGNode) => {
-        setTooltip(null);
+        hideTip();
         const opacity = selectedNode === d.id ? 0.9 : 0.4;
         d3.select(event.currentTarget as SVGGElement)
           .select("rect.node-bg")
@@ -692,7 +726,10 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
       .attr("font-weight", "600")
       .attr("font-family", "Inter, sans-serif")
       .text((d) => fmtCount(d.count));
-  }, [graph, selectedNode, handleNodeClick, layerLabels]);
+
+    // Hide any stale tooltip when the chart re-renders so it cannot get stuck.
+    hideTip();
+  }, [graph, selectedNode, handleNodeClick, layerLabels, showTipForNode, hideTip]);
 
   if (isEmpty(data)) {
     return (
@@ -720,14 +757,16 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
 
   return (
     <div
+      ref={containerRef}
       className="relative w-full"
       style={{
         opacity: mounted ? 1 : 0,
         transition: "opacity 0.4s ease-out",
       }}
+      onMouseLeave={hideTip}
     >
       {/* SVG DAG */}
-      <div className="w-full overflow-x-auto">
+      <div className="w-full overflow-x-auto" onMouseLeave={hideTip}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${graph.svgWidth} ${graph.svgHeight}`}
@@ -766,74 +805,166 @@ export function OrchestrationDAG({ data, onNodeClick, selectedNode }: Orchestrat
         </div>
       </div>
 
-      {/* Tooltip — rendered in React DOM, not D3 */}
-      {tooltip && <DAGTooltip tooltip={tooltip} />}
+      {/* Tooltip — fixed-positioned, DOM-mutated to avoid React re-renders on hover */}
+      <div
+        ref={tipRef}
+        role="tooltip"
+        aria-hidden="true"
+        className="fixed z-50 px-3 py-2 bg-[#12121f] border border-[#2a2a4a] rounded-lg shadow-2xl pointer-events-none"
+        style={{
+          display: "none",
+          opacity: 0,
+          left: 0,
+          top: 0,
+          minWidth: 220,
+          maxWidth: 300,
+          transition: "opacity 120ms ease-out",
+        }}
+      />
     </div>
   );
 }
 
-// ── Tooltip component ─────────────────────────────────────────────────────────
+// ── Tooltip DOM builder ───────────────────────────────────────────────────────
+// Builds the tooltip's content imperatively to avoid React state on hover.
 
-function DAGTooltip({ tooltip }: { tooltip: TooltipState }) {
-  const { t } = useTranslation("workflows");
-  const { x, y, node } = tooltip;
-  const nearRight = typeof window !== "undefined" && x > window.innerWidth - 220;
+function buildDAGTooltipContent(el: HTMLDivElement, node: DAGNode, t: TFn) {
+  // Clear existing children
+  while (el.firstChild) el.removeChild(el.firstChild);
 
-  const lines: Array<{ label: string; value: string }> = [
-    { label: t("orchestration.count"), value: String(node.count) },
-  ];
+  const meta = describeNode(node, t);
+
+  const title = document.createElement("p");
+  title.className = "text-xs font-semibold text-gray-200";
+  title.textContent = node.label;
+  el.appendChild(title);
+
+  const subtitle = document.createElement("p");
+  subtitle.className = "text-[10px] uppercase tracking-wider text-gray-600 mt-0.5 mb-2";
+  subtitle.textContent = meta.layer;
+  el.appendChild(subtitle);
+
+  // Stat rows
+  const rows: Array<[string, string]> = [[t("orchestration.count"), String(node.count)]];
 
   if (node.kind === "subagent" && node.meta) {
     const { completed = 0, errors = 0 } = node.meta;
-    lines.push({
-      label: t("common:status.completed", { defaultValue: "Completed" }),
-      value: String(completed),
-    });
-    lines.push({
-      label: t("common:status.error", { defaultValue: "Errors" }),
-      value: String(errors),
-    });
-    lines.push({
-      label: t("effectiveness.success", { defaultValue: "Success rate" }),
-      value: successRate(completed, node.count),
-    });
+    const abandoned = Math.max(0, node.count - completed - errors);
+    rows.push([t("common:status.completed", { defaultValue: "Completed" }), String(completed)]);
+    rows.push([t("common:status.error", { defaultValue: "Errors" }), String(errors)]);
+    if (abandoned > 0) {
+      rows.push([t("common:status.abandoned", { defaultValue: "Abandoned" }), String(abandoned)]);
+    }
+    rows.push([
+      t("effectiveness.success", { defaultValue: "Success rate" }),
+      successRate(completed, node.count),
+    ]);
   }
 
   if (node.kind === "nested" && node.meta?.subagent_type) {
-    lines.push({
-      label: t("common:type"),
-      value: node.meta.subagent_type,
-    });
+    rows.push([t("common:type"), node.meta.subagent_type]);
   }
 
   if (node.kind === "outcome" && node.meta?.status) {
-    lines.push({
-      label: t("common:statusLabel"),
-      value: t(`common:status.${node.meta.status}`, { defaultValue: node.meta.status }),
-    });
+    rows.push([
+      t("common:statusLabel"),
+      t(`common:status.${node.meta.status}`, { defaultValue: node.meta.status }),
+    ]);
   }
 
-  return (
-    <div
-      className="fixed z-50 px-3 py-2 bg-[#12121f] border border-[#2a2a4a] rounded-lg shadow-2xl pointer-events-none"
-      style={{
-        left: nearRight ? x - 16 : x + 16,
-        top: y - 8,
-        transform: nearRight ? "translateX(-100%)" : undefined,
-        minWidth: 160,
-      }}
-    >
-      <p className="text-xs font-semibold text-gray-200 mb-1.5">{node.label}</p>
-      <div className="space-y-0.5">
-        {lines.map((line) => (
-          <div key={line.label} className="flex items-center justify-between gap-4 text-[11px]">
-            <span className="text-gray-500">{line.label}</span>
-            <span className="text-gray-300 font-medium tabular-nums">{line.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  const rowList = document.createElement("div");
+  rowList.style.cssText = "margin-bottom:8px";
+  for (const [label, value] of rows) {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;justify-content:space-between;gap:16px;font-size:11px;line-height:1.6";
+    const lbl = document.createElement("span");
+    lbl.style.color = "#64748b";
+    lbl.textContent = label;
+    const val = document.createElement("span");
+    val.style.cssText = "color:#cbd5e1;font-weight:500;font-variant-numeric:tabular-nums";
+    val.textContent = value;
+    row.appendChild(lbl);
+    row.appendChild(val);
+    rowList.appendChild(row);
+  }
+  el.appendChild(rowList);
+
+  const desc = document.createElement("p");
+  desc.style.cssText =
+    "font-size:11px;color:#94a3b8;line-height:1.45;border-top:1px solid #2a2a4a;padding-top:8px;margin:0";
+  desc.textContent = meta.description;
+  el.appendChild(desc);
+
+  const hint = document.createElement("p");
+  hint.style.cssText = "font-size:10px;color:#64748b;line-height:1.45;margin:6px 0 0";
+  hint.textContent = t("orchestration.tooltip.tipClickToFilter");
+  el.appendChild(hint);
+}
+
+/**
+ * Layer-aware description for a DAG node. Pure function of the node — no I/O,
+ * no randomness, deterministic across renders. Returns translated strings via
+ * the supplied i18n function so all locales render correctly.
+ */
+function describeNode(node: DAGNode, t: TFn): { layer: string; description: string } {
+  switch (node.kind) {
+    case "session":
+      return {
+        layer: t("orchestration.tooltip.layer.session"),
+        description: t("orchestration.tooltip.desc.session"),
+      };
+    case "main":
+      return {
+        layer: t("orchestration.tooltip.layer.main"),
+        description: t("orchestration.tooltip.desc.main"),
+      };
+    case "subagent": {
+      if (node.id === "subagent:__overflow") {
+        return {
+          layer: t("orchestration.tooltip.layer.subagentOverflow"),
+          description: t("orchestration.tooltip.desc.subagentOverflow"),
+        };
+      }
+      const errors = node.meta?.errors ?? 0;
+      const completed = node.meta?.completed ?? 0;
+      const total = node.count;
+      let trailer = "";
+      if (total > 0) {
+        if (errors === 0 && completed === total) {
+          trailer = t("orchestration.tooltip.desc.subagentClean");
+        } else if (errors > 0 && completed === 0) {
+          trailer = t("orchestration.tooltip.desc.subagentAllError");
+        } else if (errors > 0) {
+          trailer = t("orchestration.tooltip.desc.subagentSomeErrors", { count: errors });
+        }
+      }
+      return {
+        layer: t("orchestration.tooltip.layer.subagent"),
+        description: t("orchestration.tooltip.desc.subagent") + trailer,
+      };
+    }
+    case "nested":
+      return {
+        layer: t("orchestration.tooltip.layer.nested"),
+        description: t("orchestration.tooltip.desc.nested"),
+      };
+    case "outcome": {
+      const status = node.meta?.status ?? "completed";
+      const descKey =
+        status === "completed"
+          ? "orchestration.tooltip.desc.outcomeCompleted"
+          : status === "error"
+            ? "orchestration.tooltip.desc.outcomeError"
+            : status === "abandoned"
+              ? "orchestration.tooltip.desc.outcomeAbandoned"
+              : "orchestration.tooltip.desc.outcomeFallback";
+      return {
+        layer: t("orchestration.tooltip.layer.outcome"),
+        description: t(descKey),
+      };
+    }
+  }
 }
 
 // ── Utility functions ─────────────────────────────────────────────────────────

@@ -55,11 +55,23 @@ type SNode = SankeyNode<NodeExtra, LinkExtra>;
 type SLink = SankeyLink<NodeExtra, LinkExtra>;
 type SGraph = SankeyGraph<NodeExtra, LinkExtra>;
 
-interface TooltipState {
-  x: number;
-  y: number;
-  content: string;
+interface NodeTipPayload {
+  kind: "node";
+  rawName: string;
+  count: number;
+  shareOfTotal: number;
 }
+
+interface LinkTipPayload {
+  kind: "link";
+  source: string;
+  target: string;
+  count: number;
+  shareOfSource: number;
+  shareOfTarget: number;
+}
+
+type TipPayload = NodeTipPayload | LinkTipPayload;
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -132,7 +144,7 @@ export function ToolExecutionFlow({
   const { t } = useTranslation("workflows");
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 700, height: 420 });
 
   // Track container width for responsiveness
@@ -159,6 +171,11 @@ export function ToolExecutionFlow({
   const isEmpty = data.transitions.length === 0 || data.transitions.every((t) => t.value === 0);
 
   const totalUsage = data.toolCounts.reduce((s, c) => s + c.count, 0);
+
+  const hideTip = useCallback(() => {
+    const tip = tipRef.current;
+    if (tip) tip.style.opacity = "0";
+  }, []);
   const localizeToolLabel = useCallback(
     (name: string) => {
       const lower = name.toLowerCase();
@@ -177,6 +194,34 @@ export function ToolExecutionFlow({
       }
     },
     [t]
+  );
+
+  const showTip = useCallback(
+    (payload: TipPayload, anchorEl: SVGGraphicsElement) => {
+      const tip = tipRef.current;
+      if (!tip) return;
+      buildToolFlowTooltip(tip, payload, localizeToolLabel, t);
+
+      // Position
+      const r = anchorEl.getBoundingClientRect();
+      tip.style.opacity = "0";
+      tip.style.display = "block";
+      const tipW = tip.offsetWidth || 280;
+      const tipH = tip.offsetHeight || 160;
+
+      const margin = 8;
+      let left = r.left + r.width / 2 - tipW / 2;
+      if (left < margin) left = margin;
+      if (left + tipW > window.innerWidth - margin) left = window.innerWidth - tipW - margin;
+
+      let top = r.top - tipH - 10;
+      if (top < margin) top = r.bottom + 10;
+
+      tip.style.left = `${left}px`;
+      tip.style.top = `${top}px`;
+      tip.style.opacity = "1";
+    },
+    [localizeToolLabel, t]
   );
 
   useEffect(() => {
@@ -269,6 +314,17 @@ export function ToolExecutionFlow({
 
     const linkGroup = root.append("g").attr("class", "links");
 
+    // Pre-compute outgoing/incoming totals per node so we can show share-of-source
+    // and share-of-target percentages in the tooltip.
+    const outgoingByNode = new Map<string, number>();
+    const incomingByNode = new Map<string, number>();
+    for (const link of graph.links as SLink[]) {
+      const src = (link.source as SNode).id;
+      const tgt = (link.target as SNode).id;
+      outgoingByNode.set(src, (outgoingByNode.get(src) ?? 0) + (link.value ?? 0));
+      incomingByNode.set(tgt, (incomingByNode.get(tgt) ?? 0) + (link.value ?? 0));
+    }
+
     linkGroup
       .selectAll<SVGPathElement, SLink>("path")
       .data(graph.links as SLink[])
@@ -282,23 +338,27 @@ export function ToolExecutionFlow({
       .attr("fill", "none")
       .attr("stroke-opacity", LINK_OPACITY_DEFAULT)
       .style("cursor", "default")
-      .on("mouseenter", function (event: MouseEvent, d: SLink) {
+      .on("mouseenter", function (_event: MouseEvent, d: SLink) {
         d3.select(this).attr("stroke-opacity", LINK_OPACITY_HOVER);
-        const srcName = localizeToolLabel(toolLabel((d.source as SNode).id));
-        const tgtName = localizeToolLabel(toolLabel((d.target as SNode).id));
-        const count = d.value;
-        setTooltip({
-          x: event.clientX,
-          y: event.clientY,
-          content: `${srcName} \u2192 ${tgtName}: ${t("toolFlow.transitionCount", { count })}`,
-        });
-      })
-      .on("mousemove", function (event: MouseEvent) {
-        setTooltip((prev) => (prev ? { ...prev, x: event.clientX, y: event.clientY } : prev));
+        const src = (d.source as SNode).id;
+        const tgt = (d.target as SNode).id;
+        const srcOut = outgoingByNode.get(src) ?? 0;
+        const tgtIn = incomingByNode.get(tgt) ?? 0;
+        showTip(
+          {
+            kind: "link",
+            source: toolLabel(src),
+            target: toolLabel(tgt),
+            count: d.value ?? 0,
+            shareOfSource: srcOut > 0 ? (d.value ?? 0) / srcOut : 0,
+            shareOfTarget: tgtIn > 0 ? (d.value ?? 0) / tgtIn : 0,
+          },
+          this as SVGGraphicsElement
+        );
       })
       .on("mouseleave", function () {
         d3.select(this).attr("stroke-opacity", LINK_OPACITY_DEFAULT);
-        setTooltip(null);
+        hideTip();
       });
 
     // ── Nodes ──────────────────────────────────────────────────────────────
@@ -319,7 +379,25 @@ export function ToolExecutionFlow({
       .attr("ry", 2)
       .attr("fill", (d) => toolColor(d.id))
       .attr("stroke-width", 0)
-      .attr("fill-opacity", 0.9);
+      .attr("fill-opacity", 0.9)
+      .style("cursor", "default")
+      .on("mouseenter", function (_event: MouseEvent, d: SNode) {
+        const rawName = toolLabel(d.id);
+        const countEntry = data.toolCounts.find((c) => c.tool_name === rawName);
+        const count = countEntry?.count ?? 0;
+        showTip(
+          {
+            kind: "node",
+            rawName,
+            count,
+            shareOfTotal: totalUsage > 0 ? count / totalUsage : 0,
+          },
+          this as SVGGraphicsElement
+        );
+      })
+      .on("mouseleave", function () {
+        hideTip();
+      });
 
     // ── Node labels ────────────────────────────────────────────────────────
     nodeGs.each(function (d: SNode) {
@@ -363,7 +441,10 @@ export function ToolExecutionFlow({
         text.append("tspan").text(pct).style("fill", "#64748b").style("font-size", "11px");
       }
     });
-  }, [data, dimensions, isEmpty, localizeToolLabel, t, totalUsage]);
+
+    // Hide any stale tooltip when the chart re-renders so it cannot get stuck.
+    hideTip();
+  }, [data, dimensions, isEmpty, localizeToolLabel, t, totalUsage, showTip, hideTip]);
 
   // Adapt SVG height based on node count so tall graphs don't crush
   useEffect(() => {
@@ -376,48 +457,140 @@ export function ToolExecutionFlow({
   }, [data.transitions]);
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative" ref={containerRef} onMouseLeave={hideTip}>
       {isEmpty ? (
         <div className="flex items-center justify-center" style={{ height: dimensions.height }}>
           <span className="text-sm text-gray-500">{t("toolFlow.noData")}</span>
         </div>
       ) : (
-        <>
-          <svg
-            ref={svgRef}
-            width={dimensions.width}
-            height={dimensions.height}
-            viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
-            preserveAspectRatio="xMidYMid meet"
-            style={{ display: "block", width: "100%", height: dimensions.height }}
-          />
-          {tooltip && <Tooltip x={tooltip.x} y={tooltip.y} content={tooltip.content} />}
-        </>
+        <svg
+          ref={svgRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ display: "block", width: "100%", height: dimensions.height }}
+          onMouseLeave={hideTip}
+        />
       )}
       <Legend />
+      <div
+        ref={tipRef}
+        role="tooltip"
+        aria-hidden="true"
+        className="fixed z-50 px-3 py-2 rounded-lg shadow-2xl pointer-events-none"
+        style={{
+          display: "none",
+          opacity: 0,
+          left: 0,
+          top: 0,
+          background: "#12121f",
+          border: "1px solid #2a2a4a",
+          color: "#e2e8f0",
+          minWidth: 240,
+          maxWidth: 320,
+          transition: "opacity 120ms ease-out",
+        }}
+      />
     </div>
   );
 }
 
-// ── Tooltip ───────────────────────────────────────────────────────────────────
+// ── Tooltip DOM builder ───────────────────────────────────────────────────────
 
-function Tooltip({ x, y, content }: { x: number; y: number; content: string }) {
-  const nearRight = typeof window !== "undefined" && x > window.innerWidth - 220;
-  return (
-    <div
-      className="fixed z-50 px-2.5 py-1.5 text-xs rounded shadow-xl pointer-events-none whitespace-nowrap"
-      style={{
-        left: nearRight ? x - 12 : x + 12,
-        top: y - 10,
-        transform: nearRight ? "translateX(-100%)" : undefined,
-        background: "#12121f",
-        border: "1px solid #2a2a4a",
-        color: "#e2e8f0",
-      }}
-    >
-      {content}
-    </div>
+function fmtPct(v: number): string {
+  if (v <= 0) return "—";
+  if (v < 0.01) return "<1%";
+  return `${(v * 100).toFixed(1)}%`;
+}
+
+function appendTipRow(parent: HTMLElement, label: string, value: string) {
+  const row = document.createElement("div");
+  row.style.cssText =
+    "display:flex;justify-content:space-between;gap:16px;font-size:11px;line-height:1.6";
+  const lbl = document.createElement("span");
+  lbl.style.color = "#64748b";
+  lbl.textContent = label;
+  const val = document.createElement("span");
+  val.style.cssText = "color:#cbd5e1;font-weight:500;font-variant-numeric:tabular-nums";
+  val.textContent = value;
+  row.appendChild(lbl);
+  row.appendChild(val);
+  parent.appendChild(row);
+}
+
+type TFn = (key: string, options?: Record<string, unknown>) => string;
+
+function buildToolFlowTooltip(
+  el: HTMLDivElement,
+  payload: TipPayload,
+  localizeToolLabel: (name: string) => string,
+  t: TFn
+) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+
+  if (payload.kind === "node") {
+    const name = localizeToolLabel(payload.rawName);
+
+    const title = document.createElement("p");
+    title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0";
+    title.textContent = name;
+    el.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    subtitle.style.cssText =
+      "font-size:10px;color:#64748b;margin:2px 0 8px;text-transform:uppercase;letter-spacing:0.05em";
+    subtitle.textContent = t("toolFlow.tooltip.node");
+    el.appendChild(subtitle);
+
+    appendTipRow(el, t("toolFlow.tooltip.totalCalls"), payload.count.toLocaleString());
+    appendTipRow(el, t("toolFlow.tooltip.shareOfAll"), fmtPct(payload.shareOfTotal));
+
+    const desc = document.createElement("p");
+    desc.style.cssText =
+      "font-size:11px;color:#94a3b8;line-height:1.45;border-top:1px solid #2a2a4a;padding-top:8px;margin:8px 0 0";
+    desc.textContent = t("toolFlow.tooltip.nodeDescFmt", { name });
+    el.appendChild(desc);
+    return;
+  }
+
+  // Link tooltip
+  const src = localizeToolLabel(payload.source);
+  const tgt = localizeToolLabel(payload.target);
+
+  const title = document.createElement("p");
+  title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0";
+  const tspanArrow = document.createElement("span");
+  tspanArrow.style.color = "#64748b";
+  tspanArrow.textContent = " → ";
+  title.appendChild(document.createTextNode(src));
+  title.appendChild(tspanArrow);
+  title.appendChild(document.createTextNode(tgt));
+  el.appendChild(title);
+
+  const subtitle = document.createElement("p");
+  subtitle.style.cssText =
+    "font-size:10px;color:#64748b;margin:2px 0 8px;text-transform:uppercase;letter-spacing:0.05em";
+  subtitle.textContent = t("toolFlow.tooltip.link");
+  el.appendChild(subtitle);
+
+  appendTipRow(el, t("toolFlow.tooltip.transitionsObserved"), payload.count.toLocaleString());
+  appendTipRow(
+    el,
+    t("toolFlow.tooltip.shareOfSourceFmt", { source: src }),
+    fmtPct(payload.shareOfSource)
   );
+  appendTipRow(
+    el,
+    t("toolFlow.tooltip.shareOfTargetFmt", { target: tgt }),
+    fmtPct(payload.shareOfTarget)
+  );
+
+  const desc = document.createElement("p");
+  desc.style.cssText =
+    "font-size:11px;color:#94a3b8;line-height:1.45;border-top:1px solid #2a2a4a;padding-top:8px;margin:8px 0 0";
+  desc.textContent = t("toolFlow.tooltip.linkDescFmt", { source: src, target: tgt });
+  el.appendChild(desc);
 }
 
 // ── Legend ────────────────────────────────────────────────────────────────────

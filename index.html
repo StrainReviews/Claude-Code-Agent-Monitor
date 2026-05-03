@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Page Metadata -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -70,6 +71,7 @@
       }
     </script>
 
+    <!-- Assets -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -77,21 +79,20 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     />
     <link rel="stylesheet" href="wiki/style.css?v=1" />
+
+    <!-- Global page styles -->
     <style>
       :root {
         --sidebar-expanded: 260px;
         --sidebar-collapsed: 56px;
       }
-
       body {
         --sidebar-current: var(--sidebar-expanded);
         overflow-x: hidden;
       }
-
       body.sidebar-collapsed {
         --sidebar-current: var(--sidebar-collapsed);
       }
-
       .sidebar {
         display: flex !important;
         position: fixed;
@@ -102,7 +103,6 @@
         overflow-x: hidden;
         transition: width 0.2s ease;
       }
-
       .main-content {
         margin-left: var(--sidebar-current) !important;
         width: calc(100vw - var(--sidebar-current)) !important;
@@ -112,29 +112,24 @@
           margin-left 0.2s ease,
           width 0.2s ease;
       }
-
       .diagram-wrap .mermaid {
         display: block;
         width: 100%;
       }
-
       .diagram-wrap .mermaid svg {
         width: 118%;
         max-width: 118%;
         height: auto;
       }
-
       .sidebar-topbar {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
       }
-
       .sidebar-logo .logo-sub {
         margin-top: 7px;
       }
-
       .sidebar-toggle {
         width: 30px;
         height: 30px;
@@ -147,33 +142,27 @@
         cursor: pointer;
         flex-shrink: 0;
       }
-
       body.sidebar-collapsed .sidebar .logo-text,
       body.sidebar-collapsed .sidebar .search-wrap,
       body.sidebar-collapsed .sidebar .nav-section,
       body.sidebar-collapsed .sidebar .sidebar-footer {
         display: none;
       }
-
       body.sidebar-collapsed .sidebar .sidebar-header {
         padding: 12px 8px;
       }
-
       body.sidebar-collapsed .sidebar .sidebar-logo {
         justify-content: center;
         margin-bottom: 0;
       }
-
       body.sidebar-collapsed .sidebar .sidebar-topbar {
         flex-direction: column;
         align-items: center;
         gap: 8px;
       }
-
       body.sidebar-collapsed .sidebar .sidebar-nav {
         padding-top: 8px;
       }
-
       body.sidebar-collapsed .sidebar .nav-link {
         justify-content: center;
         gap: 0;
@@ -181,14 +170,10 @@
         padding-right: 0;
         font-size: 0;
       }
-
       body.sidebar-collapsed .sidebar .nav-link .nav-icon {
         width: auto;
         font-size: 13px;
       }
-
-      /* Custom sidebar tooltip (floating, appended to body to escape
-         .sidebar overflow:hidden clipping). Only shown when collapsed. */
       .ccam-side-tip {
         position: fixed;
         top: 0;
@@ -212,12 +197,10 @@
         transition: opacity 0.15s ease, transform 0.15s ease;
         z-index: 10000;
       }
-
       .ccam-side-tip.visible {
         opacity: 1;
         transform: translateX(0);
       }
-
       .ccam-side-tip::before {
         content: "";
         position: absolute;
@@ -230,7 +213,6 @@
         border-right: 6px solid var(--border, #252538);
         transform: translateY(-50%);
       }
-
       .sidebar-scrim {
         position: fixed;
         inset: 0;
@@ -240,7 +222,6 @@
         transition: opacity 0.18s ease;
         z-index: 180;
       }
-
       .wiki-footer.footer-enhanced {
         margin-top: 84px;
         padding: 24px;
@@ -252,27 +233,23 @@
         gap: 22px;
         align-items: start;
       }
-
       .footer-brand-name {
         font-size: 16px;
         font-weight: 700;
         color: var(--text, #e2e2f0);
         margin-bottom: 6px;
       }
-
       .footer-note {
         font-size: 13px;
         color: var(--text-muted, #8888aa);
         margin-bottom: 12px;
         line-height: 1.55;
       }
-
       .footer-badges {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
       }
-
       .footer-badge {
         display: inline-flex;
         align-items: center;
@@ -284,7 +261,6 @@
         border: 1px solid var(--border, #252538);
         background: rgba(18, 18, 30, 0.75);
       }
-
       .footer-col-title {
         font-size: 11px;
         letter-spacing: 0.08em;
@@ -293,29 +269,24 @@
         margin-bottom: 10px;
         font-weight: 700;
       }
-
       .footer-col-links {
         display: flex;
         flex-direction: column;
         gap: 8px;
       }
-
       .footer-col-links a {
         color: var(--text-muted, #8888aa);
         text-decoration: none;
         font-size: 13px;
         overflow-wrap: anywhere;
       }
-
       .footer-col-links a:hover {
         color: var(--text, #e2e2f0);
       }
-
       #feature-carousel .carousel-btn .carousel-arrow {
         display: block;
         line-height: 1;
       }
-
       .star-history-link {
         display: block;
         line-height: 0;
@@ -325,16 +296,13 @@
         border: none;
         background: transparent;
       }
-
       .star-history-card {
         border-color: rgba(129, 140, 248, 0.32);
         background: linear-gradient(180deg, rgba(22, 22, 34, 0.98), rgba(13, 13, 23, 0.98));
       }
-
       .star-history-card picture {
         display: block;
       }
-
       .star-history-card img {
         display: block;
         width: 100%;
@@ -343,50 +311,41 @@
         object-fit: contain;
         border-bottom: none;
       }
-
       .star-history-card:hover img {
         transform: none;
       }
-
       .star-history-card .screenshot-caption {
         margin: 0;
         border-top: 1px solid rgba(129, 140, 248, 0.2);
         background: rgba(99, 102, 241, 0.08);
       }
-
       .star-history-card .star-history-caption-link {
         color: #c7d2fe;
         font-weight: 600;
         text-decoration: underline;
         text-underline-offset: 2px;
       }
-
       .star-history-card .star-history-caption-link:hover {
         color: #e0e7ff;
       }
-
       .star-history-intro {
         margin-bottom: 16px;
       }
-
       @media (max-width: 700px) {
         #feature-carousel .feature-card {
           min-height: 220px;
           padding: 18px;
         }
-
         #feature-carousel .feature-icon {
           width: 36px;
           height: 36px;
           font-size: 17px;
           margin-bottom: 10px;
         }
-
         #feature-carousel .feature-card h3 {
           font-size: 13.5px;
           margin-bottom: 6px;
         }
-
         #feature-carousel .feature-card p {
           font-size: 12.5px;
           line-height: 1.55;
@@ -396,7 +355,6 @@
           -webkit-line-clamp: 9;
           -webkit-box-orient: vertical;
         }
-
         #feature-carousel .carousel-controls {
           display: flex;
           align-items: center;
@@ -405,12 +363,10 @@
           margin-top: 12px;
           flex-wrap: nowrap;
         }
-
         #feature-carousel .carousel-prev,
         #feature-carousel .carousel-next {
           flex: 0 0 auto;
         }
-
         #feature-carousel .carousel-dots {
           flex: 1 1 auto;
           min-width: 0;
@@ -420,16 +376,13 @@
           row-gap: 6px;
           column-gap: 6px;
         }
-
         #feature-carousel .carousel-dot {
           width: 7px;
           height: 7px;
         }
-
         #feature-carousel .carousel-dot.active {
           transform: scale(1.2);
         }
-
         #feature-carousel .carousel-btn {
           width: 34px;
           min-width: 34px;
@@ -443,37 +396,30 @@
           background: var(--bg-card, #1a1a2b);
           box-shadow: none;
         }
-
         #feature-carousel .carousel-btn:focus-visible {
           outline: 2px solid rgba(129, 140, 248, 0.75);
           outline-offset: 2px;
         }
-
         .star-history-link {
           margin: 0;
           border-radius: 0;
         }
-
       }
-
       @media (max-width: 480px) {
         #feature-carousel .feature-card {
           min-height: 200px;
           padding: 16px;
         }
-
         #feature-carousel .feature-icon {
           width: 32px;
           height: 32px;
           font-size: 15px;
           margin-bottom: 8px;
         }
-
         #feature-carousel .feature-card h3 {
           font-size: 13px;
           margin-bottom: 5px;
         }
-
         #feature-carousel .feature-card p {
           font-size: 12px;
           line-height: 1.5;
@@ -481,13 +427,11 @@
           -webkit-line-clamp: 8;
         }
       }
-
       @media (max-width: 1400px) {
         .sidebar {
           display: flex !important;
           z-index: 200;
         }
-
         .main-content {
           display: block;
           padding: 32px 16px;
@@ -495,42 +439,38 @@
           width: calc(100vw - var(--sidebar-collapsed)) !important;
           max-width: calc(100vw - var(--sidebar-collapsed)) !important;
         }
-
         .diagram-wrap .mermaid svg {
           width: 100%;
           max-width: 100%;
         }
-
         body:not(.sidebar-collapsed) .sidebar {
           width: min(86vw, 320px);
           box-shadow: 10px 0 28px rgba(0, 0, 0, 0.4);
         }
-
         body:not(.sidebar-collapsed) .sidebar-scrim {
           opacity: 1;
           pointer-events: auto;
         }
-
         .wiki-footer.footer-enhanced {
           grid-template-columns: 1fr;
           gap: 16px;
           padding: 20px;
         }
       }
-
-      /* Keep long inline code from overflowing card containers. */
       #update-notifier .feature-card code,
       #update-notifier .api-table code {
         word-break: break-word;
         overflow-wrap: anywhere;
       }
     </style>
+
     <!-- Mermaid: deferred (3.2 MB bundle) so it doesn't render-block first
          paint. wiki/script.js is also deferred below; deferred scripts run
          in document order, so the mermaid global is ready when script.js
          calls mermaid.initialize. -->
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" defer></script>
   </head>
+
   <body>
     <div class="wiki-layout">
       <div id="sidebar-scrim" class="sidebar-scrim" aria-hidden="true"></div>
@@ -1035,17 +975,30 @@
                   <p>
                     D3.js-powered agent orchestration DAG showing spawn patterns across sessions,
                     tool execution Sankey diagram mapping tool-to-tool transitions, and a directed
-                    agent pipeline graph revealing which agent types run after which with frequency labels.
+                    agent pipeline graph revealing which agent types run after which with frequency
+                    labels. Every chart's title carries an <code>i</code> icon that opens a
+                    structured "What this shows / How to read it / Why it matters" popover, and
+                    hovering nodes, edges, and bars surfaces multi-section tooltips with deterministic,
+                    value-dependent interpretations — share-of-source / share-of-target percentages,
+                    success-rate health buckets, model-family descriptions, and timing patterns. All
+                    translated to en/vi/zh.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-indigo">📊</div>
                   <h3>Workflow Analytics</h3>
                   <p>
-                    Subagent effectiveness scorecards with success rings and day-of-week activity
-                    charts. Auto-detected workflow patterns, model delegation flow, error propagation
-                    with horizontal bars and API error cards, concurrency swim-lanes, and complexity
-                    bubble charts. Status filter (Active/Completed/All) filters all sections.
+                    Subagent effectiveness scorecards with success rings and day-of-week sparklines;
+                    sparkline tooltips render through a <code>createPortal</code> to escape the card's
+                    <code>overflow:hidden</code> and stay clamped inside the viewport, so they never
+                    get clipped on Sun/Sat/Mon/Fri. Auto-detected workflow patterns expand in place
+                    on click into a detail panel with the full step chain, stats grid, deterministic
+                    narrative (loop detection, frequency bucket), and a practical suggestion. Plus
+                    model delegation flow, error propagation with horizontal bars and API error cards,
+                    concurrency swim-lanes, and complexity bubble charts. Each of the six headline
+                    stat cards has a bottom-right info popover explaining how the metric is calculated
+                    and what its current value means in plain language. Status filter (Active /
+                    Completed / All) filters all sections.
                   </p>
                 </div>
                 <div class="feature-card">
@@ -1144,40 +1097,48 @@
           <h3>Screenshots</h3>
           <div class="screenshot-gallery">
             <div class="screenshot-card">
-              <img src="images/sessions.png" alt="Sessions table with search, filters, status badges, and pagination" width="1917" height="1042" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📋</span> Sessions table — searchable, filterable, paginated</div>
+              <img src="images/dashboard.png" alt="Dashboard Overview" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard</strong> — overview stats, active agent cards, and recent activity feed</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/session-agents.png" alt="Session detail — Agents tab with real-time overview tiles, top tools, subagent breakdown, token flow, and agent hierarchy tree" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🤖</span> Session detail · Agents — overview tiles, top tools, subagent breakdown, token flow, and agent tree</div>
+              <img src="images/board.png" alt="Kanban Board — Agents view" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">📋</span> <span><strong>Kanban Board (agents)</strong> — agents grouped by status across 4 columns</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/session-conversation.png" alt="Session detail — Conversation tab with markdown rendering, syntax-highlighted code blocks, and per-tool styled tool calls" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">💬</span> Session detail · Conversation — markdown, syntax-highlighted code, and per-tool styled tool calls</div>
+              <img src="images/board-sessions.png" alt="Kanban Board — Sessions view" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">🗂️</span> <span><strong>Kanban Board (sessions)</strong> — sessions grouped by status across 5 columns</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/session-timeline.png" alt="Session detail — Timeline tab with chronological event timeline, multi-dimension filters, and tool-aware payload renderers" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🔬</span> Session detail · Timeline — chronological events with multi-dimension filters and tool-aware payloads</div>
+              <img src="images/sessions.png" alt="Sessions Overview" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">📂</span> <span><strong>Sessions</strong> — searchable, filterable, server-paginated table of recorded sessions</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/board.png" alt="Kanban board, agents view: 4 columns (Working, Waiting, Completed, Error) of agent cards with model, cost, and tool info" width="1918" height="1047" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📂</span> Kanban board — agents view, 4-column status board with the yellow Waiting column</div>
+              <img src="images/session-agents.png" alt="Session Detail — Agents tab" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">🤖</span> <span><strong>Session Detail · Agents</strong> — overview tiles, subagent breakdown, and hierarchy tree</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/board-sessions.png" alt="Kanban board, sessions view: 5 columns (Active, Waiting, Completed, Error, Abandoned) of session cards with agent count, model, cost, duration, and time-ago" width="3024" height="1720" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📁</span> Kanban board — sessions view, toggleable from the same page</div>
+              <img src="images/session-conversation.png" alt="Session Detail — Conversation tab" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">💬</span> <span><strong>Session Detail · Conversation</strong> — live transcript viewer with markdown rendering</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/feed.png" alt="Real-time activity feed with streaming events, expandable payload rows, and session navigation button" width="3024" height="1672" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📰</span> Activity feed — click a row to expand payload; "Session →" button opens session details</div>
+              <img src="images/session-timeline.png" alt="Session Detail — Timeline tab" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">🔬</span> <span><strong>Session Detail · Timeline</strong> — chronological event timeline with multi-dimension filters</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/analytics.png" alt="Analytics dashboard with token usage charts, tool frequency, and session trends" width="1918" height="1046" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📊</span> Analytics — token usage, tool frequency, and trends</div>
+              <img src="images/feed.png" alt="Activity Feed Overview" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">📰</span> <span><strong>Activity Feed</strong> — real-time event log with pause / resume and multi-dimension filters</span></div>
             </div>
             <div class="screenshot-card">
-              <img src="images/workflows.png" alt="Workflow graphs showing agent orchestration DAGs and tool execution Sankey diagrams" width="1918" height="1047" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🔀</span> Workflows — agent DAGs and tool Sankey diagrams</div>
+              <img src="images/analytics.png" alt="Analytics Overview" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">📊</span> <span><strong>Analytics</strong> — token usage, tool frequency, activity heatmap, and session trends</span></div>
+            </div>
+            <div class="screenshot-card">
+              <img src="images/workflows.png" alt="Workflows Overview" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">🔀</span> <span><strong>Workflows</strong> — agent DAGs, tool Sankey diagrams, and workflow intelligence</span></div>
+            </div>
+            <div class="screenshot-card">
+              <img src="images/settings.png" alt="Settings Overview" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">⚙️</span> <span><strong>Settings</strong> — model pricing rules, data management, and system info</span></div>
             </div>
           </div>
 
@@ -3730,7 +3691,14 @@ ccam-export all --output backup.json</code></pre>
               <p>
                 Editable table of per-model pricing rules. Each Claude model variant has its own
                 explicit pattern (e.g., <code>claude-opus-4-6%</code>). Rates cover input, output,
-                cache read, and cache write tokens. Reset to defaults or add custom models.
+                cache read, and cache write tokens. Reset to defaults or add custom models. The
+                section header carries an info popover (the <code>i</code> icon) that explains how
+                rule lookup works (first matching pattern wins), the SQL-style <code>%</code>
+                wildcard syntax with concrete examples (<code>claude-opus-4-7%</code>,
+                <code>claude-%-haiku</code>, exact ids), and reminds the user that prices must be
+                updated manually when Anthropic publishes new rates — already-stored sessions keep
+                the price applied at ingest time. The CLAUDE_HOME panel and Import History flow are
+                fully i18n-driven across en/vi/zh.
               </p>
             </div>
             <div class="feature-card">
@@ -4572,30 +4540,25 @@ npm run install-hooks</code></pre>
       (function () {
         var carousel = document.getElementById("feature-carousel");
         if (!carousel) return;
-
         var viewport = carousel.querySelector(".carousel-viewport");
         var track = carousel.querySelector(".carousel-track");
         var cards = Array.prototype.slice.call(track.querySelectorAll(".feature-card"));
         var dotsContainer = document.getElementById("carousel-dots");
         var prevBtn = carousel.querySelector(".carousel-prev");
         var nextBtn = carousel.querySelector(".carousel-next");
-
         var currentPage = 0;
         var autoInterval = null;
         var AUTO_DELAY = 2500;
         var GAP = 12;
-
         function getPerPage() {
           var w = viewport.offsetWidth;
           if (w <= 700) return 1;
           if (w <= 1000) return 2;
           return 3;
         }
-
         function getTotalPages() {
           return Math.ceil(cards.length / getPerPage());
         }
-
         function sizeCards() {
           var perPage = getPerPage();
           var vpWidth = viewport.offsetWidth;
@@ -4607,7 +4570,6 @@ npm run install-hooks</code></pre>
             cards[i].style.marginLeft = "0";
           }
         }
-
         function buildDots() {
           dotsContainer.innerHTML = "";
           var total = getTotalPages();
@@ -4623,7 +4585,6 @@ npm run install-hooks</code></pre>
             dotsContainer.appendChild(dot);
           }
         }
-
         function updatePosition() {
           var perPage = getPerPage();
           var vpWidth = viewport.offsetWidth;
@@ -4634,22 +4595,18 @@ npm run install-hooks</code></pre>
           if (maxOffset < 0) maxOffset = 0;
           if (offset > maxOffset) offset = maxOffset;
           track.style.transform = "translateX(-" + offset + "px)";
-
           var dots = dotsContainer.querySelectorAll(".carousel-dot");
           for (var i = 0; i < dots.length; i++) {
             dots[i].classList.toggle("active", i === currentPage);
           }
         }
-
         function goTo(page) {
           var total = getTotalPages();
           currentPage = ((page % total) + total) % total;
           updatePosition();
         }
-
         function next() { goTo(currentPage + 1); }
         function prev() { goTo(currentPage - 1); }
-
         function startAuto() {
           stopAuto();
           autoInterval = setInterval(next, AUTO_DELAY);
@@ -4658,7 +4615,6 @@ npm run install-hooks</code></pre>
           if (autoInterval) { clearInterval(autoInterval); autoInterval = null; }
         }
         function resetAuto() { stopAuto(); startAuto(); }
-
         function layout() {
           if (currentPage >= getTotalPages()) currentPage = getTotalPages() - 1;
           if (currentPage < 0) currentPage = 0;
@@ -4666,12 +4622,10 @@ npm run install-hooks</code></pre>
           buildDots();
           updatePosition();
         }
-
         prevBtn.addEventListener("click", function () { prev(); resetAuto(); });
         nextBtn.addEventListener("click", function () { next(); resetAuto(); });
         carousel.addEventListener("mouseenter", stopAuto);
         carousel.addEventListener("mouseleave", startAuto);
-
         var touchStartX = 0;
         carousel.addEventListener("touchstart", function (e) {
           touchStartX = e.changedTouches[0].screenX;
@@ -4682,19 +4636,16 @@ npm run install-hooks</code></pre>
           if (Math.abs(diff) > 50) { if (diff > 0) next(); else prev(); }
           startAuto();
         }, { passive: true });
-
         carousel.setAttribute("tabindex", "0");
         carousel.addEventListener("keydown", function (e) {
           if (e.key === "ArrowRight") { next(); resetAuto(); }
           if (e.key === "ArrowLeft") { prev(); resetAuto(); }
         });
-
         var resizeTimer;
         window.addEventListener("resize", function () {
           clearTimeout(resizeTimer);
           resizeTimer = setTimeout(layout, 100);
         });
-
         layout();
         startAuto();
       })();
@@ -4704,14 +4655,11 @@ npm run install-hooks</code></pre>
         const btn = document.getElementById("sidebar-toggle");
         const scrim = document.getElementById("sidebar-scrim");
         if (!btn) return;
-
         const key = "wiki-sidebar-collapsed";
         const COLLAPSE_WIDTH = 1460;
-
         function shouldAutoCollapse() {
           return window.innerWidth <= COLLAPSE_WIDTH;
         }
-
         function applyCollapsed(collapsed) {
           document.body.classList.toggle("sidebar-collapsed", collapsed);
           btn.setAttribute("aria-expanded", String(!collapsed));
@@ -4721,7 +4669,6 @@ npm run install-hooks</code></pre>
             scrim.setAttribute("aria-hidden", String(collapsed || !isMobile));
           }
         }
-
         // On load: auto-collapse if narrow, otherwise respect saved preference
         if (shouldAutoCollapse()) {
           applyCollapsed(true);
@@ -4729,7 +4676,6 @@ npm run install-hooks</code></pre>
           var saved = localStorage.getItem(key);
           applyCollapsed(saved === "1");
         }
-
         btn.addEventListener("click", function () {
           var next = !document.body.classList.contains("sidebar-collapsed");
           applyCollapsed(next);
@@ -4737,14 +4683,12 @@ npm run install-hooks</code></pre>
             localStorage.setItem(key, next ? "1" : "0");
           }
         });
-
         if (scrim) {
           scrim.addEventListener("click", function () {
             applyCollapsed(true);
             localStorage.setItem(key, "1");
           });
         }
-
         window.addEventListener("resize", function () {
           if (shouldAutoCollapse()) {
             applyCollapsed(true);

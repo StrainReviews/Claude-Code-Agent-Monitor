@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Workflow, RefreshCw, Download, AlertCircle, Info } from "lucide-react";
 import { api } from "../lib/api";
@@ -143,7 +143,12 @@ export function Workflows() {
       <WorkflowStats stats={data.stats} />
 
       {/* Section 1: Agent Orchestration DAG */}
-      <Section number={1} title={t("orchestration.title")} subtitle={t("orchestration.subtitle")}>
+      <Section
+        number={1}
+        title={t("orchestration.title")}
+        subtitle={t("orchestration.subtitle")}
+        infoKey="orchestration"
+      >
         <OrchestrationDAG
           data={data.orchestration}
           onNodeClick={setSelectedNode}
@@ -166,22 +171,42 @@ export function Workflows() {
       </Section>
 
       {/* Section 2: Tool Execution Flow */}
-      <Section number={2} title={t("toolFlow.title")} subtitle={t("toolFlow.subtitle")}>
+      <Section
+        number={2}
+        title={t("toolFlow.title")}
+        subtitle={t("toolFlow.subtitle")}
+        infoKey="toolFlow"
+      >
         <ToolExecutionFlow data={data.toolFlow} filterAgentType={selectedNode} />
       </Section>
 
       {/* Section 3: Agent Collaboration Network */}
-      <Section number={3} title={t("pipeline.title")} subtitle={t("pipeline.subtitle")}>
+      <Section
+        number={3}
+        title={t("pipeline.title")}
+        subtitle={t("pipeline.subtitle")}
+        infoKey="pipeline"
+      >
         <AgentCollaborationNetwork effectiveness={data.effectiveness} edges={data.cooccurrence} />
       </Section>
 
       {/* Section 4 + 5: Two Column */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section number={4} title={t("effectiveness.title")} subtitle={t("effectiveness.subtitle")}>
+        <Section
+          number={4}
+          title={t("effectiveness.title")}
+          subtitle={t("effectiveness.subtitle")}
+          infoKey="effectiveness"
+        >
           <SubagentEffectiveness data={data.effectiveness} />
         </Section>
 
-        <Section number={5} title={t("patterns.title")} subtitle={t("patterns.subtitle")}>
+        <Section
+          number={5}
+          title={t("patterns.title")}
+          subtitle={t("patterns.subtitle")}
+          infoKey="patterns"
+        >
           <WorkflowPatterns data={data.patterns} onPatternClick={() => {}} />
         </Section>
       </div>
@@ -192,6 +217,7 @@ export function Workflows() {
           number={6}
           title={t("modelDelegation.title")}
           subtitle={t("modelDelegation.subtitle")}
+          infoKey="modelDelegation"
         >
           <ModelDelegationFlow data={data.modelDelegation} />
         </Section>
@@ -200,29 +226,50 @@ export function Workflows() {
           number={7}
           title={t("errorPropagation.title")}
           subtitle={t("errorPropagation.subtitle")}
+          infoKey="errorPropagation"
         >
           <ErrorPropagationMap data={data.errorPropagation} />
         </Section>
       </div>
 
       {/* Section 8: Agent Concurrency Timeline */}
-      <Section number={8} title={t("concurrency.title")} subtitle={t("concurrency.subtitle")}>
+      <Section
+        number={8}
+        title={t("concurrency.title")}
+        subtitle={t("concurrency.subtitle")}
+        infoKey="concurrency"
+      >
         <ConcurrencyTimeline data={data.concurrency} />
       </Section>
 
       {/* Section 9 + 10: Two Column */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Section number={9} title={t("complexity.title")} subtitle={t("complexity.subtitle")}>
+        <Section
+          number={9}
+          title={t("complexity.title")}
+          subtitle={t("complexity.subtitle")}
+          infoKey="complexity"
+        >
           <SessionComplexityScatter data={data.complexity} onSessionClick={setSelectedSessionId} />
         </Section>
 
-        <Section number={10} title={t("compaction.title")} subtitle={t("compaction.subtitle")}>
+        <Section
+          number={10}
+          title={t("compaction.title")}
+          subtitle={t("compaction.subtitle")}
+          infoKey="compaction"
+        >
           <CompactionImpact data={data.compaction} />
         </Section>
       </div>
 
       {/* Section 11: Session Drill-In */}
-      <Section number={11} title={t("drillIn.title")} subtitle={t("drillIn.subtitle")}>
+      <Section
+        number={11}
+        title={t("drillIn.title")}
+        subtitle={t("drillIn.subtitle")}
+        infoKey="drillIn"
+      >
         <SessionDrillIn
           sessionId={selectedSessionId}
           onClose={() => setSelectedSessionId(null)}
@@ -238,15 +285,16 @@ function Section({
   number,
   title,
   subtitle,
+  infoKey,
   children,
 }: {
   number: number;
   title: string;
   subtitle: string;
+  /** Key under workflows.chartInfo.* — drives the structured popover content. */
+  infoKey: string;
   children: React.ReactNode;
 }) {
-  const [showTip, setShowTip] = useState(false);
-
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -255,26 +303,122 @@ function Section({
             {number}
           </span>
           <h2 className="text-sm font-semibold text-gray-100">{title}</h2>
-          <div className="relative">
-            <button
-              onMouseEnter={() => setShowTip(true)}
-              onMouseLeave={() => setShowTip(false)}
-              className="flex items-center justify-center"
-            >
-              <Info className="w-3.5 h-3.5 text-gray-600 hover:text-gray-400 transition-colors" />
-            </button>
-            {showTip && (
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 px-3 py-2 bg-[#12121f] border border-[#2a2a4a] rounded-lg shadow-2xl text-[11px] text-gray-300 whitespace-nowrap pointer-events-none">
-                {subtitle}
-                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-[#2a2a4a]" />
-              </div>
-            )}
-          </div>
+          <ChartInfoPopover infoKey={infoKey} title={title} />
         </div>
         <span className="text-[11px] text-gray-600 hidden lg:block">{subtitle}</span>
       </div>
       <div className="card p-4">{children}</div>
     </div>
+  );
+}
+
+/**
+ * Structured info popover for a Workflows chart section. Hover or focus the
+ * `i` icon to read three short paragraphs sourced from i18n:
+ *
+ *   1. What this shows  — what data the chart visualizes
+ *   2. How to read it   — visual encoding (axes, sizes, colors, etc.)
+ *   3. Why it matters   — what insights the user can extract
+ *
+ * The popover uses fixed positioning and is clamped to the viewport so it
+ * never gets clipped by the sidebar or screen edges. Auto-flips above the
+ * trigger when there's no room below.
+ */
+function ChartInfoPopover({ infoKey, title }: { infoKey: string; title: string }) {
+  const { t } = useTranslation("workflows");
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+
+  const POPOVER_W = 340;
+  const MARGIN = 12;
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const btn = buttonRef.current;
+      const pop = popoverRef.current;
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      const popH = pop?.offsetHeight ?? 280;
+
+      // Center horizontally over the icon, clamp to viewport.
+      let left = r.left + r.width / 2 - POPOVER_W / 2;
+      if (left < MARGIN) left = MARGIN;
+      if (left + POPOVER_W > window.innerWidth - MARGIN) {
+        left = window.innerWidth - POPOVER_W - MARGIN;
+      }
+      // Default below the icon; flip above if not enough room.
+      const spaceBelow = window.innerHeight - r.bottom;
+      const placeAbove = spaceBelow < popH + MARGIN && r.top > popH + MARGIN;
+      const top = placeAbove ? Math.max(MARGIN, r.top - popH - 8) : r.bottom + 8;
+
+      setCoords({ left, top });
+    };
+    update();
+    const raf = requestAnimationFrame(update);
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={t("chartInfo.labels.what")}
+        aria-expanded={open}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="flex items-center justify-center rounded-full p-0.5 -m-0.5 text-gray-600 hover:text-gray-400 transition-colors focus:outline-none focus:ring-1 focus:ring-accent/40"
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <div
+          ref={popoverRef}
+          role="tooltip"
+          className="fixed z-50 p-3.5 bg-[#12121f] border border-[#2a2a4a] rounded-lg shadow-2xl text-[11px] text-gray-300 pointer-events-none"
+          style={{ left: coords.left, top: coords.top, width: POPOVER_W }}
+        >
+          <p className="text-xs font-semibold text-gray-100 mb-2.5 pb-2 border-b border-[#2a2a4a]">
+            {title}
+          </p>
+
+          <p className="font-semibold text-gray-200 uppercase tracking-wider text-[9px] mb-1">
+            {t("chartInfo.labels.what")}
+          </p>
+          <p className="text-gray-400 leading-snug mb-2.5">{t(`chartInfo.${infoKey}.what`)}</p>
+
+          <p className="font-semibold text-gray-200 uppercase tracking-wider text-[9px] mb-1">
+            {t("chartInfo.labels.howToRead")}
+          </p>
+          <p className="text-gray-400 leading-snug mb-2.5">{t(`chartInfo.${infoKey}.howToRead`)}</p>
+
+          <p className="font-semibold text-gray-200 uppercase tracking-wider text-[9px] mb-1">
+            {t("chartInfo.labels.why")}
+          </p>
+          <p className="text-gray-400 leading-snug">{t(`chartInfo.${infoKey}.why`)}</p>
+        </div>
+      )}
+    </>
   );
 }
 

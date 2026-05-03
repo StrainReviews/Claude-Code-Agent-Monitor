@@ -15,7 +15,25 @@
     "patternPlaceholder": "claude-opus-4%",
     "namePlaceholder": "Claude Opus 4",
     "validationRequired": "Pattern and display name are required",
-    "lastUpdated": "Last updated: "
+    "lastUpdated": "Last updated: ",
+    "tooltip": {
+      "title": "How model pricing works",
+      "howItWorks": "How it works",
+      "howItWorksBody": "When a session reports usage, the dashboard finds the first pricing rule whose pattern matches the model id and multiplies (input tokens / 1M) and (output tokens / 1M) by the rates below to compute cost. Rules are evaluated top-to-bottom — the first match wins.",
+      "patternsTitle": "Pattern syntax",
+      "patternsBody": "Patterns are SQL-style globs. % is a wildcard that matches any characters. For example: claude-opus-4-7% matches every model id that starts with claude-opus-4-7 (e.g. claude-opus-4-7, claude-opus-4-7-20260101). claude-%-haiku matches any haiku variant. An exact id like claude-sonnet-4-6 only matches itself.",
+      "manualUpdates": "You must update prices manually",
+      "manualUpdatesBody": "Anthropic publishes pricing changes on their website — there is no live feed. When a new model launches or rates change, edit the matching rule (or add a new one above the catch-all) so newly recorded sessions are costed correctly. Already-stored sessions keep the price that was applied at ingest time."
+    }
+  },
+  "claudeHome": {
+    "title": "CLAUDE_HOME",
+    "description": "Root directory for Claude Code session data. Changing this updates the scan path for transcripts and imports immediately.",
+    "save": "Save",
+    "saving": "Saving...",
+    "current": "Current:",
+    "placeholder": "/path/to/claude-home",
+    "saveFailed": "Failed to update CLAUDE_HOME"
   },
   "hooks": {
     "title": "Hook Configuration",
@@ -77,6 +95,8 @@
     "dropzoneSub": "Accepts .jsonl, .meta.json, .zip, .tar, .tar.gz, .tgz, .gz",
     "filesSelected": "{{count}} file(s) selected",
     "clearSelection": "Clear",
+    "copy": "Copy",
+    "copied": "Copied",
     "progress": {
       "scan": "Scanning directory...",
       "extract": "Extracting archives ({{processed}}/{{total}})...",

@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   DollarSign,
@@ -45,6 +45,7 @@ import {
   BarChart3,
   Settings as SettingsIcon,
   FolderOpen,
+  Info,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
@@ -177,6 +178,100 @@ function Toggle({
         />
       </button>
     </label>
+  );
+}
+
+/**
+ * Info popover for the Model Pricing section. Hover or focus the icon to see a
+ * three-section explanation: how prices are applied, how pattern matching
+ * works, and a reminder that prices must be edited manually when Anthropic
+ * publishes new rates. All copy is i18n-driven (settings.pricing.tooltip.*).
+ *
+ * The popover is fixed-positioned and clamped to the viewport so it never
+ * gets clipped by the sidebar or screen edges, mirroring the pattern used by
+ * the Workflows stat tooltips.
+ */
+function PricingInfoTooltip() {
+  const { t } = useTranslation("settings");
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+
+  const positionPopover = useCallback(() => {
+    const btn = buttonRef.current;
+    const pop = popoverRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const w = pop?.offsetWidth ?? 320;
+    const h = pop?.offsetHeight ?? 240;
+    const margin = 8;
+
+    let left = r.right - w; // right-align with the icon
+    if (left < margin) left = margin;
+    if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+    let top = r.bottom + 8;
+    if (top + h > window.innerHeight - margin) {
+      top = Math.max(margin, r.top - h - 8);
+    }
+    setPos({ left, top });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    positionPopover();
+    const onScroll = () => positionPopover();
+    const onResize = () => positionPopover();
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onResize);
+    const raf = requestAnimationFrame(positionPopover);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [open, positionPopover]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={t("pricing.tooltip.title")}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex items-center justify-center rounded-full p-0.5 text-gray-500 hover:text-gray-300 focus:outline-none focus:ring-1 focus:ring-accent/40"
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <div
+          ref={popoverRef}
+          role="tooltip"
+          className="fixed z-50 p-3 bg-[#12121f] border border-[#2a2a4a] rounded-lg shadow-2xl text-[11px] text-gray-300 pointer-events-none"
+          style={{ left: pos.left, top: pos.top, width: 320 }}
+        >
+          <p className="text-xs font-semibold text-gray-100 mb-2">{t("pricing.tooltip.title")}</p>
+
+          <p className="font-semibold text-gray-200 uppercase tracking-wider text-[9px] mb-1">
+            {t("pricing.tooltip.howItWorks")}
+          </p>
+          <p className="text-gray-400 leading-snug mb-2.5">{t("pricing.tooltip.howItWorksBody")}</p>
+
+          <p className="font-semibold text-gray-200 uppercase tracking-wider text-[9px] mb-1">
+            {t("pricing.tooltip.patternsTitle")}
+          </p>
+          <p className="text-gray-400 leading-snug mb-2.5">{t("pricing.tooltip.patternsBody")}</p>
+
+          <p className="font-semibold text-amber-300 uppercase tracking-wider text-[9px] mb-1">
+            {t("pricing.tooltip.manualUpdates")}
+          </p>
+          <p className="text-gray-400 leading-snug">{t("pricing.tooltip.manualUpdatesBody")}</p>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -409,7 +504,7 @@ export function Settings() {
       setClaudeHomeState(res.claude_home);
       setClaudeHomeInput(res.claude_home);
     } catch (err) {
-      setClaudeHomeError(err instanceof Error ? err.message : "Failed to update CLAUDE_HOME");
+      setClaudeHomeError(err instanceof Error ? err.message : t("claudeHome.saveFailed"));
     } finally {
       setClaudeHomeSaving(false);
     }
@@ -597,6 +692,7 @@ export function Settings() {
             <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-gray-500" />
               {t("pricing.title")}
+              <PricingInfoTooltip />
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">{t("pricing.description")}</p>
           </div>
@@ -791,12 +887,9 @@ export function Settings() {
       <section>
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <FolderOpen className="w-4 h-4 text-gray-500" />
-          CLAUDE_HOME
+          {t("claudeHome.title")}
         </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Root directory for Claude Code session data. Changing this updates the scan path for
-          transcripts and imports immediately.
-        </p>
+        <p className="text-xs text-gray-500 mb-4">{t("claudeHome.description")}</p>
 
         <div className="card p-5 space-y-4">
           <div className="flex items-center gap-3">
@@ -808,20 +901,20 @@ export function Settings() {
                 setClaudeHomeError(null);
               }}
               className="flex-1 bg-surface-4 border border-surface-3 rounded-lg px-3 py-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-violet-500/50"
-              placeholder="/path/to/claude-home"
+              placeholder={t("claudeHome.placeholder")}
             />
             <button
               onClick={handleSaveClaudeHome}
               disabled={claudeHomeSaving || claudeHomeInput === claudeHome}
               className="btn-primary px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {claudeHomeSaving ? "Saving..." : "Save"}
+              {claudeHomeSaving ? t("claudeHome.saving") : t("claudeHome.save")}
             </button>
           </div>
           {claudeHomeError && <p className="text-xs text-red-400">{claudeHomeError}</p>}
           {claudeHome && (
             <p className="text-xs text-gray-500">
-              Current: <code className="text-gray-400">{claudeHome}</code>
+              {t("claudeHome.current")} <code className="text-gray-400">{claudeHome}</code>
             </p>
           )}
         </div>

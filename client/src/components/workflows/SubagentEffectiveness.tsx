@@ -4,7 +4,8 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { SubagentEffectivenessItem } from "../../lib/types";
 
@@ -104,6 +105,12 @@ interface SparklineProps {
   color: string;
 }
 
+interface SparklineTooltipState {
+  index: number;
+  /** Bounding rect of the hovered bar (in viewport coordinates). */
+  rect: DOMRect;
+}
+
 function Sparkline({ data, color }: SparklineProps) {
   const { t, i18n } = useTranslation(["workflows", "common"]);
   const locale = i18n.resolvedLanguage ?? i18n.language;
@@ -116,43 +123,32 @@ function Sparkline({ data, color }: SparklineProps) {
       ),
     [locale]
   );
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [tip, setTip] = useState<SparklineTooltipState | null>(null);
   const bars = data.length > 0 ? data : Array.from({ length: 7 }, () => 0);
   const max = Math.max(...bars, 1);
 
   return (
     <div aria-label={t("effectiveness.weeklyActivityAria")}>
       {/* Bars */}
-      <div className="flex items-end gap-1 h-8 relative">
+      <div className="flex items-end gap-1 h-8 relative" onMouseLeave={() => setTip(null)}>
         {bars.map((value, i) => {
           const heightPct = Math.max((value / max) * 100, value > 0 ? 8 : 4);
-          const label = dayLabels[i % dayLabels.length] ?? "";
           return (
             <div
               key={i}
-              className="flex-1 relative group"
+              className="flex-1 relative"
               style={{ height: "100%" }}
-              onMouseEnter={() => setHoveredIndex(i)}
-              onMouseLeave={() => setHoveredIndex(null)}
+              onMouseEnter={(e) =>
+                setTip({ index: i, rect: e.currentTarget.getBoundingClientRect() })
+              }
             >
-              {/* Tooltip */}
-              {hoveredIndex === i && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 px-2 py-1 bg-[#12121f] border border-[#2a2a4a] rounded-md shadow-xl text-[10px] text-gray-200 whitespace-nowrap pointer-events-none">
-                  <span className="font-medium">{label}</span>
-                  <span className="text-gray-400 mx-1">·</span>
-                  <span className="tabular-nums" style={{ color }}>
-                    {t("effectiveness.sessionCount", { count: value })}
-                  </span>
-                  <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-l-transparent border-r-4 border-r-transparent border-t-4 border-t-[#2a2a4a]" />
-                </div>
-              )}
               {/* Bar (anchored to bottom) */}
               <div
                 className="absolute bottom-0 left-0 right-0 rounded-sm transition-all duration-300"
                 style={{
                   height: `${heightPct}%`,
                   backgroundColor: value > 0 ? color : "#2a2a3d",
-                  opacity: hoveredIndex === i ? 1 : value > 0 ? 0.85 : 0.4,
+                  opacity: tip?.index === i ? 1 : value > 0 ? 0.85 : 0.4,
                 }}
               />
             </div>
@@ -170,7 +166,78 @@ function Sparkline({ data, color }: SparklineProps) {
           </span>
         ))}
       </div>
+      {tip && (
+        <SparklineTooltip
+          rect={tip.rect}
+          label={dayLabels[tip.index % dayLabels.length] ?? ""}
+          value={bars[tip.index] ?? 0}
+          color={color}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Tooltip is rendered into `document.body` via a portal so the parent
+ * ScoreCard's `overflow-hidden` (and hover-transform that would otherwise
+ * become its containing block) cannot clip it. Coordinates are computed
+ * from the hovered bar's bounding rect and clamped to the viewport with an
+ * 8 px margin, so the tooltip can never be cut off on any day of the week.
+ */
+function SparklineTooltip({
+  rect,
+  label,
+  value,
+  color,
+}: {
+  rect: DOMRect;
+  label: string;
+  value: number;
+  color: string;
+}) {
+  const { t } = useTranslation("workflows");
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number }>({
+    left: rect.left,
+    top: rect.top,
+  });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const margin = 8;
+
+    // Center horizontally over the bar, then clamp to viewport.
+    let left = rect.left + rect.width / 2 - w / 2;
+    if (left < margin) left = margin;
+    if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+
+    // Default above the bar; flip below if there isn't room.
+    let top = rect.top - h - 8;
+    if (top < margin) top = rect.bottom + 8;
+
+    setPos({ left, top });
+  }, [rect]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      ref={ref}
+      role="tooltip"
+      className="fixed z-[60] px-2 py-1 bg-[#12121f] border border-[#2a2a4a] rounded-md shadow-xl text-[10px] text-gray-200 whitespace-nowrap pointer-events-none"
+      style={{ left: pos.left, top: pos.top }}
+    >
+      <span className="font-medium">{label}</span>
+      <span className="text-gray-400 mx-1">·</span>
+      <span className="tabular-nums" style={{ color }}>
+        {t("effectiveness.sessionCount", { count: value })}
+      </span>
+    </div>,
+    document.body
   );
 }
 

@@ -68,44 +68,113 @@ const MAX_R = 44;
 
 // ── Safe tooltip DOM builder ──
 
+function appendTooltipRow(parent: HTMLElement, label: string, value: string) {
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;justify-content:space-between;gap:16px;font-size:11px";
+  const lbl = document.createElement("span");
+  lbl.style.color = "#64748b";
+  lbl.textContent = label;
+  const val = document.createElement("span");
+  val.style.cssText = "color:#cbd5e1;font-weight:500";
+  val.textContent = value;
+  row.appendChild(lbl);
+  row.appendChild(val);
+  parent.appendChild(row);
+}
+
+function appendTooltipDescription(parent: HTMLElement, text: string) {
+  const p = document.createElement("p");
+  p.style.cssText =
+    "font-size:11px;color:#94a3b8;line-height:1.45;margin:8px 0 0;padding-top:8px;border-top:1px solid #2a2a4a";
+  p.textContent = text;
+  parent.appendChild(p);
+}
+
+type TFn = (key: string, options?: Record<string, unknown>) => string;
+
+function describeNodeRole(d: PipelineNode, t: TFn): string {
+  const sr = Math.round(d.successRate);
+  let healthKey: string;
+  if (sr >= 95) healthKey = "pipeline.tooltip.health.perfect";
+  else if (sr >= 80) healthKey = "pipeline.tooltip.health.healthy";
+  else if (sr >= 50) healthKey = "pipeline.tooltip.health.shaky";
+  else healthKey = "pipeline.tooltip.health.failing";
+
+  return t("pipeline.tooltip.nodeDescFmt", {
+    id: d.id,
+    total: d.total,
+    sessions: d.sessions,
+    rate: sr,
+    health: t(healthKey),
+  });
+}
+
 function showTooltip(
   el: HTMLDivElement,
   d: PipelineNode,
   x: number,
   y: number,
-  t: (key: string) => string
+  t: TFn,
+  totalSpawns: number
 ) {
   el.textContent = "";
 
   const title = document.createElement("p");
-  title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0 0 6px";
+  title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0 0 2px";
   title.textContent = d.id;
   el.appendChild(title);
 
+  const subtitle = document.createElement("p");
+  subtitle.style.cssText =
+    "font-size:10px;color:#64748b;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em";
+  subtitle.textContent = t("pipeline.tooltip.agentType");
+  el.appendChild(subtitle);
+
+  const sharePct = totalSpawns > 0 ? `${((d.total / totalSpawns) * 100).toFixed(1)}%` : "—";
+
   const rows: [string, string][] = [
     [t("pipeline.spawned"), String(d.total) + t("pipeline.spawns")],
+    [t("pipeline.tooltip.shareOfAllSpawns"), sharePct],
     [t("pipeline.inSessions"), String(d.sessions)],
     [t("effectiveness.success"), Math.round(d.successRate) + "%"],
   ];
   for (const [label, value] of rows) {
-    const row = document.createElement("div");
-    row.style.cssText = "display:flex;justify-content:space-between;gap:16px;font-size:11px";
-    const lbl = document.createElement("span");
-    lbl.style.color = "#64748b";
-    lbl.textContent = label;
-    const val = document.createElement("span");
-    val.style.cssText = "color:#cbd5e1;font-weight:500";
-    val.textContent = value;
-    row.appendChild(lbl);
-    row.appendChild(val);
-    el.appendChild(row);
+    appendTooltipRow(el, label, value);
   }
 
-  el.style.display = "block";
-  const nearRight = x > window.innerWidth - 220;
-  el.style.left = nearRight ? `${x - 16}px` : `${x + 16}px`;
-  el.style.top = `${y - 8}px`;
-  el.style.transform = nearRight ? "translateX(-100%)" : "";
+  appendTooltipDescription(el, describeNodeRole(d, t));
+
+  el.style.maxWidth = "320px";
+  positionTooltipAt(el, x, y);
+}
+
+/**
+ * Position a tooltip so its top-right corner sits near (x, y), but clamped to
+ * the viewport so it never disappears behind the sidebar or the right edge.
+ * Sets opacity to 1 to fade the tooltip in via its CSS transition.
+ */
+function positionTooltipAt(el: HTMLDivElement, x: number, y: number) {
+  el.style.opacity = "0";
+  const w = el.offsetWidth || 280;
+  const h = el.offsetHeight || 160;
+  const margin = 8;
+
+  // Default: place just below-right of the cursor
+  let left = x + 14;
+  let top = y + 14;
+
+  if (left + w > window.innerWidth - margin) left = window.innerWidth - w - margin;
+  if (left < margin) left = margin;
+  if (top + h > window.innerHeight - margin) top = y - h - 14;
+  if (top < margin) top = margin;
+
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+  el.style.transform = "";
+  // Trigger fade-in on the next frame for a smooth transition.
+  requestAnimationFrame(() => {
+    el.style.opacity = "1";
+  });
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -278,6 +347,8 @@ export function AgentCollaborationNetwork({
     const tipEl = tooltipRef.current;
 
     // Edge hover
+    const totalSpawns = simNodes.reduce((s, n) => s + n.total, 0);
+
     linkHits
       .on("mouseenter", (event: MouseEvent, d: PipelineLink) => {
         const src = d.source as PipelineNode;
@@ -293,42 +364,43 @@ export function AgentCollaborationNetwork({
         if (tipEl) {
           tipEl.textContent = "";
           const title = document.createElement("p");
-          title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0 0 6px";
+          title.style.cssText = "font-size:12px;font-weight:600;color:#e2e8f0;margin:0 0 2px";
           title.textContent = `${src.id} \u2192 ${tgt.id}`;
           tipEl.appendChild(title);
 
+          const subtitle = document.createElement("p");
+          subtitle.style.cssText =
+            "font-size:10px;color:#64748b;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.05em";
+          subtitle.textContent = t("pipeline.tooltip.edge");
+          tipEl.appendChild(subtitle);
+
+          const shareOfSrc =
+            src.total > 0 ? `${((d.weight / src.total) * 100).toFixed(1)}%` : "\u2014";
+          const shareOfTgt =
+            tgt.total > 0 ? `${((d.weight / tgt.total) * 100).toFixed(1)}%` : "\u2014";
+
           const rows: [string, string][] = [
-            ["Frequency", `${d.weight} times`],
-            ["Meaning", `${tgt.id} ran after ${src.id}`],
-            [src.id + " total", `${src.total} spawns`],
-            [tgt.id + " total", `${tgt.total} spawns`],
+            [t("pipeline.tooltip.sequentialPairs"), `${d.weight}\u00d7`],
+            [t("pipeline.tooltip.shareOfSrcFmt", { source: src.id }), shareOfSrc],
+            [t("pipeline.tooltip.shareOfTgtFmt", { target: tgt.id }), shareOfTgt],
+            [t("pipeline.tooltip.totalSpawnsFmt", { id: src.id }), String(src.total)],
+            [t("pipeline.tooltip.totalSpawnsFmt", { id: tgt.id }), String(tgt.total)],
           ];
           for (const [label, value] of rows) {
-            const row = document.createElement("div");
-            row.style.cssText =
-              "display:flex;justify-content:space-between;gap:16px;font-size:11px";
-            const lbl = document.createElement("span");
-            lbl.style.color = "#64748b";
-            lbl.textContent = label;
-            const val = document.createElement("span");
-            val.style.cssText = "color:#cbd5e1;font-weight:500";
-            val.textContent = value;
-            row.appendChild(lbl);
-            row.appendChild(val);
-            tipEl.appendChild(row);
+            appendTooltipRow(tipEl, label, value);
           }
 
-          tipEl.style.display = "block";
-          const nearRight = event.clientX > window.innerWidth - 260;
-          tipEl.style.left = nearRight ? `${event.clientX - 16}px` : `${event.clientX + 16}px`;
-          tipEl.style.top = `${event.clientY - 8}px`;
-          tipEl.style.transform = nearRight ? "translateX(-100%)" : "";
-        }
-      })
-      .on("mousemove", (event: MouseEvent) => {
-        if (tipEl) {
-          tipEl.style.left = `${event.clientX + 16}px`;
-          tipEl.style.top = `${event.clientY - 8}px`;
+          appendTooltipDescription(
+            tipEl,
+            t("pipeline.tooltip.edgeDescFmt", {
+              source: src.id,
+              target: tgt.id,
+              count: d.weight,
+            })
+          );
+
+          tipEl.style.maxWidth = "320px";
+          positionTooltipAt(tipEl, event.clientX, event.clientY);
         }
       })
       .on("mouseleave", () => {
@@ -336,7 +408,7 @@ export function AgentCollaborationNetwork({
           .attr("stroke-opacity", 0.55)
           .attr("stroke-width", (d) => Math.max(1.5, strokeScale(d.weight)));
         edgeLabels.attr("fill-opacity", 1);
-        if (tipEl) tipEl.style.display = "none";
+        if (tipEl) tipEl.style.opacity = "0";
       });
 
     // Node hover
@@ -355,19 +427,13 @@ export function AgentCollaborationNetwork({
         d3.select(event.currentTarget as SVGGElement)
           .select("circle")
           .attr("stroke-width", 4);
-        if (tipEl) showTooltip(tipEl, d, event.clientX, event.clientY, t);
-      })
-      .on("mousemove", (event: MouseEvent) => {
-        if (tipEl) {
-          tipEl.style.left = `${event.clientX + 16}px`;
-          tipEl.style.top = `${event.clientY - 8}px`;
-        }
+        if (tipEl) showTooltip(tipEl, d, event.clientX, event.clientY, t, totalSpawns);
       })
       .on("mouseleave", () => {
         linkEls.attr("stroke-opacity", 0.55);
         edgeLabels.attr("fill-opacity", 1);
         nodeEls.selectAll("circle").attr("stroke-width", 2);
-        if (tipEl) tipEl.style.display = "none";
+        if (tipEl) tipEl.style.opacity = "0";
       });
 
     // ── Drag ──
@@ -473,18 +539,32 @@ export function AgentCollaborationNetwork({
     );
   }
 
+  const handleContainerLeave = () => {
+    const tip = tooltipRef.current;
+    if (tip) tip.style.opacity = "0";
+  };
+
   return (
-    <div ref={containerRef} className="w-full relative">
+    <div ref={containerRef} className="w-full relative" onMouseLeave={handleContainerLeave}>
       <svg
         ref={svgRef}
         style={{ display: "block", width: "100%", background: "transparent" }}
         aria-label={t("pipeline.ariaLabel")}
         role="img"
+        onMouseLeave={handleContainerLeave}
       />
       <div
         ref={tooltipRef}
+        role="tooltip"
+        aria-hidden="true"
         className="fixed z-50 px-3 py-2 bg-[#12121f] border border-[#2a2a4a] rounded-lg shadow-2xl pointer-events-none"
-        style={{ display: "none", minWidth: 172 }}
+        style={{
+          opacity: 0,
+          left: 0,
+          top: 0,
+          minWidth: 172,
+          transition: "opacity 120ms ease-out",
+        }}
       />
       <div className="flex flex-wrap items-center gap-3 mt-3 px-1">
         <span className="text-[10px] text-gray-600 uppercase tracking-widest font-medium">
