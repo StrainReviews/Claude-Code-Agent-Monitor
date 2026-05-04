@@ -38,8 +38,6 @@
   "type": "Typ",
   "statusLabel": "Status",
   "status": {
-    "idle": "Leerlauf",
-    "connected": "Verbunden",
     "working": "Arbeiten",
     "waiting": "Wartet",
     "completed": "Abgeschlossen",

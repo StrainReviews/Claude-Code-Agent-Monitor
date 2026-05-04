@@ -49,10 +49,22 @@ export const api = {
   },
 
   sessions: {
-    list: (params?: { status?: string; q?: string; limit?: number; offset?: number }) => {
+    facets: () => request<{ cwds: string[] }>("/sessions/facets"),
+    list: (params?: {
+      status?: string;
+      q?: string;
+      cwd?: string;
+      sort_by?: string;
+      sort_desc?: boolean;
+      limit?: number;
+      offset?: number;
+    }) => {
       const qs = new URLSearchParams();
       if (params?.status) qs.set("status", params.status);
       if (params?.q) qs.set("q", params.q);
+      if (params?.cwd) qs.set("cwd", params.cwd);
+      if (params?.sort_by) qs.set("sort_by", params.sort_by);
+      if (params?.sort_desc !== undefined) qs.set("sort_desc", String(params.sort_desc));
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.offset) qs.set("offset", String(params.offset));
       const queryString = qs.toString();
@@ -147,9 +159,40 @@ export const api = {
   settings: {
     info: () =>
       request<{
-        db: { path: string; size: number; counts: Record<string, number> };
+        db: {
+          path: string;
+          size: number;
+          counts: Record<string, number>;
+          pragmas: {
+            journal_mode: string;
+            synchronous: number;
+            auto_vacuum: number;
+            encoding: string;
+            foreign_keys: number;
+            busy_timeout: number;
+          };
+          load_stats: { m5: number; m15: number; h1: number };
+        };
         hooks: { installed: boolean; path: string; hooks: Record<string, boolean> };
-        server: { uptime: number; node_version: string; platform: string; ws_connections: number };
+        server: {
+          uptime: number;
+          node_version: string;
+          platform: string;
+          ws_connections: number;
+          memory: { rss: number; heapTotal: number; heapUsed: number; external: number };
+          cpu_load: number[];
+          arch: string;
+          total_mem: number;
+          free_mem: number;
+          cpus: number;
+        };
+        transcript_cache: {
+          size: number;
+          maxSize: number;
+          hits: number;
+          misses: number;
+          keys: string[];
+        };
       }>("/settings/info"),
     claudeHome: {
       get: () => request<{ claude_home: string }>("/settings/claude-home"),

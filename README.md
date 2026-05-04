@@ -134,7 +134,13 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
 <p align="center">
   <img src="images/dashboard.png" alt="Dashboard Overview" width="100%">
   <br>
-  <em>📡 <strong>Dashboard</strong> — overview stats, active agent cards, and recent activity feed</em>
+  <em>📡 <strong>Dashboard · Monitor</strong> — overview stats, active agent cards, and recent activity feed</em>
+</p>
+
+<p align="center">
+  <img src="images/dashboard-health.png" alt="Dashboard — System Health tab" width="100%">
+  <br>
+  <em>🩺 <strong>Dashboard · Health</strong> — composite health score ring, storage engine donut chart, cache hit / error / success gauges, tool invocation bars, subagent effectiveness, model token distribution, and compaction stats — all auto-refreshing every 5 s</em>
 </p>
 
 <p align="center">
@@ -207,8 +213,8 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 
 | Feature                            | Description                                                                                                                                                                                                                                                                  |
 |------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Dashboard**                      | Overview stats, active agent cards with collapsible subagent hierarchy, recent activity feed                                                                                                                                                                                 |
-| **Kanban Board**                   | Two views with a header toggle (persisted in `localStorage`): **Agents** — 4 columns (Working / Waiting / Completed / Error) — and **Sessions** — 5 columns (Active / Waiting / Completed / Error / Abandoned). The yellow **Waiting** column is a UI overlay surfaced from the `awaiting_input_since` column on sessions and agents — populated when Claude Code is sitting at a prompt (fresh session, between turns, or blocked on a permission Notification) and cleared the moment the user resumes (UserPromptSubmit / PreToolUse). Each column header shows a `?` tooltip explaining lifecycle transitions. Cards fetch by persisted status from the server (effectively unlimited per status), then paginate client-side at 10 cards per column with a "Show more" affordance. WS subscription scopes to the active view (`agent_*` vs `session_*` frames) so off-view updates don't trigger refetches. Idle and Connected remain valid persisted statuses (still queryable via `/api/agents?status=…`) but are intentionally not given dedicated columns — the live state machine never lands an active main agent there. |
+| **Dashboard**                      | Two tabs persisted in `localStorage`: **Monitor** — overview stats (6 stat cards), active agent cards with collapsible subagent hierarchy, and recent activity feed with dynamic item counts that fill available viewport height via `ResizeObserver`. **Health** — composite system health score ring (weighted: 0.4 × success rate + 0.25 × cache hit rate + 0.25 × (100 − error rate) + 0.1 × (100 − heap %)), storage engine donut chart with record distribution, cache performance / error rate / success rate gauges, tool invocation horizontal bar chart (top 8), subagent effectiveness bars, model token distribution, and compaction impact stats. All health metrics auto-refresh every 5 s from `/api/settings/info` and `/api/workflows`. Cursor-following tooltips with viewport edge detection on every chart |
+| **Kanban Board**                   | Two views with a header toggle (persisted in `localStorage`): **Agents** — 4 columns (Working / Waiting / Completed / Error) — and **Sessions** — 5 columns (Active / Waiting / Completed / Error / Abandoned). The **Waiting** column maps directly to the persisted `waiting` status on agents — set when Claude Code is sitting at a prompt (fresh session, between turns, or blocked on a permission Notification) and transitions to `working` the moment the user resumes (UserPromptSubmit / PreToolUse). Each column header shows a `?` tooltip explaining lifecycle transitions. Cards fetch by persisted status from the server (effectively unlimited per status), then paginate client-side at 10 cards per column with a "Show more" affordance. WS subscription scopes to the active view (`agent_*` vs `session_*` frames) so off-view updates don't trigger refetches. |
 | **Sessions**                       | Searchable, filterable, **server-paginated** table of every recorded session. Each page click hits `/api/sessions?status=&q=&limit=10&offset=…`, so cost computation runs only over the visible page — independent of how many sessions exist in the database. The search box (`q=`) does case-insensitive matching across `id` / `name` / `cwd` on the server with a 300 ms debounce, and the response carries a `total` count for the paginator UI. Status filter, search, and pagination compose. |
 | **Session Detail**                 | Per-session real-time overview panel with active-agent banner (current tool + task), six tile counters (events with events/min rate, tool calls, subagents, compactions, errors, ticking duration), top-tool usage bars, subagent type breakdown, stacked token-flow strip, and event-type pill cloud — all live-refreshed on hook events. Below it: agent hierarchy tree, full event timeline with multi-dimension filters (status, event type, tool, agent, text search, date range), Pre/Post grouping by `tool_use_id`, human-readable summary block, tool-aware input/response renderers (terminal for Bash, unified diff for Edit, line-numbered code for Read/Write, match list for Grep, key/value card for MCP tools), and a Conversation tab that renders transcripts with markdown (headings, lists, blockquotes, tables, task lists), syntax-highlighted code blocks (js/ts, python, json, bash, html, css, sql, yaml, diff) with line numbers and copy-to-clipboard, and per-tool styled tool calls (Bash → terminal, Edit → side-by-side old/new, Write → file label, Read → path chip, Grep → pattern card) |
 | **Activity Feed**                  | Real-time streaming event log with pause/resume, multi-dimension filters (same toolbar as Session Detail plus a Session filter), server-driven "Load more" pagination, debounced filter-aware live refresh preserving the loaded page size, grouping toggle, origin prefix showing project › session › subagent, and a "Session →" button per row                                         |
@@ -395,47 +401,46 @@ sequenceDiagram
    - On `SessionStart`, stamps the session and main agent's `awaiting_input_since` so a fresh CLI sitting at the prompt lands in **Waiting** immediately
    - On `UserPromptSubmit` (user hits enter), clears the waiting flag and promotes the main agent to `working` — the only reliable signal that text-only assistant turns have started, since they emit no `PreToolUse`
    - Sets agent to "working" on `PreToolUse` (also clears the waiting flag), keeps it working through `PostToolUse`
-   - On `Stop` (Claude finishes responding), main agent goes to "idle" and the waiting flag is re-stamped — Claude finished its turn, ball is in the user's court. Background subagents continue running. Session stays `active`. Error stops drop the flag so the session lands cleanly in Error
-   - On a permission `Notification` (matched by message pattern: `permission`, `waiting for input`, `needs your approval`, …), stamps the waiting flag without changing status
+   - On `Stop` (Claude finishes responding), main agent goes to "waiting" — Claude finished its turn, ball is in the user's court. Background subagents continue running. Session stays `active`. Stop with `stop_reason=error` marks the agent `error` and the session `error`
+   - On a permission `Notification` (matched by message pattern: `permission`, `waiting for input`, `needs your approval`, …), sets the agent to `waiting` and stamps `awaiting_input_since`
    - `SubagentStop` deliberately does NOT clear the waiting flag (a backgrounded subagent finishing tells us nothing about the human)
    - Marks subagents completed individually via `SubagentStop`. After `res.json()` returns, fires a fire-and-forget `scanAndImportSubagents` pass that walks the session's `subagents/agent-*.jsonl` files, pairs `tool_use` ↔ `tool_result` blocks by `tool_use_id`, and emits `PreToolUse` + `PostToolUse` events under each subagent's own `agent_id` — closing the gap where subagent-internal tool calls would otherwise be invisible to the dashboard
-   - On `SessionEnd` (CLI process exits), drops the waiting flag and marks all agents + the session as `completed`
+   - On `SessionEnd` (CLI process exits), drops the waiting flag. If the session is in `error`, the error state is preserved; otherwise marks all agents + the session as `completed`
    - On `SessionStart`, any other active session with no activity for `DASHBOARD_STALE_MINUTES` (default 180 = 3 h, env-overridable) is automatically marked "abandoned" with its agents completed. This handles `/resume` inside a session, Ctrl+C, and other scenarios where a session is orphaned without a clean `SessionEnd`
    - Reactivates completed/error/abandoned sessions when new work events arrive (session resumed). Stop and SubagentStop events also reactivate completed/abandoned sessions — this handles pre-existing sessions imported before the server started, where the first hook event may be a Stop
+   - **Error recovery**: only `UserPromptSubmit` and `PreToolUse` can recover a session from `error` back to `active` — indicating the user actively retried
    - Detects conversation compaction (`isCompactSummary` entries in the JSONL transcript) and creates `Compaction` agents + events. Token baselines are preserved across compactions so no usage is lost. Transcript reads use a shared stat-based cache with incremental byte-offset reads — only new bytes appended since the last read are parsed, giving ~50x speedup for long sessions
    - Extracts API errors (`isApiErrorMessage` entries: quota limits, rate limits, invalid_request) and raw `type: "error"` responses from JSONL transcripts, stored as `APIError` events. Turn durations (`system` subtype `turn_duration`) are stored as `TurnDuration` events. Tool result errors (`toolUseResult.is_error`) are tracked as `ToolError` events
+   - **Error detection watchdog** — a background timer runs every 15 seconds, scanning active sessions with no recent hook events (>10 s stale). It re-reads their transcript files looking for API errors (auth failures, rate limits, quota exhaustion), derives transcript paths from session `cwd` for imported sessions without `transcript_path` in event data, and marks sessions/agents as `error` when API errors are found. This catches cases where the Claude CLI does not fire a hook after an API error (e.g., 401 auth failures where the CLI shows the error and waits)
    - A periodic server sweep catches abandoned sessions and new compactions that slipped past event-based detection (e.g., `/compact` fires no hook, `/resume` within seconds of session creation). Cadence is derived from `DASHBOARD_STALE_MINUTES` (¼ of the threshold, clamped to 60 s – 5 min). The sweep shares the transcript cache with the hook handler, avoiding duplicate I/O. Abandoned session cleanup also evicts the transcript cache entry to bound memory
 4. **WebSocket** broadcasts the change to all connected clients
 5. **UI** receives the update and re-renders the affected components in real-time with no polling.
 
 ### Agent State Machine
 
-Persisted statuses: `idle | connected | working | completed | error`. The
-**Waiting** state shown on the dashboard is a UI overlay derived from the
-`awaiting_input_since` column — set whenever Claude Code is sitting at a
-prompt waiting for the human, cleared the moment the user resumes.
+Persisted statuses: `working | waiting | completed | error`. The
+`awaiting_input_since` column is supplementary — it tracks when the agent
+started waiting and is used for duration display, but `waiting` is now a
+real persisted status.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> connected: ensureSession (first hook)
-    connected --> waiting: SessionStart (stamps awaiting flag)
-    waiting --> working: UserPromptSubmit (user hits enter)
-    waiting --> working: PreToolUse (Claude calls a tool)
-    working --> working: PreToolUse (subsequent tool)
-    working --> waiting: Stop, non-error (idle + flag)
-    working --> waiting: Permission Notification (flag set, status unchanged)
-    waiting --> completed: SessionEnd
+    [*] --> waiting: ensureSession (first hook)
+    waiting --> working: PreToolUse / UserPromptSubmit
+    working --> working: PostToolUse (tool completed)
+    working --> waiting: Stop, non-error
+    working --> waiting: Notification (input prompt)
+    waiting --> error: Stop with error
+    working --> error: Stop with error
+    waiting --> error: API error detected (watchdog)
+    working --> error: API error detected (watchdog)
+    error --> working: UserPromptSubmit / PreToolUse (recovery)
     working --> completed: SessionEnd
-    working --> error: Stop, stop_reason=error
-    completed --> [*]
-    error --> [*]
+    waiting --> completed: SessionEnd
 
     note right of waiting
-        Persisted as status=idle/connected
-        with awaiting_input_since set.
-        SubagentStop does NOT exit Waiting —
-        a subagent finishing tells us nothing
-        about the human.
+        Agent is between turns or
+        awaiting user input
     end note
 ```
 
@@ -450,10 +455,14 @@ stateDiagram-v2
     [*] --> waiting: SessionStart (status=active + flag)
     waiting --> active: UserPromptSubmit / PreToolUse / PostToolUse
     active --> waiting: Stop, non-error (flag re-stamped)
-    active --> waiting: Permission Notification
+    active --> waiting: Permission Notification (agent → waiting)
     active --> error: Stop, stop_reason=error
+    active --> error: API error detected (watchdog)
+    waiting --> error: API error detected (watchdog)
+    error --> active: UserPromptSubmit / PreToolUse (recovery)
     waiting --> completed: SessionEnd (CLI exited)
     active --> completed: SessionEnd (CLI exited)
+    error --> error: SessionEnd (preserves error)
     waiting --> abandoned: Stale > DASHBOARD_STALE_MINUTES (default 180)
     active --> abandoned: Stale > DASHBOARD_STALE_MINUTES
     completed --> active: Session resumed (new work event)
@@ -955,12 +964,12 @@ The dashboard processes these Claude Code hook types:
 | `UserPromptSubmit`  | User hits enter on a prompt    | Clears the waiting flag and promotes the main agent to `working` — the only signal that text-only assistant turns have started, since they emit no `PreToolUse` |
 | `PreToolUse`        | Agent starts using a tool      | Clears the waiting flag, sets agent to `working`, sets `current_tool`. If tool is `Agent`, creates a subagent record |
 | `PostToolUse`       | Tool execution completed       | Clears the waiting flag (handles permission-prompt approvals where the Notification stamped it mid-tool). Clears `current_tool`. Agent stays `working` |
-| `Stop`              | Claude finishes responding     | Non-error: main agent → `idle` and waiting flag re-stamped — Claude finished its turn, ball is in the user's court. Error: drops the flag, marks the session `error`. Background subagents keep running |
+| `Stop`              | Claude finishes responding     | Non-error: main agent → `waiting` — Claude finished its turn, ball is in the user's court. `stop_reason=error`: marks the agent and session `error`. Background subagents keep running |
 | `SubagentStop`      | Background agent finished      | Matches and completes the subagent by description, type, or task. Deliberately does NOT clear the waiting flag — a subagent finishing tells us nothing about the human. **Triggers a fire-and-forget JSONL scan** (`scanAndImportSubagents`) that emits per-tool `PreToolUse` + `PostToolUse` events under the subagent's own `agent_id` so the Timeline shows every tool the subagent ran, not just the spawn marker |
-| `Notification`      | Agent notification             | Logs event. Permission/input-prompt messages stamp the waiting flag (matched by pattern: `permission`, `waiting for input`, `needs your approval`, …). Compaction notifications are tagged as `Compaction` events. Triggers a browser notification if enabled |
-| `SessionEnd`        | Claude Code CLI process exits  | Drops the waiting flag, marks all agents and the session as `completed`                       |
+| `Notification`      | Agent notification             | Logs event. Permission/input-prompt messages set the agent to `waiting` and stamp `awaiting_input_since` (matched by pattern: `permission`, `waiting for input`, `needs your approval`, …). Compaction notifications are tagged as `Compaction` events. Triggers a browser notification if enabled |
+| `SessionEnd`        | Claude Code CLI process exits  | Drops the waiting flag. If the session is already in `error`, the error state is preserved; otherwise marks all agents and the session as `completed` |
 | `Compaction`   | `/compact` detected in JSONL   | Creates a compaction subagent (type `compaction`) and Compaction event. Detected via `isCompactSummary` entries in the transcript JSONL. Also detected by periodic scanner for active sessions |
-| `APIError`     | API error in JSONL transcript  | Extracted from `isApiErrorMessage` entries (quota, rate limit, invalid_request) and raw `type: "error"` responses. Stored as event with error details |
+| `APIError`     | API error in JSONL transcript  | Extracted from `isApiErrorMessage` entries (quota, rate limit, invalid_request) and raw `type: "error"` responses. **Now immediately marks the session and agent as `error`** — previously recorded as events without changing status. Stored as event with error details |
 | `TurnDuration` | Turn timing in JSONL transcript| Extracted from `system` subtype `turn_duration` messages with `durationMs`. Stored as event for turn-level timing analysis |
 | `ToolError`    | Tool result error in JSONL     | Extracted from `toolUseResult.is_error` entries. Tracks tool-level failures for error propagation analysis |
 
@@ -1140,9 +1149,9 @@ erDiagram
         TEXT session_id FK
         TEXT name "Main Agent — {session name} or subagent description"
         TEXT type "main|subagent"
-        TEXT status "idle|connected|working|completed|error"
+        TEXT status "working|waiting|completed|error"
         TEXT current_tool "Active tool or NULL"
-        TEXT awaiting_input_since "ISO 8601 or NULL — main-agent waiting flag"
+        TEXT awaiting_input_since "ISO 8601 or NULL — supplementary wait timestamp"
     }
 
     events {

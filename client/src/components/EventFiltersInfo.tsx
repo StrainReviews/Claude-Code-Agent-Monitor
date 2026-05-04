@@ -17,12 +17,12 @@ export function EventFiltersInfo() {
   const { t } = useTranslation("common");
   return (
     <details className="card bg-surface-2/40 border border-border rounded overflow-hidden">
-      <summary className="cursor-pointer select-none px-3 py-2 flex items-center gap-2 text-[11px] text-gray-400 hover:text-gray-200 hover:bg-surface-2/80">
-        <Info className="w-3.5 h-3.5" />
-        <span className="font-semibold uppercase tracking-wide">
+      <summary className="cursor-pointer select-none px-3 py-2 flex items-center text-[11px] text-gray-400 hover:text-gray-200 hover:bg-surface-2/80">
+        <Info className="w-3.5 h-3.5 mr-2" />
+        <span className="font-semibold uppercase tracking-wide mr-1.5">
           {t("eventFilters.help.title")}
         </span>
-        <span className="text-gray-500 font-normal ml-1">— {t("eventFilters.help.subtitle")}</span>
+        <span className="text-gray-500 font-normal">— {t("eventFilters.help.subtitle")}</span>
       </summary>
 
       <div className="divide-y divide-border">
@@ -34,9 +34,9 @@ export function EventFiltersInfo() {
             </dt>
             <dd className="self-center">{t("eventFilters.help.statusWorkingDesc")}</dd>
             <dt>
-              <AgentStatusBadge status="connected" />
+              <AgentStatusBadge status="waiting" />
             </dt>
-            <dd className="self-center">{t("eventFilters.help.statusConnectedDesc")}</dd>
+            <dd className="self-center">{t("eventFilters.help.statusWaitingDesc")}</dd>
             <dt>
               <AgentStatusBadge status="completed" />
             </dt>
@@ -45,10 +45,6 @@ export function EventFiltersInfo() {
               <AgentStatusBadge status="error" />
             </dt>
             <dd className="self-center">{t("eventFilters.help.statusErrorDesc")}</dd>
-            <dt>
-              <AgentStatusBadge status="idle" />
-            </dt>
-            <dd className="self-center">{t("eventFilters.help.statusIdleDesc")}</dd>
           </dl>
         </Section>
 

@@ -241,7 +241,7 @@ describe("Agents API", () => {
       session_id: "sess-2",
       name: "Main Agent",
       type: "main",
-      status: "connected",
+      status: "working",
     });
     assert.equal(res.status, 201);
     assert.equal(res.body.agent.id, "agent-1");
@@ -326,7 +326,7 @@ describe("Agents API", () => {
 
   it("should clear current_tool on update", async () => {
     const res = await patch("/api/agents/agent-1", {
-      status: "connected",
+      status: "working",
       current_tool: null,
     });
     assert.equal(res.status, 200);
@@ -843,7 +843,7 @@ describe("Hook Event Processing", () => {
     assert.equal(main.awaiting_input_since, null);
   });
 
-  it("should keep session active and set main agent idle on Stop", async () => {
+  it("should keep session active and set main agent waiting on Stop", async () => {
     // First make sure main agent is in a working state
     await post("/api/hooks/event", {
       hook_type: "PreToolUse",
@@ -863,10 +863,10 @@ describe("Hook Event Processing", () => {
     const sessRes = await fetch("/api/sessions/hook-sess-1");
     assert.equal(sessRes.body.session.status, "active");
 
-    // Main agent should be idle (waiting for user input)
+    // Main agent should be waiting (waiting for user input)
     const agentsRes = await fetch("/api/agents?session_id=hook-sess-1");
     const main = agentsRes.body.agents.find((a) => a.type === "main");
-    assert.equal(main.status, "idle");
+    assert.equal(main.status, "waiting");
 
     // Non-error Stop also stamps awaiting_input_since so the dashboard
     // surfaces a Waiting badge — Claude finished its turn, ball is now in
@@ -1087,7 +1087,7 @@ describe("Hook Event Processing", () => {
     assert.equal(subagent.ended_at, null, "Subagent should not have ended_at");
 
     const mainAgent = agentsRes.body.agents.find((a) => a.type === "main");
-    assert.equal(mainAgent.status, "idle", "Main agent should be idle");
+    assert.equal(mainAgent.status, "waiting", "Main agent should be waiting");
 
     const sessRes = await fetch("/api/sessions/hook-sess-bg");
     assert.equal(sessRes.body.session.status, "active", "Session should stay active");
@@ -1159,7 +1159,7 @@ describe("Hook Event Processing", () => {
 
     const agents0 = await fetch("/api/agents?session_id=hook-sess-flicker");
     const main0 = agents0.body.agents.find((a) => a.type === "main");
-    assert.equal(main0.status, "idle", "Main should be idle after Stop");
+    assert.equal(main0.status, "waiting", "Main should be waiting after Stop");
 
     const sub0 = agents0.body.agents.find((a) => a.type === "subagent");
     assert.equal(sub0.status, "working", "Background subagent should stay working after Stop");
@@ -1256,7 +1256,7 @@ describe("Hook Event Processing", () => {
     );
 
     main = sessRes.body.agents.find((a) => a.type === "main");
-    assert.equal(main.status, "idle", "Main agent should be idle after Stop reactivation");
+    assert.equal(main.status, "waiting", "Main agent should be waiting after Stop reactivation");
   });
 
   it("should NOT reactivate error session on Stop event", async () => {
@@ -1304,7 +1304,7 @@ describe("Hook Event Processing", () => {
 
     let agentsRes = await fetch("/api/agents?session_id=hook-sess-multiturn");
     let main = agentsRes.body.agents.find((a) => a.type === "main");
-    assert.equal(main.status, "idle", "Main agent should be idle after turn 1 Stop");
+    assert.equal(main.status, "waiting", "Main agent should be waiting after turn 1 Stop");
 
     // Turn 2: user asks something else — PreToolUse should transition idle → working
     await post("/api/hooks/event", {
@@ -1326,7 +1326,7 @@ describe("Hook Event Processing", () => {
 
     agentsRes = await fetch("/api/agents?session_id=hook-sess-multiturn");
     main = agentsRes.body.agents.find((a) => a.type === "main");
-    assert.equal(main.status, "idle", "Main agent should be idle after turn 2 Stop");
+    assert.equal(main.status, "waiting", "Main agent should be waiting after turn 2 Stop");
   });
 
   it("should mark session completed on SessionEnd", async () => {
@@ -1550,7 +1550,7 @@ describe("Database Integrity", () => {
         "Test",
         "invalid_type",
         null,
-        "idle",
+        "waiting",
         null,
         null,
         null
@@ -1567,7 +1567,7 @@ describe("Database Integrity", () => {
       "Agent",
       "main",
       null,
-      "idle",
+      "waiting",
       null,
       null,
       null
@@ -1720,8 +1720,8 @@ describe("Transcript cache integration", () => {
     const res = await fetch("/api/settings/info");
     assert.strictEqual(res.status, 200);
     assert.ok(res.body.transcript_cache, "response should include transcript_cache");
-    assert.ok(typeof res.body.transcript_cache.entries === "number", "should have entries count");
-    assert.ok(Array.isArray(res.body.transcript_cache.paths), "should have paths array");
+    assert.ok(typeof res.body.transcript_cache.size === "number", "should have size count");
+    assert.ok(Array.isArray(res.body.transcript_cache.keys), "should have keys array");
   });
 
   it("should evict cache entry on SessionEnd", async () => {
@@ -1747,7 +1747,7 @@ describe("Transcript cache integration", () => {
         },
       });
       assert.ok(
-        transcriptCache.stats().paths.includes(tmpTranscript),
+        transcriptCache.stats().keys.includes(tmpTranscript),
         "cache should contain transcript path after event"
       );
 
@@ -1757,7 +1757,7 @@ describe("Transcript cache integration", () => {
         data: { session_id: sessionId, transcript_path: tmpTranscript, cwd: "/tmp" },
       });
       assert.ok(
-        !transcriptCache.stats().paths.includes(tmpTranscript),
+        !transcriptCache.stats().keys.includes(tmpTranscript),
         "cache should NOT contain transcript path after SessionEnd"
       );
     } finally {
@@ -1798,18 +1798,18 @@ describe("Nested Agent Spawning", () => {
     assert.equal(sub1.status, "working");
   });
 
-  it("should parent sub-subagent to working subagent when main is idle (depth 1→2)", async () => {
+  it("should parent sub-subagent to working subagent when main is waiting (depth 1→2)", async () => {
     // Stop main agent so it goes idle — simulates main waiting for subagent results
     await post("/api/hooks/event", {
       hook_type: "Stop",
       data: { session_id: SID, stop_reason: "end_turn" },
     });
 
-    // Verify main is idle
+    // Verify main is waiting
     const mainRes = await fetch(`/api/agents/${SID}-main`);
-    assert.equal(mainRes.body.agent.status, "idle", "Main should be idle");
+    assert.equal(mainRes.body.agent.status, "waiting", "Main should be waiting");
 
-    // Now a new Agent tool call arrives — since main is idle, this must be from the working subagent
+    // Now a new Agent tool call arrives — since main is waiting, this must be from the working subagent
     await post("/api/hooks/event", {
       hook_type: "PreToolUse",
       data: {
@@ -1836,7 +1836,7 @@ describe("Nested Agent Spawning", () => {
   });
 
   it("should parent sub-sub-subagent to deepest working agent (depth 2→3)", async () => {
-    // Level-2 is working, level-1 is working, main is idle → deepest working is level-2
+    // Level-2 is working, level-1 is working, main is waiting → deepest working is level-2
     await post("/api/hooks/event", {
       hook_type: "PreToolUse",
       data: {

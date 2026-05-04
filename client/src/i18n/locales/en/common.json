@@ -38,8 +38,6 @@
   "type": "Type",
   "statusLabel": "Status",
   "status": {
-    "idle": "Idle",
-    "connected": "Connected",
     "working": "Working",
     "waiting": "Waiting",
     "completed": "Completed",
@@ -142,7 +140,7 @@
     "help": {
       "toggle": "Help",
       "title": "About events, filters, and grouping",
-      "subtitle": "Click to expand — badges, lifecycle, filter semantics, filter values",
+      "subtitle": "Unlock deeper insights: badges, lifecycles, and filter mechanics explained.",
       "valuesTitle": "What each filter accepts",
       "valueStatusDesc": "Preset shortcut that expands to event_type values (Working → PreToolUse, Completed → Stop/SubagentStop/Compaction, ...).",
       "valueEventTypeDesc": "Raw event_type strings from the DB. Pulled from /api/events/facets.",

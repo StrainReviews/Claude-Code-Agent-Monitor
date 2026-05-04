@@ -41,97 +41,145 @@ async function readFirstLine(filePath) {
 }
 
 router.get("/", (req, res) => {
-  // Cap raised from 1000 → 10000 so the Sessions and Kanban pages can list
-  // realistic deployments without truncation. Cost computation below runs
-  // only over the *returned* rows, so it scales with limit (the page size),
-  // not with the total session count — server-side pagination keeps each
-  // request cheap regardless of how many sessions exist in the DB.
   const limit = Math.min(parseInt(req.query.limit) || 50, 10000);
   const offset = parseInt(req.query.offset) || 0;
   const status = req.query.status;
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const cwd = req.query.cwd;
+  const sortBy = req.query.sort_by || "time"; // "time", "duration", "price"
+  const sortDesc = req.query.sort_desc !== "false";
 
-  let rows;
-  let total;
+  let where = [];
+  let params = [];
+
   if (q) {
-    // Search across id, name, cwd — case-insensitive LIKE. Composes with
-    // the status filter when present. Output shape (agent_count,
-    // last_activity, ordering) matches stmts.listSessions so callers can
-    // treat the search result identically.
     const like = `%${q}%`;
-    const where = ["(s.id LIKE ? OR s.name LIKE ? OR s.cwd LIKE ?)"];
-    const params = [like, like, like];
-    if (status) {
-      where.push("s.status = ?");
-      params.push(status);
+    where.push("(s.id LIKE ? OR s.name LIKE ? OR s.cwd LIKE ?)");
+    params.push(like, like, like);
+  }
+  if (status) {
+    where.push("s.status = ?");
+    params.push(status);
+  }
+  if (cwd) {
+    where.push("s.cwd = ?");
+    params.push(cwd);
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  const total = db.prepare(`SELECT COUNT(*) as c FROM sessions s ${whereSql}`).get(...params).c;
+
+  let rows = [];
+
+  if (sortBy === "price") {
+    const allRows = db
+      .prepare(
+        `SELECT s.*, COUNT(a.id) as agent_count, s.updated_at as last_activity
+         FROM sessions s LEFT JOIN agents a ON a.session_id = s.id
+         ${whereSql}
+         GROUP BY s.id`
+      )
+      .all(...params);
+
+    if (allRows.length > 0) {
+      const rules = stmts.listPricing.all();
+
+      for (let i = 0; i < allRows.length; i += 900) {
+        const chunk = allRows.slice(i, i + 900);
+        const ids = chunk.map((r) => r.id);
+        const placeholders = ids.map(() => "?").join(",");
+        const chunkTokens = db
+          .prepare(
+            `SELECT session_id, model,
+              input_tokens + baseline_input as input_tokens,
+              output_tokens + baseline_output as output_tokens,
+              cache_read_tokens + baseline_cache_read as cache_read_tokens,
+              cache_write_tokens + baseline_cache_write as cache_write_tokens
+            FROM token_usage WHERE session_id IN (${placeholders})`
+          )
+          .all(...ids);
+
+        const tokensBySession = {};
+        for (const t of chunkTokens) {
+          if (!tokensBySession[t.session_id]) tokensBySession[t.session_id] = [];
+          tokensBySession[t.session_id].push(t);
+        }
+
+        for (const row of chunk) {
+          const sessionTokens = tokensBySession[row.id];
+          row.cost = sessionTokens ? calculateCost(sessionTokens, rules).total_cost : 0;
+        }
+      }
+
+      allRows.sort((a, b) => {
+        return sortDesc ? b.cost - a.cost : a.cost - b.cost;
+      });
+      rows = allRows.slice(offset, offset + limit);
     }
-    const whereSql = `WHERE ${where.join(" AND ")}`;
+  } else {
+    let orderSql = "s.updated_at DESC";
+    if (sortBy === "time") {
+      orderSql = `s.updated_at ${sortDesc ? "DESC" : "ASC"}`;
+    } else if (sortBy === "duration") {
+      orderSql = `(julianday(COALESCE(s.ended_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))) - julianday(s.started_at)) ${sortDesc ? "DESC" : "ASC"}`;
+    }
+
     rows = db
       .prepare(
         `SELECT s.*, COUNT(a.id) as agent_count, s.updated_at as last_activity
          FROM sessions s LEFT JOIN agents a ON a.session_id = s.id
          ${whereSql}
-         GROUP BY s.id ORDER BY s.updated_at DESC LIMIT ? OFFSET ?`
+         GROUP BY s.id ORDER BY ${orderSql} LIMIT ? OFFSET ?`
       )
       .all(...params, limit, offset);
-    total = db.prepare(`SELECT COUNT(*) as c FROM sessions s ${whereSql}`).get(...params).c;
-  } else if (status) {
-    rows = stmts.listSessionsByStatus.all(status, limit, offset);
-    total = db.prepare("SELECT COUNT(*) as c FROM sessions WHERE status = ?").get(status).c;
-  } else {
-    rows = stmts.listSessions.all(limit, offset);
-    total = db.prepare("SELECT COUNT(*) as c FROM sessions").get().c;
-  }
 
-  // Bulk-compute costs for the returned page only (not the entire matching
-  // set). One IN-clause query for token rows, one for pricing rules, then
-  // an O(rows) JS pass.
-  if (rows.length > 0) {
-    const ids = rows.map((r) => r.id);
-    const placeholders = ids.map(() => "?").join(",");
-    // Combine main-session tokens (token_usage, baselines applied) with
-    // per-subagent tokens (subagent_token_usage). Subagent transcripts are
-    // disjoint from the main transcript so additive summation is correct.
-    const allTokens = db
-      .prepare(
-        `SELECT session_id, model,
-          SUM(input_tokens)       as input_tokens,
-          SUM(output_tokens)      as output_tokens,
-          SUM(cache_read_tokens)  as cache_read_tokens,
-          SUM(cache_write_tokens) as cache_write_tokens
-        FROM (
-          SELECT session_id, model,
-            input_tokens + baseline_input       as input_tokens,
-            output_tokens + baseline_output     as output_tokens,
-            cache_read_tokens + baseline_cache_read  as cache_read_tokens,
-            cache_write_tokens + baseline_cache_write as cache_write_tokens
-          FROM token_usage WHERE session_id IN (${placeholders})
-          UNION ALL
-          SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
-          FROM subagent_token_usage WHERE session_id IN (${placeholders})
+    if (rows.length > 0) {
+      const ids = rows.map((r) => r.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const allTokens = db
+        .prepare(
+          `SELECT session_id, model,
+            SUM(input_tokens)       as input_tokens,
+            SUM(output_tokens)      as output_tokens,
+            SUM(cache_read_tokens)  as cache_read_tokens,
+            SUM(cache_write_tokens) as cache_write_tokens
+          FROM (
+            SELECT session_id, model,
+              input_tokens + baseline_input       as input_tokens,
+              output_tokens + baseline_output     as output_tokens,
+              cache_read_tokens + baseline_cache_read  as cache_read_tokens,
+              cache_write_tokens + baseline_cache_write as cache_write_tokens
+            FROM token_usage WHERE session_id IN (${placeholders})
+            UNION ALL
+            SELECT session_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens
+            FROM subagent_token_usage WHERE session_id IN (${placeholders})
+          )
+          GROUP BY session_id, model`
         )
-        GROUP BY session_id, model`
-      )
-      .all(...ids, ...ids);
+        .all(...ids, ...ids);
 
-    const rules = stmts.listPricing.all();
-    const tokensBySession = {};
-    for (const t of allTokens) {
-      if (!tokensBySession[t.session_id]) tokensBySession[t.session_id] = [];
-      tokensBySession[t.session_id].push(t);
-    }
+      const rules = stmts.listPricing.all();
+      const tokensBySession = {};
+      for (const t of allTokens) {
+        if (!tokensBySession[t.session_id]) tokensBySession[t.session_id] = [];
+        tokensBySession[t.session_id].push(t);
+      }
 
-    for (const row of rows) {
-      const sessionTokens = tokensBySession[row.id];
-      if (sessionTokens) {
-        row.cost = calculateCost(sessionTokens, rules).total_cost;
-      } else {
-        row.cost = 0;
+      for (const row of rows) {
+        const sessionTokens = tokensBySession[row.id];
+        row.cost = sessionTokens ? calculateCost(sessionTokens, rules).total_cost : 0;
       }
     }
   }
 
   res.json({ sessions: rows, limit, offset, total });
+});
+
+router.get("/facets", (req, res) => {
+  const rows = db
+    .prepare("SELECT DISTINCT cwd FROM sessions WHERE cwd IS NOT NULL AND cwd != '' ORDER BY cwd")
+    .all();
+  res.json({ cwds: rows.map((r) => r.cwd) });
 });
 
 router.get("/:id", (req, res) => {

@@ -816,8 +816,12 @@
                   <div class="feature-icon ic-indigo">📡</div>
                   <h3>Live Dashboard</h3>
                   <p>
-                    Overview stats, active agent cards with collapsible subagent hierarchy, and recent
-                    activity feed — all updating in real-time via WebSocket.
+                    Two tabs: <strong>Monitor</strong> — overview stats, active agent cards with
+                    collapsible subagent hierarchy, and recent activity feed with dynamic item counts
+                    that fill available viewport height. <strong>Health</strong> — composite system
+                    health score ring, storage engine donut chart, cache/error/success gauges, tool
+                    invocation bars, subagent effectiveness, model token distribution, and compaction
+                    stats — all auto-refreshing every 5 seconds via WebSocket.
                   </p>
                 </div>
                 <div class="feature-card">
@@ -1059,7 +1063,7 @@
                   <h3>Concurrency Timeline</h3>
                   <p>
                     Visualize parallel agent execution with a Gantt-style timeline showing overlapping
-                    subagent lifetimes, tool call concurrency, and idle gaps. Identify bottlenecks in
+                    subagent lifetimes, tool call concurrency, and wait gaps. Identify bottlenecks in
                     multi-agent orchestration and optimize task parallelism across complex sessions.
                   </p>
                 </div>
@@ -1098,7 +1102,11 @@
           <div class="screenshot-gallery">
             <div class="screenshot-card">
               <img src="images/dashboard.png" alt="Dashboard Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard</strong> — overview stats, active agent cards, and recent activity feed</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard · Monitor</strong> — overview stats, active agent cards, and recent activity feed</span></div>
+            </div>
+            <div class="screenshot-card">
+              <img src="images/dashboard-health.png" alt="Dashboard — System Health tab" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">🩺</span> <span><strong>Dashboard · Health</strong> — composite health score, storage engine donut, cache/error/success gauges, tool invocation bars, subagent effectiveness, model token distribution</span></div>
             </div>
             <div class="screenshot-card">
               <img src="images/board.png" alt="Kanban Board — Agents view" width="100%" loading="lazy" decoding="async" />
@@ -1244,10 +1252,10 @@
                   <td><code>Stop</code></td>
                   <td>Claude finishes a turn</td>
                   <td>
-                    Non-error: main agent → <code>idle</code> and <code>awaiting_input_since</code> re-stamped — UI shows
-                    <span class="status-chip chip-idle"
+                    Non-error: main agent → <code>waiting</code> — UI shows
+                    <span class="status-chip chip-waiting"
                       ><span class="chip-dot"></span>Waiting</span
-                    > until the next user input. Error: drops the flag, marks the session
+                    > until the next user input. <code>stop_reason=error</code>: marks the agent and session
                     <span class="status-chip chip-error"
                       ><span class="chip-dot"></span>Error</span
                     >. Background subagents keep running.
@@ -1266,7 +1274,7 @@
                 <tr>
                   <td><code>Notification</code></td>
                   <td>Agent sends notification</td>
-                  <td>Event logged to activity feed. Permission/input-prompt patterns (e.g. "needs your permission", "waiting for your input") stamp the waiting flag. Compaction-related notifications tagged as <code>Compaction</code> events. Triggers a browser notification if enabled.</td>
+                  <td>Event logged to activity feed. Permission/input-prompt patterns (e.g. "needs your permission", "waiting for your input") set the agent to <code>waiting</code> and stamp <code>awaiting_input_since</code>. Compaction-related notifications tagged as <code>Compaction</code> events. Triggers a browser notification if enabled.</td>
                 </tr>
                 <tr>
                   <td><code>Compaction</code></td>
@@ -1282,8 +1290,8 @@
                   <td><code>APIError</code></td>
                   <td>API error detected in transcript</td>
                   <td>
-                    Extracted from JSONL during history import or real-time transcript scanning.
-                    Captures quota limits, rate limits, and other API failures.
+                    Extracted from JSONL during history import, real-time transcript scanning, or the error detection watchdog.
+                    Captures quota limits, rate limits, auth failures, and other API errors. <strong>Immediately marks sessions and agents as error</strong> — previously recorded as events without changing status.
                   </td>
                 </tr>
                 <tr>
@@ -1298,7 +1306,10 @@
                   <td><code>SessionEnd</code></td>
                   <td>Claude Code CLI process exits</td>
                   <td>
-                    Drops the waiting flag and marks all agents and the session as
+                    Drops the waiting flag. If the session is already in
+                    <span class="status-chip chip-error"
+                      ><span class="chip-dot"></span>Error</span
+                    >, the error state is preserved; otherwise marks all agents and the session as
                     <span class="status-chip chip-completed"
                       ><span class="chip-dot"></span>Completed</span
                     >. Evicts the session's transcript from the shared cache.
@@ -1427,7 +1438,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                   <td>Sessions</td>
                   <td>
                     Your session listed with status
-                    <span class="status-chip chip-idle"
+                    <span class="status-chip chip-waiting"
                       ><span class="chip-dot"></span>Waiting</span
                     > (a fresh CLI is sitting at the prompt) — flips to
                     <span class="status-chip chip-active"
@@ -1809,21 +1820,26 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
             <!-- prettier-ignore -->
             <div class="mermaid">
               stateDiagram-v2
-                [*] --> connected: ensureSession (first hook)
-                connected --> waiting: SessionStart (stamps awaiting flag)
-                waiting --> working: UserPromptSubmit
-                waiting --> working: PreToolUse
-                working --> working: PreToolUse (subsequent tool)
-                working --> waiting: Stop (non-error, idle + flag)
-                working --> waiting: Permission Notification
-                waiting --> completed: SessionEnd
+                [*] --> waiting: ensureSession (first hook)
+                waiting --> working: PreToolUse / UserPromptSubmit
+                working --> working: PostToolUse (tool completed)
+                working --> waiting: Stop (non-error)
+                working --> waiting: Notification (input prompt)
+                waiting --> error: Stop with error
+                working --> error: Stop with error
+                waiting --> error: API error (watchdog)
+                working --> error: API error (watchdog)
+                error --> working: UserPromptSubmit / PreToolUse (recovery)
                 working --> completed: SessionEnd
-                working --> error: Stop (stop_reason=error)
-                completed --> [*]
-                error --> [*]
+                waiting --> completed: SessionEnd
+
+                note right of waiting
+                    Agent is between turns or
+                    awaiting user input
+                end note
             </div>
             <p class="diagram-label">
-              Agent status transitions driven by hook events. <code>waiting</code> is a UI overlay — persisted as <code>idle</code>/<code>connected</code> with <code>awaiting_input_since</code> set.
+              Agent status transitions driven by hook events. <code>waiting</code> is a real persisted status — agents start as <code>waiting</code> and return to it after each turn. Error recovery requires active user retry (<code>UserPromptSubmit</code> or <code>PreToolUse</code>). A background watchdog detects API errors in transcripts every 15 s.
             </p>
           </div>
 
@@ -1835,18 +1851,25 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                 [*] --> waiting: SessionStart (status=active + flag)
                 waiting --> active: UserPromptSubmit / PreToolUse / PostToolUse
                 active --> waiting: Stop (non-error, flag re-stamped)
-                active --> waiting: Permission Notification
+                active --> waiting: Permission Notification (agent → waiting)
                 active --> error: Stop (stop_reason=error)
+                active --> error: API error (watchdog)
+                waiting --> error: API error (watchdog)
+                error --> active: UserPromptSubmit / PreToolUse (recovery)
                 waiting --> completed: SessionEnd
                 active --> completed: SessionEnd
+                error --> error: SessionEnd (preserves error)
                 waiting --> abandoned: Stale > DASHBOARD_STALE_MINUTES
                 active --> abandoned: Stale > DASHBOARD_STALE_MINUTES
+                completed --> active: Session resumed
+                error --> active: Session resumed
+                abandoned --> active: Session resumed
                 completed --> [*]
                 error --> [*]
                 abandoned --> [*]
             </div>
             <p class="diagram-label">
-              Session status lifecycle. <code>waiting</code> is a UI overlay — persisted as <code>active</code> with <code>awaiting_input_since</code> set.
+              Session status lifecycle. <code>waiting</code> is a UI overlay — persisted as <code>active</code> with <code>awaiting_input_since</code> set. <code>SessionEnd</code> preserves error state. Error recovery requires <code>UserPromptSubmit</code> or <code>PreToolUse</code>.
             </p>
           </div>
         </section>
@@ -1875,7 +1898,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                 TX->>TX: ensureSession(session_id)
                 Note over TX: Creates session + main agent<br/>on first contact
                 TX->>TX: process by hook_type
-                Note over TX: SessionStart -> stamp awaiting flag (Waiting)<br/>UserPromptSubmit -> clear flag, agent working<br/>PreToolUse -> clear flag, agent working<br/>PostToolUse -> clear flag, clear current_tool<br/>Stop (non-error) -> idle + flag re-stamped<br/>Stop (error) -> drop flag, session error<br/>SubagentStop -> complete matched subagent (does NOT touch flag);<br/>fire-and-forget scanAndImportSubagents emits<br/>per-tool Pre/PostToolUse events under each<br/>subagent's own agent_id<br/>Notification (permission) -> stamp flag<br/>SessionEnd -> drop flag, mark all completed
+                Note over TX: SessionStart -> stamp awaiting flag (Waiting)<br/>UserPromptSubmit -> clear flag, agent working<br/>PreToolUse -> clear flag, agent working<br/>PostToolUse -> clear flag, clear current_tool<br/>Stop (non-error) -> agent waiting<br/>Stop (error) -> agent error, session error<br/>SubagentStop -> complete matched subagent (does NOT touch flag);<br/>fire-and-forget scanAndImportSubagents emits<br/>per-tool Pre/PostToolUse events under each<br/>subagent's own agent_id<br/>Notification (permission) -> stamp flag<br/>SessionEnd -> drop flag, mark all completed
                 TX->>TX: insertEvent(...)
                 TX->>TX: COMMIT
                 API->>WS: broadcast("agent_updated", agent)
@@ -2312,7 +2335,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                   TEXT name "Display name"
                   TEXT type "main|subagent"
                   TEXT subagent_type "Explore|general-purpose|etc"
-                  TEXT status "idle|connected|working|completed|error"
+                  TEXT status "working|waiting|completed|error"
                   TEXT task "Current task description"
                   TEXT current_tool "Active tool or NULL"
                   TEXT started_at "ISO 8601"
@@ -3730,11 +3753,12 @@ ccam-export all --output backup.json</code></pre>
             </div>
             <div class="feature-card">
               <div class="feature-icon ic-blue">🖧</div>
-              <h3>System Info</h3>
+              <h3>System Health</h3>
               <p>
-                Server uptime, Node.js version, platform, and active WebSocket connections.
-                At-a-glance health monitoring for the dashboard server itself, with database
-                statistics and memory usage displayed in real-time.
+                Dedicated Health tab on the Dashboard with a composite health score (weighted from
+                success rate, cache hit rate, error rate, and heap usage), storage engine donut chart,
+                tool invocation frequency bars, subagent effectiveness, model token distribution, and
+                compaction impact — all with cursor-following tooltips and 5-second auto-refresh.
               </p>
             </div>
             <div class="feature-card">
@@ -4548,7 +4572,7 @@ npm run install-hooks</code></pre>
         var nextBtn = carousel.querySelector(".carousel-next");
         var currentPage = 0;
         var autoInterval = null;
-        var AUTO_DELAY = 2500;
+        var AUTO_DELAY = 6000;
         var GAP = 12;
         function getPerPage() {
           var w = viewport.offsetWidth;

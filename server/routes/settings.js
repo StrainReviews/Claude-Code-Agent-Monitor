@@ -71,16 +71,40 @@ function getHookStatus() {
 }
 
 // GET /api/settings/info — system info, db stats, hook status
-router.get("/info", (_req, res) => {
+router.get("/info", (req, res) => {
   const dbSize = getDbSize();
   const counts = getTableCounts();
   const hookStatus = getHookStatus();
+
+  // Advanced SQLite info
+  const pragmas = {
+    journal_mode: db.pragma("journal_mode", { simple: true }),
+    synchronous: db.pragma("synchronous", { simple: true }),
+    auto_vacuum: db.pragma("auto_vacuum", { simple: true }),
+    encoding: db.pragma("encoding", { simple: true }),
+    foreign_keys: db.pragma("foreign_keys", { simple: true }),
+    busy_timeout: db.pragma("busy_timeout", { simple: true }),
+  };
+
+  // Recent activity load (events in last 5, 15, 60 minutes)
+  const getCount = (ms) => {
+    const d = new Date(Date.now() - ms).toISOString();
+    return db.prepare("SELECT COUNT(*) as c FROM events WHERE created_at > ?").get(d).c;
+  };
+
+  const load_stats = {
+    m5: getCount(5 * 60 * 1000),
+    m15: getCount(15 * 60 * 1000),
+    h1: getCount(60 * 60 * 1000),
+  };
 
   res.json({
     db: {
       path: DB_PATH,
       size: dbSize,
       counts,
+      pragmas,
+      load_stats,
     },
     hooks: hookStatus,
     server: {
@@ -88,6 +112,12 @@ router.get("/info", (_req, res) => {
       node_version: process.version,
       platform: process.platform,
       ws_connections: getConnectionCount(),
+      memory: process.memoryUsage(),
+      cpu_load: os.loadavg(),
+      arch: os.arch(),
+      total_mem: os.totalmem(),
+      free_mem: os.freemem(),
+      cpus: os.cpus().length,
     },
     transcript_cache: transcriptCache.stats(),
   });
@@ -219,7 +249,7 @@ router.post("/cleanup", (req, res) => {
       ).run(row.id);
       // Also complete any lingering agents
       db.prepare(
-        "UPDATE agents SET status = 'completed', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND status IN ('idle','connected','working')"
+        "UPDATE agents SET status = 'completed', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND status IN ('waiting','working')"
       ).run(row.id);
     }
     result.abandoned = stale.length;

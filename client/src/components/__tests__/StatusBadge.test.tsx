@@ -9,14 +9,9 @@ import { render, screen } from "@testing-library/react";
 import { AgentStatusBadge, SessionStatusBadge } from "../StatusBadge";
 
 describe("AgentStatusBadge", () => {
-  it("should render idle status", () => {
-    render(<AgentStatusBadge status="idle" />);
-    expect(screen.getByText("Idle")).toBeInTheDocument();
-  });
-
-  it("should render connected status", () => {
-    render(<AgentStatusBadge status="connected" />);
-    expect(screen.getByText("Connected")).toBeInTheDocument();
+  it("should render waiting status", () => {
+    render(<AgentStatusBadge status="waiting" />);
+    expect(screen.getByText("Waiting")).toBeInTheDocument();
   });
 
   it("should render working status", () => {
@@ -40,16 +35,16 @@ describe("AgentStatusBadge", () => {
     expect(dot).toBeInTheDocument();
   });
 
-  it("should apply pulse animation for connected status by default", () => {
-    const { container } = render(<AgentStatusBadge status="connected" />);
+  it("should not apply pulse for connected status (now working — has pulse)", () => {
+    const { container } = render(<AgentStatusBadge status="working" />);
     const dot = container.querySelector(".animate-pulse-dot");
     expect(dot).toBeInTheDocument();
   });
 
-  it("should not apply pulse animation for idle status", () => {
-    const { container } = render(<AgentStatusBadge status="idle" />);
+  it("should apply pulse animation for waiting status by default", () => {
+    const { container } = render(<AgentStatusBadge status="waiting" />);
     const dot = container.querySelector(".animate-pulse-dot");
-    expect(dot).not.toBeInTheDocument();
+    expect(dot).toBeInTheDocument();
   });
 
   it("should respect explicit pulse=false override", () => {
@@ -59,7 +54,7 @@ describe("AgentStatusBadge", () => {
   });
 
   it("should respect explicit pulse=true override", () => {
-    const { container } = render(<AgentStatusBadge status="idle" pulse={true} />);
+    const { container } = render(<AgentStatusBadge status="waiting" pulse={true} />);
     const dot = container.querySelector(".animate-pulse-dot");
     expect(dot).toBeInTheDocument();
   });

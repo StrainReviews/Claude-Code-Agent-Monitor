@@ -4,7 +4,14 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Workflow, RefreshCw, Download, AlertCircle, Info } from "lucide-react";
 import { api } from "../lib/api";
@@ -437,6 +444,7 @@ function PageHeader({
   lastUpdated: Date | null;
 }) {
   const { t } = useTranslation("workflows");
+  const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
   const filters: { value: StatusFilter; label: string }[] = [
     { value: "all", label: t("allSessions") },
     { value: "active", label: t("activeOnly") },
@@ -450,7 +458,20 @@ function PageHeader({
           <Workflow className="w-4.5 h-4.5 text-accent" />
         </div>
         <div>
-          <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+            {wsConnected ? (
+              <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+                {t("common:live")}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                {t("common:offline")}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-gray-500">{t("subtitle")}</p>
         </div>
       </div>

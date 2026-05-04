@@ -94,61 +94,71 @@ function Heatmap({ weeks }: { weeks: Array<Array<{ date: string; count: number }
   const { show, move, hide, node } = useTooltip();
   const { t, i18n } = useTranslation(["analytics", "common"]);
   const locale = i18n.resolvedLanguage ?? i18n.language;
+
   const monthLabels = useMemo(
     () =>
       Array.from({ length: 12 }, (_, month) =>
-        new Intl.DateTimeFormat(locale, { month: "short" }).format(
-          new Date(Date.UTC(2026, month, 1))
-        )
+        new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(2026, month, 1))
       ),
     [locale]
   );
+
   const dayNames = useMemo(
     () =>
       Array.from({ length: 7 }, (_, day) =>
         new Intl.DateTimeFormat(locale, { weekday: "short" }).format(
-          new Date(Date.UTC(2026, 0, 4 + day))
+          new Date(2026, 0, 4 + day) // Jan 4, 2026 is Sunday
         )
       ),
     [locale]
   );
-  const dayLabels = ["", dayNames[1] ?? "", "", dayNames[3] ?? "", "", dayNames[5] ?? "", ""];
+
+  // Labels on the left: Sun (0), Tue (2), Thu (4)
+  const dayLabels = [dayNames[0], "", dayNames[2], "", dayNames[4], "", ""];
   const maxCount = Math.max(...weeks.flatMap((w) => w.map((c) => c.count)), 1);
 
-  // Compute month label positions (which week index a month starts)
-  const monthPositions: Array<{ label: string; col: number }> = [];
-  let lastMonth = -1;
-  weeks.forEach((week, wi) => {
-    const firstCell = week[0];
-    if (!firstCell) return;
-    const m = new Date(firstCell.date + "T12:00:00").getMonth();
-    if (m !== lastMonth) {
-      monthPositions.push({ label: monthLabels[m] ?? "", col: wi });
-      lastMonth = m;
-    }
-  });
+  // Compute month label positions accurately
+  const monthPositions = useMemo(() => {
+    const positions: Array<{ label: string; col: number }> = [];
+    let prevMonth = -1;
+
+    weeks.forEach((week, wi) => {
+      const firstCell = week[0];
+      if (!firstCell) return;
+
+      const parts = firstCell.date.split("-").map(Number);
+      const m = (parts[1] || 1) - 1; // 0-indexed month
+
+      if (m !== prevMonth) {
+        positions.push({ label: monthLabels[m] ?? "", col: wi });
+        prevMonth = m;
+      }
+    });
+    return positions;
+  }, [weeks, monthLabels]);
 
   return (
-    <div>
+    <div className="relative">
       {node}
       {/* Month labels */}
-      <div className="flex mb-1 ml-7" style={{ gap: "3px" }}>
-        {weeks.map((_, wi) => {
-          const mp = monthPositions.find((m) => m.col === wi);
-          return (
-            <div key={wi} className="text-[10px] text-gray-600 flex-shrink-0" style={{ width: 13 }}>
-              {mp ? mp.label : ""}
-            </div>
-          );
-        })}
+      <div className="flex mb-2 ml-[32px] relative h-4">
+        {monthPositions.map((mp, i) => (
+          <div
+            key={i}
+            className="absolute text-[10px] text-gray-600 font-medium whitespace-nowrap"
+            style={{ left: mp.col * 16 }}
+          >
+            {mp.label}
+          </div>
+        ))}
       </div>
       <div className="flex" style={{ gap: "3px" }}>
         {/* Day labels */}
-        <div className="flex flex-col mr-1" style={{ gap: "3px" }}>
+        <div className="flex flex-col mr-1 w-7" style={{ gap: "3px" }}>
           {dayLabels.map((d, i) => (
             <div
               key={i}
-              className="text-[10px] text-gray-600 flex items-center"
+              className="text-[9px] text-gray-700 flex items-center justify-end pr-1.5"
               style={{ height: 13 }}
             >
               {d}
@@ -162,7 +172,12 @@ function Heatmap({ weeks }: { weeks: Array<Array<{ date: string; count: number }
               <div
                 key={cell.date}
                 onMouseEnter={(e) => {
-                  const dow = new Date(cell.date + "T12:00:00").getDay();
+                  const parts = cell.date.split("-").map(Number);
+                  const y = parts[0] || 0;
+                  const m = (parts[1] || 1) - 1;
+                  const d = parts[2] || 1;
+                  const date = new Date(y, m, d, 12);
+                  const dow = date.getDay();
                   show(
                     e,
                     <>
@@ -182,7 +197,7 @@ function Heatmap({ weeks }: { weeks: Array<Array<{ date: string; count: number }
                   height: 13,
                   borderRadius: 2,
                   backgroundColor: cellColor(cell.count, maxCount),
-                  border: "1px solid rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.04)",
                   flexShrink: 0,
                   cursor: "default",
                 }}
@@ -592,12 +607,13 @@ export function Analytics() {
 
   // Build heatmap: 52 weeks × 7 days
   // Align start to Sunday (day 0) so row indices match day-of-week labels correctly.
-  // JavaScript getDay(): 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
   const today = new Date();
+  today.setHours(12, 0, 0, 0); // Normalize to noon
+
   const startDate = new Date(today);
-  startDate.setDate(today.getDate() - 363);
-  // Roll back to the previous Sunday so columns align to week boundaries
-  const startDow = startDate.getDay(); // 0=Sun
+  startDate.setDate(today.getDate() - 364); // Exactly 52 weeks ago
+  // Roll back to the previous Sunday
+  const startDow = startDate.getDay();
   startDate.setDate(startDate.getDate() - startDow);
 
   const weeks: Array<Array<{ date: string; count: number }>> = [];
@@ -734,11 +750,10 @@ export function Analytics() {
       color: "#10b981",
     },
     {
-      label: t("common:status.connected"),
-      value: data?.agents_by_status?.connected ?? 0,
-      color: "#3b82f6",
+      label: t("common:status.waiting"),
+      value: data?.agents_by_status?.waiting ?? 0,
+      color: "#eab308",
     },
-    { label: t("common:status.idle"), value: data?.agents_by_status?.idle ?? 0, color: "#6b7280" },
     {
       label: t("common:status.error"),
       value: data?.agents_by_status?.error ?? 0,

@@ -17,8 +17,7 @@ export function AgentStatusBadge({ status, pulse }: AgentStatusBadgeProps) {
   const config = STATUS_CONFIG[status];
   // "waiting" pulses by default so the user's eye is drawn to sessions that
   // need their attention, matching the pulsing for active/working states.
-  const shouldPulse =
-    pulse ?? (status === "working" || status === "connected" || status === "waiting");
+  const shouldPulse = pulse ?? (status === "working" || status === "waiting");
 
   return (
     <span className={`badge ${config.bg} ${config.color}`}>

@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import {
   DollarSign,
@@ -141,6 +141,40 @@ function formatUptime(seconds: number): string {
   if (d > 0) return `${d}d ${h}h ${m}m`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+function useCountUp(end: number | null, durationMs = 1000) {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (end === null) {
+      setCount(0);
+      return;
+    }
+
+    let startTimestamp: number | null = null;
+    let animationFrameId: number;
+    const startValue = count;
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / durationMs, 1);
+      // easeOutQuart
+      const easeProgress = 1 - Math.pow(1 - progress, 4);
+      setCount(startValue + (end - startValue) * easeProgress);
+
+      if (progress < 1) {
+        animationFrameId = window.requestAnimationFrame(step);
+      } else {
+        setCount(end);
+      }
+    };
+
+    animationFrameId = window.requestAnimationFrame(step);
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [end, durationMs]);
+
+  return count;
 }
 
 // ─── Toggle component ───
@@ -302,6 +336,9 @@ export function Settings() {
   const [claudeHomeInput, setClaudeHomeInput] = useState("");
   const [claudeHomeSaving, setClaudeHomeSaving] = useState(false);
   const [claudeHomeError, setClaudeHomeError] = useState<string | null>(null);
+
+  const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
+  const animatedTotalCost = useCountUp(totalCost);
 
   const load = useCallback(async () => {
     try {
@@ -637,7 +674,20 @@ export function Settings() {
             <SettingsIcon className="w-4.5 h-4.5 text-accent" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+              {wsConnected ? (
+                <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+                  {t("common:live")}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                  {t("common:offline")}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">{t("subtitle")}</p>
           </div>
         </div>
@@ -673,7 +723,7 @@ export function Settings() {
                       : undefined
                   }
                 >
-                  {totalCost !== null ? fmtCost(totalCost) : "$-.--"}
+                  {totalCost !== null ? fmtCost(animatedTotalCost) : "$-.--"}
                 </Tip>
               </p>
             </div>
@@ -788,7 +838,7 @@ export function Settings() {
                       ${rule.cache_write_per_mtok}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 transition-opacity">
                         <button
                           onClick={() => startEdit(rule)}
                           disabled={isEditing}

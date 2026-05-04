@@ -38,8 +38,6 @@
   "type": "Loại",
   "statusLabel": "Trạng thái",
   "status": {
-    "idle": "Nhàn rỗi",
-    "connected": "Đã kết nối",
     "working": "Đang xử lý",
     "waiting": "Đang chờ",
     "completed": "Hoàn tất",

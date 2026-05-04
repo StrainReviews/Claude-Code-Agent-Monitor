@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Search, X, Filter } from "lucide-react";
 import { api } from "../lib/api";
+import { DateTimePicker } from "./DateTimePicker";
 
 export type EventFiltersValue = {
   event_type: string[];
@@ -54,12 +55,12 @@ export function isEmptyFilters(f: EventFiltersValue): boolean {
 // preset that doesn't restrict the query (same as no selection).
 export const STATUS_TO_EVENT_TYPES: Record<string, string[]> = {
   working: ["PreToolUse"],
-  connected: ["PostToolUse"],
+  waiting: ["PostToolUse", "Stop"],
   completed: ["Stop", "SubagentStop", "Compaction"],
   error: ["error", "APIError"],
 };
 
-export const STATUS_OPTIONS = ["working", "connected", "completed", "error"] as const;
+export const STATUS_OPTIONS = ["working", "waiting", "completed", "error"] as const;
 
 // Expand the selected status presets into a union of event_type values. The
 // consumer merges this with any explicit event_type selection so both layers
@@ -159,22 +160,20 @@ export function EventFilters({
             className="w-full bg-surface-2 border border-border rounded pl-7 pr-2 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-accent"
           />
         </div>
-        <input
-          type="datetime-local"
+        <DateTimePicker
           value={value.from}
-          onChange={(e) => onChange({ ...value, from: e.target.value })}
+          onChange={(val: string) => onChange({ ...value, from: val })}
           aria-label={t("eventFilters.from")}
           title={t("eventFilters.from")}
-          className="bg-surface-2 border border-border rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent"
+          placeholder={t("eventFilters.from")}
         />
         <span className="text-xs text-gray-600">→</span>
-        <input
-          type="datetime-local"
+        <DateTimePicker
           value={value.to}
-          onChange={(e) => onChange({ ...value, to: e.target.value })}
+          onChange={(val: string) => onChange({ ...value, to: val })}
           aria-label={t("eventFilters.to")}
           title={t("eventFilters.to")}
-          className="bg-surface-2 border border-border rounded px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-accent"
+          placeholder={t("eventFilters.to")}
         />
         {!empty && (
           <button
@@ -195,7 +194,7 @@ export function EventFilters({
           options={[...STATUS_OPTIONS]}
           labels={{
             working: t("status.working"),
-            connected: t("status.connected"),
+            waiting: t("status.waiting"),
             completed: t("status.completed"),
             error: t("status.error"),
           }}

@@ -217,7 +217,7 @@ describe("importSubagentFromJsonl — event attribution", () => {
       "Main Agent",
       "main",
       null,
-      "idle",
+      "waiting",
       null,
       null,
       null

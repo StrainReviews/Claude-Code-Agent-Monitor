@@ -191,7 +191,7 @@ function seedFixtures() {
         "Main Agent",
         "main",
         null,
-        "idle",
+        "waiting",
         "Orchestrating multi-agent research pipeline",
         null,
         null
@@ -308,7 +308,7 @@ function seedFixtures() {
         "Example Generator",
         "subagent",
         "general-purpose",
-        "connected",
+        "working",
         "Generating cURL examples for auth endpoints",
         ids.l1DocWriter,
         null
@@ -429,7 +429,7 @@ function seedFullDemo() {
 
     for (let i = 0; i < 3; i++) {
       const subId = uuidv4();
-      const status = randomItem(["working", "working", "connected"]);
+      const status = randomItem(["working", "working", "working"]);
       stmts.insertAgent.run(
         subId,
         activeSessionId,
@@ -456,7 +456,7 @@ function seedFullDemo() {
       "Main Agent",
       "main",
       null,
-      "connected",
+      "working",
       "Investigating payment webhook failures",
       null,
       null

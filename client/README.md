@@ -226,8 +226,8 @@ graph TB
     App[App.tsx<br/>Router + WS + Notifications]
     Layout[Layout.tsx<br/>Sidebar + Outlet]
 
-    Dashboard[Dashboard<br/>stats + agents + events]
-    Kanban[KanbanBoard<br/>5-column agent board]
+    Dashboard[Dashboard<br/>Monitor tab: stats + agents + events<br/>Health tab: SystemHealthTab]
+    Kanban[KanbanBoard<br/>4-column agent board]
     Sessions[Sessions<br/>filterable table]
     Detail[SessionDetail<br/>agent hierarchy + timeline]
     Feed[ActivityFeed<br/>streaming event log]
@@ -240,6 +240,7 @@ graph TB
 
     Dashboard --> StatCard[StatCard × 6]
     Dashboard --> AgentCard[AgentCard × N]
+    Dashboard --> HealthTab["SystemHealthTab<br/>(health score, storage donut,<br/>gauges, tool bars, subagent<br/>effectiveness, model tokens)"]
     Detail --> AgentCard
     Feed --> EventDetail[EventDetail<br/>inline payload viewer]
     Detail --> EventDetail
@@ -745,7 +746,7 @@ interface Session {
   id: string;
   session_id: string;
   model: string;
-  status: 'active' | 'completed';
+  status: 'active' | 'completed' | 'error' | 'abandoned';
   total_cost: number;
   created_at: string;
   updated_at: string;
@@ -756,7 +757,7 @@ interface Agent {
   agent_id: string;
   session_id: string;
   agent_type: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'working' | 'waiting' | 'completed' | 'error';
   input_tokens: number;
   output_tokens: number;
   cost: number;

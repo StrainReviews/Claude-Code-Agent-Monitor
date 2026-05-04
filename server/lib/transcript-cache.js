@@ -11,6 +11,8 @@ class TranscriptCache {
   constructor(maxEntries = MAX_CACHE_ENTRIES) {
     this._cache = new Map();
     this._maxEntries = maxEntries;
+    this._hits = 0;
+    this._misses = 0;
   }
 
   /**
@@ -32,9 +34,11 @@ class TranscriptCache {
 
       // Cache hit: file unchanged (same mtime + size)
       if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+        this._hits++;
         return cached.result;
       }
 
+      this._misses++;
       // File shrunk or first read → full re-read
       if (!cached || stat.size < cached.bytesRead) {
         const result = this._fullRead(transcriptPath);
@@ -458,8 +462,11 @@ class TranscriptCache {
   /** Return cache stats for diagnostics */
   stats() {
     return {
-      entries: this._cache.size,
-      paths: [...this._cache.keys()],
+      size: this._cache.size,
+      maxSize: this._maxEntries,
+      hits: this._hits,
+      misses: this._misses,
+      keys: [...this._cache.keys()],
     };
   }
 }

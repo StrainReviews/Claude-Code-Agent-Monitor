@@ -38,8 +38,6 @@
   "type": "类型",
   "statusLabel": "状态",
   "status": {
-    "idle": "空闲",
-    "connected": "已连接",
     "working": "工作中",
     "waiting": "等待中",
     "completed": "已完成",

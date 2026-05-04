@@ -8,7 +8,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Activity, Pause, Play, RefreshCw, ChevronRight, ExternalLink } from "lucide-react";
@@ -243,6 +243,8 @@ export function ActivityFeed() {
     return map;
   }, [events]);
 
+  const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
+
   return (
     <div className="animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -251,7 +253,20 @@ export function ActivityFeed() {
             <Activity className="w-4.5 h-4.5 text-accent" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+              {wsConnected ? (
+                <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+                  {t("common:live")}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                  {t("common:offline")}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">
               {t("subtitle")}
               {paused && (

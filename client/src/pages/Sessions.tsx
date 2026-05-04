@@ -4,10 +4,18 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { FolderOpen, Search, ChevronRight, RefreshCw } from "lucide-react";
+import {
+  FolderOpen,
+  Search,
+  ChevronRight,
+  RefreshCw,
+  SortDesc,
+  SortAsc,
+  ChevronDown,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
 import { SessionStatusBadge } from "../components/StatusBadge";
@@ -32,6 +40,11 @@ export function Sessions() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
 
+  const [cwd, setCwd] = useState("");
+  const [sortBy, setSortBy] = useState("time");
+  const [sortDesc, setSortDesc] = useState(true);
+  const [directories, setDirectories] = useState<string[]>([]);
+
   const FILTER_OPTIONS: Array<{ label: string; value: string }> = [
     { label: t("filterAll"), value: "" },
     { label: t("filterActive"), value: "active" },
@@ -48,6 +61,15 @@ export function Sessions() {
     return () => window.clearTimeout(id);
   }, [searchInput]);
 
+  useEffect(() => {
+    api.sessions
+      .facets()
+      .then((res) => {
+        setDirectories(res.cwds);
+      })
+      .catch(console.error);
+  }, []);
+
   // Server-side pagination: only the visible page is fetched. Cost
   // computation on the server scales with PAGE_SIZE, not with the total
   // session count, so this stays cheap regardless of how many sessions
@@ -62,6 +84,9 @@ export function Sessions() {
         const res = await api.sessions.list({
           status: "active",
           q: search || undefined,
+          cwd: cwd || undefined,
+          sort_by: sortBy,
+          sort_desc: sortDesc,
           limit: 10000,
           offset: 0,
         });
@@ -70,28 +95,39 @@ export function Sessions() {
         setSessions(waiting.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
         return;
       }
-      const params: { status?: string; q?: string; limit: number; offset: number } = {
+      const params: {
+        status?: string;
+        q?: string;
+        cwd?: string;
+        sort_by?: string;
+        sort_desc?: boolean;
+        limit: number;
+        offset: number;
+      } = {
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
+        sort_by: sortBy,
+        sort_desc: sortDesc,
       };
       if (filter) params.status = filter;
       if (search) params.q = search;
+      if (cwd) params.cwd = cwd;
       const res = await api.sessions.list(params);
       setSessions(res.sessions);
       setTotal(res.total);
     } finally {
       setLoading(false);
     }
-  }, [filter, search, page]);
+  }, [filter, search, cwd, sortBy, sortDesc, page]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Reset to page 0 whenever filter or search changes.
+  // Reset to page 0 whenever filters or sort changes.
   useEffect(() => {
     setPage(0);
-  }, [filter, search]);
+  }, [filter, search, cwd, sortBy, sortDesc]);
 
   useEffect(() => {
     return eventBus.subscribe((msg) => {
@@ -112,6 +148,8 @@ export function Sessions() {
   const paged = sessions;
   const filtered = sessions; // kept for empty-state checks below
 
+  const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
+
   return (
     <div className="animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
@@ -120,7 +158,20 @@ export function Sessions() {
             <FolderOpen className="w-4.5 h-4.5 text-accent" />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-gray-100">{t("title")}</h1>
+              {wsConnected ? (
+                <span className="flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-dot" />
+                  {t("common:live")}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-[11px] text-gray-400 bg-gray-500/10 border border-gray-500/20 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                  {t("common:offline")}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-500">
               {t("sessionCount", { count: total })}
               {filter ? ` ${filter}` : ""}
@@ -133,8 +184,9 @@ export function Sessions() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-wrap lg:flex-nowrap items-center gap-3 mb-6 bg-surface-2/40 p-2 rounded-xl border border-border w-full">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px] max-w-[340px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
           <input
             type="text"
@@ -144,12 +196,57 @@ export function Sessions() {
             className="input w-full pl-10"
           />
         </div>
-        <div className="flex gap-1 bg-surface-2 rounded-lg p-1">
+
+        {/* Directory Selector */}
+        <div className="relative shrink-0 w-[180px]">
+          <select
+            value={cwd}
+            onChange={(e) => setCwd(e.target.value)}
+            className="input w-full text-ellipsis bg-surface-1 pr-9 appearance-none cursor-pointer"
+          >
+            <option value="">All Directories</option>
+            {directories.map((d) => (
+              <option key={d} value={d} title={d}>
+                {truncate(d, 30)}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+        </div>
+
+        {/* Sort Controls */}
+        <div className="flex items-center gap-1.5 bg-surface-1 px-1.5 py-1 rounded-lg border border-border h-[38px] flex-1 min-w-[180px]">
+          <div className="relative flex-1">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="bg-transparent w-full text-xs text-gray-200 outline-none pl-3 pr-8 appearance-none cursor-pointer whitespace-nowrap"
+            >
+              <option value="time">Sort by Time ({sortDesc ? "Newest" : "Oldest"})</option>
+              <option value="duration">
+                Sort by Duration ({sortDesc ? "Longest" : "Shortest"})
+              </option>
+              <option value="price">Sort by Price ({sortDesc ? "Highest" : "Lowest"})</option>
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
+          </div>
+          <div className="w-px h-4 bg-border mx-1" />
+          <button
+            onClick={() => setSortDesc(!sortDesc)}
+            className="p-1.5 rounded hover:bg-surface-3 text-gray-400 hover:text-gray-200 transition-colors shrink-0"
+            title={sortDesc ? "Descending" : "Ascending"}
+          >
+            {sortDesc ? <SortDesc className="w-4 h-4" /> : <SortAsc className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Status Filters */}
+        <div className="flex gap-1 bg-surface-1 rounded-lg p-1 border border-border ml-auto shrink-0">
           {FILTER_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => setFilter(opt.value)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
                 filter === opt.value
                   ? "bg-surface-4 text-gray-200"
                   : "text-gray-500 hover:text-gray-300"
@@ -165,7 +262,7 @@ export function Sessions() {
         <EmptyState
           icon={FolderOpen}
           title={t("noSessions")}
-          description={search || filter ? t("noSessionsDesc") : t("noSessionsHint")}
+          description={search || filter || cwd ? t("noSessionsDesc") : t("noSessionsHint")}
         />
       ) : (
         <>
@@ -231,7 +328,10 @@ export function Sessions() {
                     <td className="px-5 py-4 text-sm text-gray-400 font-mono">
                       {session.cost != null && session.cost > 0 ? fmtCost(session.cost) : "-"}
                     </td>
-                    <td className="px-5 py-4 text-[11px] text-gray-500 font-mono">
+                    <td
+                      className="px-5 py-4 text-[11px] text-gray-500 font-mono"
+                      title={session.cwd || undefined}
+                    >
                       {session.cwd ? truncate(session.cwd, 30) : "-"}
                     </td>
                     <td className="px-3 py-4">
