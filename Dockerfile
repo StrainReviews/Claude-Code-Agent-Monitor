@@ -1,3 +1,8 @@
+# Multi-stage Dockerfile for Claude Code Agent Monitor - a Node.js server with a React client.
+# This setup optimizes the final image size by separating the build and runtime stages.
+# Compatible with both Podman and Docker.
+# Author: Son Nguyen <hoangson091104@gmail.com>
+
 # ── Stage 1: Install server production deps ───────────────────────────
 FROM node:22-alpine AS server-deps
 WORKDIR /app
