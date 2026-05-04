@@ -401,15 +401,17 @@ sequenceDiagram
    - On `SessionStart`, stamps the session and main agent's `awaiting_input_since` so a fresh CLI sitting at the prompt lands in **Waiting** immediately
    - On `UserPromptSubmit` (user hits enter), clears the waiting flag and promotes the main agent to `working` — the only reliable signal that text-only assistant turns have started, since they emit no `PreToolUse`
    - Sets agent to "working" on `PreToolUse` (also clears the waiting flag), keeps it working through `PostToolUse`
-   - On `Stop` (Claude finishes responding), main agent goes to "waiting" — Claude finished its turn, ball is in the user's court. Background subagents continue running. Session stays `active`. Error stops mark the agent `error` so the session lands cleanly in Error
-   - On a permission `Notification` (matched by message pattern: `permission`, `waiting for input`, `needs your approval`, …), stamps the waiting flag without changing status
+   - On `Stop` (Claude finishes responding), main agent goes to "waiting" — Claude finished its turn, ball is in the user's court. Background subagents continue running. Session stays `active`. Stop with `stop_reason=error` marks the agent `error` and the session `error`
+   - On a permission `Notification` (matched by message pattern: `permission`, `waiting for input`, `needs your approval`, …), sets the agent to `waiting` and stamps `awaiting_input_since`
    - `SubagentStop` deliberately does NOT clear the waiting flag (a backgrounded subagent finishing tells us nothing about the human)
    - Marks subagents completed individually via `SubagentStop`. After `res.json()` returns, fires a fire-and-forget `scanAndImportSubagents` pass that walks the session's `subagents/agent-*.jsonl` files, pairs `tool_use` ↔ `tool_result` blocks by `tool_use_id`, and emits `PreToolUse` + `PostToolUse` events under each subagent's own `agent_id` — closing the gap where subagent-internal tool calls would otherwise be invisible to the dashboard
-   - On `SessionEnd` (CLI process exits), drops the waiting flag and marks all agents + the session as `completed`
+   - On `SessionEnd` (CLI process exits), drops the waiting flag. If the session is in `error`, the error state is preserved; otherwise marks all agents + the session as `completed`
    - On `SessionStart`, any other active session with no activity for `DASHBOARD_STALE_MINUTES` (default 180 = 3 h, env-overridable) is automatically marked "abandoned" with its agents completed. This handles `/resume` inside a session, Ctrl+C, and other scenarios where a session is orphaned without a clean `SessionEnd`
    - Reactivates completed/error/abandoned sessions when new work events arrive (session resumed). Stop and SubagentStop events also reactivate completed/abandoned sessions — this handles pre-existing sessions imported before the server started, where the first hook event may be a Stop
+   - **Error recovery**: only `UserPromptSubmit` and `PreToolUse` can recover a session from `error` back to `active` — indicating the user actively retried
    - Detects conversation compaction (`isCompactSummary` entries in the JSONL transcript) and creates `Compaction` agents + events. Token baselines are preserved across compactions so no usage is lost. Transcript reads use a shared stat-based cache with incremental byte-offset reads — only new bytes appended since the last read are parsed, giving ~50x speedup for long sessions
    - Extracts API errors (`isApiErrorMessage` entries: quota limits, rate limits, invalid_request) and raw `type: "error"` responses from JSONL transcripts, stored as `APIError` events. Turn durations (`system` subtype `turn_duration`) are stored as `TurnDuration` events. Tool result errors (`toolUseResult.is_error`) are tracked as `ToolError` events
+   - **Error detection watchdog** — a background timer runs every 15 seconds, scanning active sessions with no recent hook events (>10 s stale). It re-reads their transcript files looking for API errors (auth failures, rate limits, quota exhaustion), derives transcript paths from session `cwd` for imported sessions without `transcript_path` in event data, and marks sessions/agents as `error` when API errors are found. This catches cases where the Claude CLI does not fire a hook after an API error (e.g., 401 auth failures where the CLI shows the error and waits)
    - A periodic server sweep catches abandoned sessions and new compactions that slipped past event-based detection (e.g., `/compact` fires no hook, `/resume` within seconds of session creation). Cadence is derived from `DASHBOARD_STALE_MINUTES` (¼ of the threshold, clamped to 60 s – 5 min). The sweep shares the transcript cache with the hook handler, avoiding duplicate I/O. Abandoned session cleanup also evicts the transcript cache entry to bound memory
 4. **WebSocket** broadcasts the change to all connected clients
 5. **UI** receives the update and re-renders the affected components in real-time with no polling.
@@ -427,8 +429,12 @@ stateDiagram-v2
     waiting --> working: PreToolUse / UserPromptSubmit
     working --> working: PostToolUse (tool completed)
     working --> waiting: Stop, non-error
+    working --> waiting: Notification (input prompt)
     waiting --> error: Stop with error
     working --> error: Stop with error
+    waiting --> error: API error detected (watchdog)
+    working --> error: API error detected (watchdog)
+    error --> working: UserPromptSubmit / PreToolUse (recovery)
     working --> completed: SessionEnd
     waiting --> completed: SessionEnd
 
@@ -449,10 +455,14 @@ stateDiagram-v2
     [*] --> waiting: SessionStart (status=active + flag)
     waiting --> active: UserPromptSubmit / PreToolUse / PostToolUse
     active --> waiting: Stop, non-error (flag re-stamped)
-    active --> waiting: Permission Notification
+    active --> waiting: Permission Notification (agent → waiting)
     active --> error: Stop, stop_reason=error
+    active --> error: API error detected (watchdog)
+    waiting --> error: API error detected (watchdog)
+    error --> active: UserPromptSubmit / PreToolUse (recovery)
     waiting --> completed: SessionEnd (CLI exited)
     active --> completed: SessionEnd (CLI exited)
+    error --> error: SessionEnd (preserves error)
     waiting --> abandoned: Stale > DASHBOARD_STALE_MINUTES (default 180)
     active --> abandoned: Stale > DASHBOARD_STALE_MINUTES
     completed --> active: Session resumed (new work event)
@@ -954,12 +964,12 @@ The dashboard processes these Claude Code hook types:
 | `UserPromptSubmit`  | User hits enter on a prompt    | Clears the waiting flag and promotes the main agent to `working` — the only signal that text-only assistant turns have started, since they emit no `PreToolUse` |
 | `PreToolUse`        | Agent starts using a tool      | Clears the waiting flag, sets agent to `working`, sets `current_tool`. If tool is `Agent`, creates a subagent record |
 | `PostToolUse`       | Tool execution completed       | Clears the waiting flag (handles permission-prompt approvals where the Notification stamped it mid-tool). Clears `current_tool`. Agent stays `working` |
-| `Stop`              | Claude finishes responding     | Non-error: main agent → `waiting` — Claude finished its turn, ball is in the user's court. Error: marks the agent and session `error`. Background subagents keep running |
+| `Stop`              | Claude finishes responding     | Non-error: main agent → `waiting` — Claude finished its turn, ball is in the user's court. `stop_reason=error`: marks the agent and session `error`. Background subagents keep running |
 | `SubagentStop`      | Background agent finished      | Matches and completes the subagent by description, type, or task. Deliberately does NOT clear the waiting flag — a subagent finishing tells us nothing about the human. **Triggers a fire-and-forget JSONL scan** (`scanAndImportSubagents`) that emits per-tool `PreToolUse` + `PostToolUse` events under the subagent's own `agent_id` so the Timeline shows every tool the subagent ran, not just the spawn marker |
-| `Notification`      | Agent notification             | Logs event. Permission/input-prompt messages stamp the waiting flag (matched by pattern: `permission`, `waiting for input`, `needs your approval`, …). Compaction notifications are tagged as `Compaction` events. Triggers a browser notification if enabled |
-| `SessionEnd`        | Claude Code CLI process exits  | Drops the waiting flag, marks all agents and the session as `completed`                       |
+| `Notification`      | Agent notification             | Logs event. Permission/input-prompt messages set the agent to `waiting` and stamp `awaiting_input_since` (matched by pattern: `permission`, `waiting for input`, `needs your approval`, …). Compaction notifications are tagged as `Compaction` events. Triggers a browser notification if enabled |
+| `SessionEnd`        | Claude Code CLI process exits  | Drops the waiting flag. If the session is already in `error`, the error state is preserved; otherwise marks all agents and the session as `completed` |
 | `Compaction`   | `/compact` detected in JSONL   | Creates a compaction subagent (type `compaction`) and Compaction event. Detected via `isCompactSummary` entries in the transcript JSONL. Also detected by periodic scanner for active sessions |
-| `APIError`     | API error in JSONL transcript  | Extracted from `isApiErrorMessage` entries (quota, rate limit, invalid_request) and raw `type: "error"` responses. Stored as event with error details |
+| `APIError`     | API error in JSONL transcript  | Extracted from `isApiErrorMessage` entries (quota, rate limit, invalid_request) and raw `type: "error"` responses. **Now immediately marks the session and agent as `error`** — previously recorded as events without changing status. Stored as event with error details |
 | `TurnDuration` | Turn timing in JSONL transcript| Extracted from `system` subtype `turn_duration` messages with `durationMs`. Stored as event for turn-level timing analysis |
 | `ToolError`    | Tool result error in JSONL     | Extracted from `toolUseResult.is_error` entries. Tracks tool-level failures for error propagation analysis |
 

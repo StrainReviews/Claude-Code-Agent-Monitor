@@ -402,14 +402,16 @@ sequenceDiagram
    - `UserPromptSubmit` 时(用户按下回车),清除等待标志并将主 Agent 提升为 `working` — 这是文本响应回合开始的唯一可靠信号,因为它们不发出 `PreToolUse`
    - `PreToolUse` 时将 Agent 设为 `working`(同时清除等待标志),`PostToolUse` 后保持 working 状态(也清除等待标志 — 用于处理用户在工具运行期间批准权限提示的场景)
    - 非错误 `Stop` 时,主 Agent 变为 `waiting` — Claude 完成本回合,主动权交给用户。错误 `Stop` 会将 Agent 和会话标记为 `error`。后台子 Agent 继续运行
-   - 在权限 `Notification` 时(按消息模式匹配:`permission`、`waiting for input`、`needs your approval` 等),盖上等待标志而不改变状态
+   - 在权限 `Notification` 时（按消息模式匹配：`permission`、`waiting for input`、`needs your approval` 等），将 Agent 设为 `waiting` 并盖上 `awaiting_input_since`
    - `SubagentStop` 故意不清除等待标志 — 后台子 Agent 完成不能说明用户是否已响应
    - 通过 `SubagentStop` 单独标记子 Agent 为完成。`res.json()` 返回后,触发 fire-and-forget 的 `scanAndImportSubagents`,遍历会话的 `subagents/agent-*.jsonl` 文件,根据 `tool_use_id` 配对 `tool_use` ↔ `tool_result` 块,并在每个子 Agent 自己的 `agent_id` 下发出 `PreToolUse` + `PostToolUse` 事件 — 弥补子 Agent 内部工具调用对 dashboard 不可见的空白
-   - `SessionEnd` 时(CLI 进程退出),清除等待标志并将所有 Agent 和会话标记为 `completed`
+   - `SessionEnd` 时（CLI 进程退出），清除等待标志。如果会话已处于 `error` 状态，则保留错误状态；否则将所有 Agent 和会话标记为 `completed`
    - `SessionStart` 时,任何无活动超过 `DASHBOARD_STALE_MINUTES`(默认 180 = 3 小时,可通过环境变量覆盖)的其他活跃会话自动标记为"abandoned",其 Agent 标记为完成。处理会话内的 `/resume`、Ctrl+C 和其他会话无 `SessionEnd` 而被孤立的场景
+   - **错误恢复**：只有 `UserPromptSubmit` 和 `PreToolUse` 可以将会话从 `error` 恢复为 `active` — 表示用户主动进行了重试
    - 新工作事件到达时重新激活 completed/error/abandoned 会话(会话恢复)。Stop 和 SubagentStop 事件也会重新激活 completed/abandoned 会话 — 处理服务器启动前已导入的预存会话,其中第一个 Hook 事件可能是 Stop
    - 检测对话压缩(JSONL Transcript 中的 `isCompactSummary` 条目)并创建 `Compaction` Agent 和事件。Token 基线在压缩中保留,不丢失任何用量。Transcript 读取使用基于 stat 的缓存和增量字节偏移读取 — 仅解析自上次读取后追加的新字节,长会话约提速 50 倍
    - 从 JSONL Transcript 提取 API 错误(`isApiErrorMessage` 条目:配额限制、速率限制、invalid_request)和原始 `type: "error"` 响应,存储为 `APIError` 事件。回合耗时(`system` 子类型 `turn_duration`)存储为 `TurnDuration` 事件。工具结果错误(`toolUseResult.is_error`)追踪为 `ToolError` 事件
+   - **错误检测看门狗** — 后台定时器每 15 秒运行一次，扫描没有近期 Hook 事件（>10 秒）的活跃会话。它重新读取 Transcript 文件查找 API 错误（认证失败、速率限制、配额耗尽），从会话 `cwd` 推导 Transcript 路径（用于没有 `transcript_path` 的导入会话），并在发现 API 错误时将会话/Agent 标记为 `error`。这可以捕获 Claude CLI 在 API 错误后不触发 Hook 的情况（例如 401 认证失败时 CLI 只显示错误并等待）
    - 周期性服务器清理捕获遗漏事件检测的废弃会话和新压缩(例如 `/compact` 不触发 Hook、会话创建后几秒内 `/resume`)。频率从 `DASHBOARD_STALE_MINUTES` 派生(¼ 阈值,夹在 60 秒–5 分钟之间)。清理共享 Hook Handler 的 Transcript 缓存,避免重复 I/O。废弃会话清理还会驱逐 Transcript 缓存条目以限制内存使用
 4. **WebSocket** 将变更广播到所有已连接客户端
 5. **UI** 接收更新并重新渲染受影响的组件
@@ -425,9 +427,13 @@ stateDiagram-v2
     [*] --> waiting: ensureSession(首个 hook)
     waiting --> working: PreToolUse / UserPromptSubmit
     working --> working: PostToolUse(工具完成)
-    working --> waiting: Stop,非错误
+    working --> waiting: Stop，非错误
+    working --> waiting: Notification（输入提示）
     waiting --> error: Stop 有错误
     working --> error: Stop 有错误
+    waiting --> error: 检测到 API 错误（看门狗）
+    working --> error: 检测到 API 错误（看门狗）
+    error --> working: UserPromptSubmit / PreToolUse（恢复）
     working --> completed: SessionEnd
     waiting --> completed: SessionEnd
 
@@ -446,14 +452,18 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> waiting: SessionStart(status=active + 标志)
     waiting --> active: UserPromptSubmit / PreToolUse / PostToolUse
-    active --> waiting: Stop,非错误(标志重新盖上)
-    active --> waiting: 权限 Notification
+    active --> waiting: Stop，非错误（标志重新盖上）
+    active --> waiting: 权限 Notification（Agent → waiting）
     active --> error: Stop, stop_reason=error
-    waiting --> completed: SessionEnd(CLI 退出)
-    active --> completed: SessionEnd(CLI 退出)
-    waiting --> abandoned: 过期 > DASHBOARD_STALE_MINUTES(默认 180)
+    active --> error: 检测到 API 错误（看门狗）
+    waiting --> error: 检测到 API 错误（看门狗）
+    error --> active: UserPromptSubmit / PreToolUse（恢复）
+    waiting --> completed: SessionEnd（CLI 退出）
+    active --> completed: SessionEnd（CLI 退出）
+    error --> error: SessionEnd（保留错误状态）
+    waiting --> abandoned: 过期 > DASHBOARD_STALE_MINUTES（默认 180）
     active --> abandoned: 过期 > DASHBOARD_STALE_MINUTES
-    completed --> active: 会话恢复(新工作事件)
+    completed --> active: 会话恢复（新工作事件）
     error --> active: 会话恢复
     abandoned --> active: 会话恢复
     completed --> [*]
@@ -940,12 +950,12 @@ Dashboard 处理以下 Claude Code Hook 类型：
 | `UserPromptSubmit` | 用户在提示符前按下回车 | 清除等待标志并将主 Agent 提升为 `working` — 文本响应回合开始的唯一可靠信号,因为它们不发出 `PreToolUse` |
 | `PreToolUse` | Agent 开始使用工具 | 清除等待标志,设置 Agent 为 `working`,设置 `current_tool`。如果工具是 `Agent`,创建子 Agent 记录 |
 | `PostToolUse` | 工具执行完成 | 清除等待标志(用于处理用户在工具运行期间批准权限提示的场景)。清除 `current_tool`。Agent 保持 `working` |
-| `Stop` | Claude 完成响应 | 非错误:主 Agent → `waiting` — Claude 完成本回合,主动权交给用户。错误:将 Agent 和会话标记为 `error`。后台子 Agent 继续运行 |
+| `Stop` | Claude 完成响应 | 非错误：主 Agent → `waiting` — Claude 完成本回合，主动权交给用户。`stop_reason=error`：将 Agent 和会话标记为 `error`。后台子 Agent 继续运行 |
 | `SubagentStop` | 后台 Agent 完成 | 通过描述、类型或任务匹配并完成子 Agent。故意不清除等待标志 — 子 Agent 完成不能说明用户是否已响应。**触发 fire-and-forget 的 JSONL 扫描**(`scanAndImportSubagents`),在子 Agent 自己的 `agent_id` 下为每个 tool 发出 `PreToolUse` + `PostToolUse` 事件,使 Timeline 显示子 Agent 运行的所有 tool,而不仅仅是 spawn 标记 |
-| `Notification` | Agent 通知 | 记录事件。权限/输入提示消息盖上等待标志(模式:`permission`、`waiting for input`、`needs your approval` 等)。压缩通知标记为 `Compaction` 事件。如果启用,触发浏览器通知 |
-| `SessionEnd` | Claude Code CLI 进程退出 | 清除等待标志,将所有 Agent 和会话标记为 `completed` |
+| `Notification` | Agent 通知 | 记录事件。权限/输入提示消息将 Agent 设为 `waiting` 并盖上 `awaiting_input_since`（模式：`permission`、`waiting for input`、`needs your approval` 等）。压缩通知标记为 `Compaction` 事件。如果启用,触发浏览器通知 |
+| `SessionEnd` | Claude Code CLI 进程退出 | 清除等待标志。如果会话已处于 `error` 状态，则保留错误状态；否则将所有 Agent 和会话标记为 `completed` |
 | `Compaction` | JSONL 中检测到 `/compact` | 创建压缩子 Agent（类型 `compaction`）和 Compaction 事件。通过 Transcript JSONL 中的 `isCompactSummary` 条目检测。也可由周期性扫描器对活跃会话检测 |
-| `APIError` | JSONL Transcript 中的 API 错误 | 从 `isApiErrorMessage` 条目（配额、速率限制、invalid_request）和原始 `type: "error"` 响应中提取。存储为包含错误详情的事件 |
+| `APIError` | JSONL Transcript 中的 API 错误 | 从 `isApiErrorMessage` 条目（配额、速率限制、invalid_request）和原始 `type: "error"` 响应中提取。**立即将会话和 Agent 标记为 `error`** — 之前仅记录事件而不更改状态。存储为包含错误详情的事件 |
 | `TurnDuration` | JSONL Transcript 中的回合计时 | 从 `system` 子类型 `turn_duration` 消息中提取，含 `durationMs`。存储为回合级计时分析事件 |
 | `ToolError` | JSONL 中的工具结果错误 | 从 `toolUseResult.is_error` 条目中提取。追踪工具级失败用于错误传播分析 |
 

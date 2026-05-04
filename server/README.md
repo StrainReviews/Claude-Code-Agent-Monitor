@@ -803,33 +803,47 @@ const DEFAULT_PRICING = [
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Created: SessionStart hook
-    Created --> Active: First tool execution
-    Active --> Active: Tool executions
-    Active --> Completed: SessionEnd hook
-    Completed --> [*]
-    
-    note right of Active
-        updated_at bumped on every hook
-        total_cost incremented on PostToolUse
-    end note
+    [*] --> waiting: SessionStart (status=active + flag)
+    waiting --> active: UserPromptSubmit / PreToolUse / PostToolUse
+    active --> waiting: Stop (non-error, flag re-stamped)
+    active --> waiting: Permission Notification (agent → waiting)
+    active --> error: Stop (stop_reason=error)
+    active --> error: API error detected (watchdog)
+    waiting --> error: API error detected (watchdog)
+    error --> active: UserPromptSubmit / PreToolUse (recovery)
+    waiting --> completed: SessionEnd (CLI exited)
+    active --> completed: SessionEnd (CLI exited)
+    error --> error: SessionEnd (preserves error)
+    waiting --> abandoned: Stale > DASHBOARD_STALE_MINUTES
+    active --> abandoned: Stale > DASHBOARD_STALE_MINUTES
+    completed --> active: Session resumed (new work event)
+    error --> active: Session resumed (new work event)
+    abandoned --> active: Session resumed (new work event)
+    completed --> [*]
+    error --> [*]
+    abandoned --> [*]
 ```
 
 ### Agent Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Running: Agent created
-    Running --> Running: PreToolUse (set current_tool)
-    Running --> Running: PostToolUse (increment tokens, cost)
-    Running --> Completed: Stop/SubagentStop hook
-    Running --> Failed: Error in hook processing
-    Completed --> [*]
-    Failed --> [*]
-    
-    note right of Running
-        current_tool tracks active tool
-        Cleared to null on PostToolUse
+    [*] --> waiting: ensureSession (first hook)
+    waiting --> working: PreToolUse / UserPromptSubmit
+    working --> working: PostToolUse (tool completed)
+    working --> waiting: Stop (non-error)
+    working --> waiting: Notification (input prompt)
+    waiting --> error: Stop with error
+    working --> error: Stop with error
+    waiting --> error: API error detected (watchdog)
+    working --> error: API error detected (watchdog)
+    error --> working: UserPromptSubmit / PreToolUse (recovery)
+    working --> completed: SessionEnd
+    waiting --> completed: SessionEnd
+
+    note right of waiting
+        Agent is between turns or
+        awaiting user input
     end note
 ```
 
@@ -934,6 +948,35 @@ router.post("/api/hooks/event", (req, res) => {
   }
 });
 ```
+
+### Error Detection Watchdog
+
+The server runs a background error detection timer every 15 seconds that proactively catches API errors even when Claude Code fails to fire hooks:
+
+1. **Stale session scan** — finds active sessions with no recent hook events (>10 seconds since last event)
+2. **Transcript re-read** — re-reads JSONL transcript files for those sessions looking for API errors (401 auth failures, rate limits, quota exhaustion)
+3. **Path derivation** — for imported sessions that don't have `transcript_path` in event data, derives the transcript path from the session's `cwd`
+4. **Error marking** — marks sessions and agents as `error` when API errors are found in transcripts
+
+This catches cases where the Claude CLI doesn't fire a hook after an API error (e.g., 401 auth failures where the CLI just shows the error message and waits for user input).
+
+### API Error → Error State Flow
+
+API errors detected in JSONL transcripts (`isApiErrorMessage` entries: quota limits, rate limits, `invalid_request`) now **immediately mark the session and agent as `error`**. Previously, these errors were recorded as `APIError` events but did not change session/agent status.
+
+Error state transitions:
+- `Stop` with `stop_reason=error` → agent `error`, session `error`
+- API error in transcript (hook-based or watchdog) → session `error`, agent `error`
+- `Notification` indicating input prompt → agent `waiting` (status change, not just flag)
+- `SessionEnd` on error session → **preserves** `error` status (previously always set to `completed`)
+
+### Error Recovery
+
+Only two events can recover a session from `error` back to `active`:
+- **`UserPromptSubmit`** — user hits enter on a new prompt (active retry)
+- **`PreToolUse`** — agent begins using a tool (session resumed with work)
+
+This ensures error states are only cleared by deliberate user action, not by background activity.
 
 ---
 

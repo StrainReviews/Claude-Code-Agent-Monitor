@@ -403,14 +403,16 @@ sequenceDiagram
    - Trên `UserPromptSubmit` (người dùng nhấn enter), xóa cờ chờ và đẩy Agent chính sang `working` — đây là tín hiệu đáng tin cậy duy nhất cho biết các lượt văn bản thuần đã bắt đầu, vì chúng không phát ra `PreToolUse`
    - Đặt tác nhân thành "working" trên `PreToolUse` (đồng thời xóa cờ chờ), giữ cho tác nhân hoạt động qua `PostToolUse` (cũng xóa cờ chờ — xử lý tình huống user duyệt prompt xin quyền giữa lúc tool đang chạy)
    - Trên `Stop` không lỗi, Agent chính chuyển sang `waiting` — Claude đã hoàn thành lượt, lượt tiếp theo thuộc về người dùng. `Stop` lỗi đánh dấu Agent và phiên `error`. Các Subagent nền vẫn tiếp tục chạy
-   - Trên Notification dạng xin quyền (khớp mẫu: `permission`, `waiting for input`, `needs your approval`, …), đóng dấu cờ chờ mà không thay đổi trạng thái
+   - Trên Notification dạng xin quyền (khớp mẫu: `permission`, `waiting for input`, `needs your approval`, …), đặt agent sang `waiting` và đóng dấu `awaiting_input_since`
    - `SubagentStop` cố tình KHÔNG xóa cờ chờ — Subagent nền hoàn thành không nói lên gì về việc người dùng đã trả lời hay chưa
    - Đánh dấu các Subagent hoàn thành riêng lẻ thông qua `SubagentStop`. Sau khi `res.json()` trả về, chạy fire-and-forget `scanAndImportSubagents` để duyệt các tệp `subagents/agent-*.jsonl` của phiên, ghép cặp `tool_use` ↔ `tool_result` theo `tool_use_id`, và phát các sự kiện `PreToolUse` + `PostToolUse` dưới `agent_id` của chính từng subagent — lấp đầy khoảng trống mà các tool call nội bộ của subagent vốn vô hình với dashboard
-   - Trên `SessionEnd` (CLI thoát), xóa cờ chờ và đánh dấu tất cả Agent + phiên là `completed`
+   - Trên `SessionEnd` (CLI thoát), xóa cờ chờ. Nếu phiên đang ở trạng thái `error`, trạng thái lỗi được giữ nguyên; ngược lại đánh dấu tất cả Agent + phiên là `completed`
    - Trên `SessionStart`, bất kỳ phiên active nào khác không có hoạt động trong `DASHBOARD_STALE_MINUTES` (mặc định 180 = 3 giờ, có thể ghi đè qua biến môi trường) sẽ được đánh dấu "abandoned" với các Agent của nó hoàn thành. Điều này xử lý `/resume` bên trong phiên, Ctrl+C và các tình huống mồ côi khác mà không có `SessionEnd` sạch
    - Kích hoạt lại các phiên completed/error/abandoned khi có sự kiện công việc mới (phiên được tiếp tục). Các sự kiện Stop và SubagentStop cũng kích hoạt lại các phiên completed/abandoned — thao tác này xử lý các phiên có sẵn được nhập trước khi máy chủ khởi động, trong đó sự kiện hook đầu tiên có thể là Stop
+   - **Khôi phục lỗi**: chỉ `UserPromptSubmit` và `PreToolUse` có thể khôi phục phiên từ `error` về `active` — cho thấy người dùng đã chủ động thử lại
    - Phát hiện quá trình nén cuộc hội thoại (`isCompactSummary` trong bản ghi JSONL) và tạo tác nhân + sự kiện `Compaction`. Baseline token được bảo toàn qua các lần nén nên không bị mất usage. Việc đọc transcript sử dụng cache stat-based với incremental byte-offset reads — chỉ các byte mới được thêm vào kể từ lần đọc cuối cùng được parse, giúp tăng tốc ~50 lần cho các phiên dài
    - Trích xuất các lỗi API (`isApiErrorMessage`: giới hạn quota, rate limit, invalid_request) và phản hồi `type: "error"` thô từ JSONL transcript, lưu dưới dạng sự kiện `APIError`. Thời lượng lượt (`system` subtype `turn_duration`) được lưu dưới dạng `TurnDuration`. Lỗi tool result (`toolUseResult.is_error`) được theo dõi dưới dạng `ToolError`
+   - **Watchdog phát hiện lỗi** — một timer nền chạy mỗi 15 giây, quét các phiên active không có sự kiện hook gần đây (>10 giây). Nó đọc lại các tệp transcript tìm lỗi API (lỗi xác thực, rate limit, hết quota), suy ra đường dẫn transcript từ `cwd` của phiên cho các phiên import không có `transcript_path` trong dữ liệu sự kiện, và đánh dấu phiên/agent là `error` khi phát hiện lỗi API. Điều này bắt các trường hợp Claude CLI không kích hoạt hook sau lỗi API (ví dụ: lỗi xác thực 401 khi CLI chỉ hiển thị lỗi và chờ)
    - Quét máy chủ định kỳ phát hiện các phiên bị bỏ qua và các lần nén mới vượt qua khả năng phát hiện dựa trên sự kiện (ví dụ: `/compact` không kích hoạt hook, `/resume` trong vài giây sau khi tạo phiên). Tần suất được dẫn xuất từ `DASHBOARD_STALE_MINUTES` (¼ ngưỡng, kẹp giữa 60s–5 phút). Quá trình quét chia sẻ transcript cache với trình xử lý hook, tránh I/O trùng lặp. Việc dọn dẹp phiên bỏ dở cũng evict cache để bound memory
 4. **WebSocket** thông báo thay đổi tới tất cả các máy khách được kết nối
 5. **UI** nhận bản cập nhật và hiển thị lại các thành phần bị ảnh hưởng trong thời gian thực mà không cần thăm dò ý kiến.
@@ -428,8 +430,12 @@ stateDiagram-v2
     waiting --> working: PreToolUse / UserPromptSubmit
     working --> working: PostToolUse (tool hoàn tất)
     working --> waiting: Stop, không lỗi
+    working --> waiting: Notification (yêu cầu input)
     waiting --> error: Stop có lỗi
     working --> error: Stop có lỗi
+    waiting --> error: Phát hiện lỗi API (watchdog)
+    working --> error: Phát hiện lỗi API (watchdog)
+    error --> working: UserPromptSubmit / PreToolUse (khôi phục)
     working --> completed: SessionEnd
     waiting --> completed: SessionEnd
 
@@ -450,10 +456,14 @@ stateDiagram-v2
     [*] --> waiting: SessionStart (status=active + cờ)
     waiting --> active: UserPromptSubmit / PreToolUse / PostToolUse
     active --> waiting: Stop, không lỗi (cờ được đóng dấu lại)
-    active --> waiting: Notification xin quyền
+    active --> waiting: Notification xin quyền (agent → waiting)
     active --> error: Stop, stop_reason=error
+    active --> error: Phát hiện lỗi API (watchdog)
+    waiting --> error: Phát hiện lỗi API (watchdog)
+    error --> active: UserPromptSubmit / PreToolUse (khôi phục)
     waiting --> completed: SessionEnd (CLI thoát)
     active --> completed: SessionEnd (CLI thoát)
+    error --> error: SessionEnd (giữ nguyên lỗi)
     waiting --> abandoned: Quá hạn > DASHBOARD_STALE_MINUTES (mặc định 180)
     active --> abandoned: Quá hạn > DASHBOARD_STALE_MINUTES
     completed --> active: Phiên được tiếp tục (sự kiện công việc mới)
@@ -950,12 +960,12 @@ Bảng điều khiển xử lý các loại hook Claude Code này:
 | `UserPromptSubmit`| Người dùng nhấn enter          | Xóa cờ chờ và đẩy Agent chính sang `working` — tín hiệu duy nhất cho biết các lượt văn bản thuần đã bắt đầu, vì chúng không phát ra `PreToolUse` |
 | `PreToolUse`      | Agent bắt đầu sử dụng tool     | Xóa cờ chờ, đặt Agent thành `working`, đặt `current_tool`. Nếu tool là `Agent`, tạo bản ghi Subagent |
 | `PostToolUse`     | Tool hoàn tất                  | Xóa cờ chờ (xử lý các phê duyệt prompt xin quyền mà Notification đã đóng dấu giữa lúc tool đang chạy). Xóa `current_tool`. Agent ở lại `working` |
-| `Stop`            | Claude trả lời xong            | Không lỗi: Agent chính → `waiting` — Claude xong lượt, đến lượt người dùng. Lỗi: đánh dấu Agent và phiên `error`. Subagent nền vẫn tiếp tục chạy |
+| `Stop`            | Claude trả lời xong            | Không lỗi: Agent chính → `waiting` — Claude xong lượt, đến lượt người dùng. `stop_reason=error`: đánh dấu Agent và phiên `error`. Subagent nền vẫn tiếp tục chạy |
 | `SubagentStop`    | Subagent nền đã hoàn tất       | Khớp và hoàn thành Subagent theo mô tả, loại hoặc nhiệm vụ. Cố tình KHÔNG xóa cờ chờ — Subagent xong không nói lên gì về người dùng. **Kích hoạt quét JSONL fire-and-forget** (`scanAndImportSubagents`) phát các sự kiện `PreToolUse` + `PostToolUse` cho từng tool dưới `agent_id` của chính subagent, để Timeline hiển thị đầy đủ tool subagent đã chạy chứ không chỉ marker spawn |
-| `Notification`    | Notification Agent             | Ghi sự kiện. Tin nhắn xin quyền/yêu cầu input đóng dấu cờ chờ (mẫu: `permission`, `waiting for input`, `needs your approval`, …). Notification liên quan đến nén được gắn thẻ `Compaction`. Kích hoạt notification trình duyệt nếu được bật |
-| `SessionEnd`      | CLI Claude Code thoát          | Xóa cờ chờ, đánh dấu tất cả Agent + phiên là `completed`                                              |
+| `Notification`    | Notification Agent             | Ghi sự kiện. Tin nhắn xin quyền/yêu cầu input đặt agent sang `waiting` và đóng dấu `awaiting_input_since` (mẫu: `permission`, `waiting for input`, `needs your approval`, …). Notification liên quan đến nén được gắn thẻ `Compaction`. Kích hoạt notification trình duyệt nếu được bật |
+| `SessionEnd`      | CLI Claude Code thoát          | Xóa cờ chờ. Nếu phiên đang ở trạng thái `error`, trạng thái lỗi được giữ nguyên; ngược lại đánh dấu tất cả Agent + phiên là `completed` |
 | `Compaction`   | `/compact` được phát hiện trong JSONL   | Tạo một tác nhân phụ nén (loại `compaction`) và sự kiện Nén. Được phát hiện qua các mục `isCompactSummary` trong bản ghi JSONL. Cũng được phát hiện bởi máy quét định kỳ cho các phiên hoạt động |
-| `APIError`     | Lỗi API trong bản ghi JSONL  | Được trích xuất từ ​​các mục nhập `isApiErrorMessage` (hạn ngạch, giới hạn tỷ lệ, yêu cầu không hợp lệ) và phản hồi thô `type: "error"`. Được lưu trữ dưới dạng sự kiện với chi tiết lỗi |
+| `APIError`     | Lỗi API trong bản ghi JSONL  | Được trích xuất từ các mục nhập `isApiErrorMessage` (hạn ngạch, giới hạn tỷ lệ, yêu cầu không hợp lệ) và phản hồi thô `type: "error"`. **Ngay lập tức đánh dấu phiên và agent là `error`** — trước đây chỉ ghi nhận sự kiện mà không thay đổi trạng thái. Được lưu trữ dưới dạng sự kiện với chi tiết lỗi |
 | `TurnDuration` | Xoay thời gian trong bảng điểm JSONL| Trích xuất từ ​​​​các tin nhắn `system` kiểu con `turn_duration` có `durationMs`. Được lưu trữ dưới dạng sự kiện để phân tích thời gian theo cấp độ |
 | `ToolError`    | Lỗi kết quả công cụ trong JSONL     | Trích xuất từ ​​​​các mục `toolUseResult.is_error`. Theo dõi lỗi cấp công cụ để phân tích lan truyền lỗi |
 

@@ -1272,10 +1272,15 @@ export function Dashboard() {
                       <AgentStatusBadge
                         status={
                           event.event_type === "Stop"
-                            ? "completed"
-                            : event.event_type === "PreToolUse"
-                              ? "working"
-                              : "waiting"
+                            ? event.summary?.toLowerCase().includes("error")
+                              ? "error"
+                              : "completed"
+                            : event.event_type === "APIError" ||
+                                event.summary?.toLowerCase().includes("error")
+                              ? "error"
+                              : event.event_type === "PreToolUse"
+                                ? "working"
+                                : "waiting"
                         }
                       />
                       <span className="text-sm text-gray-300 truncate flex-1">

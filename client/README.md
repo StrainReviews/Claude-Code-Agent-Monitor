@@ -227,7 +227,7 @@ graph TB
     Layout[Layout.tsx<br/>Sidebar + Outlet]
 
     Dashboard[Dashboard<br/>Monitor tab: stats + agents + events<br/>Health tab: SystemHealthTab]
-    Kanban[KanbanBoard<br/>5-column agent board]
+    Kanban[KanbanBoard<br/>4-column agent board]
     Sessions[Sessions<br/>filterable table]
     Detail[SessionDetail<br/>agent hierarchy + timeline]
     Feed[ActivityFeed<br/>streaming event log]
@@ -746,7 +746,7 @@ interface Session {
   id: string;
   session_id: string;
   model: string;
-  status: 'active' | 'completed';
+  status: 'active' | 'completed' | 'error' | 'abandoned';
   total_cost: number;
   created_at: string;
   updated_at: string;
@@ -757,7 +757,7 @@ interface Agent {
   agent_id: string;
   session_id: string;
   agent_type: string;
-  status: 'running' | 'completed' | 'failed';
+  status: 'working' | 'waiting' | 'completed' | 'error';
   input_tokens: number;
   output_tokens: number;
   cost: number;
