@@ -750,11 +750,10 @@ export function Analytics() {
       color: "#10b981",
     },
     {
-      label: t("common:status.connected"),
-      value: data?.agents_by_status?.connected ?? 0,
-      color: "#3b82f6",
+      label: t("common:status.waiting"),
+      value: data?.agents_by_status?.waiting ?? 0,
+      color: "#eab308",
     },
-    { label: t("common:status.idle"), value: data?.agents_by_status?.idle ?? 0, color: "#6b7280" },
     {
       label: t("common:status.error"),
       value: data?.agents_by_status?.error ?? 0,

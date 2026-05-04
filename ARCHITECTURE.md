@@ -652,7 +652,7 @@ erDiagram
         TEXT name "Main Agent — {session name} or subagent description"
         TEXT type "main|subagent"
         TEXT subagent_type "Explore|general-purpose|etc"
-        TEXT status "idle|connected|working|completed|error"
+        TEXT status "working|waiting|completed|error"
         TEXT task "Current task description"
         TEXT current_tool "Active tool name or NULL"
         TEXT started_at "ISO 8601"

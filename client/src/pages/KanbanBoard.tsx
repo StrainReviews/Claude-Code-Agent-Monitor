@@ -1,7 +1,7 @@
 /**
  * @file KanbanBoard.tsx
  * @description Kanban-style board with two views: agents grouped by their
- * AgentStatus (idle/connected/working/completed/error) or sessions grouped
+ * AgentStatus (working/waiting/completed/error) or sessions grouped
  * by their SessionStatus (active/completed/error/abandoned). The view toggle
  * is persisted in localStorage so the user's choice survives reloads. Each
  * column paginates client-side at COLUMN_PAGE_SIZE.
@@ -33,22 +33,10 @@ import type {
 
 type BoardView = "agents" | "sessions";
 
-// Persisted statuses we fetch from the API. We MUST fetch `idle` even
-// though it doesn't have its own column: a main agent post-Stop has
-// status="idle" with awaiting_input_since set, and that agent belongs in
-// the Waiting column. Filtering `idle` out of the fetch list (as a prior
-// version did, after we dropped the Idle column) caused those agents to
-// never load on the board even though the session detail page rendered
-// them correctly.
-const AGENT_FETCH_STATUSES: AgentStatus[] = ["idle", "connected", "working", "completed", "error"];
+// Persisted statuses we fetch from the API.
+const AGENT_FETCH_STATUSES: AgentStatus[] = ["working", "waiting", "completed", "error"];
 
-// Columns rendered on the Agents board. Idle and Connected are
-// intentionally absent — with the current state machine, neither is
-// reachable on a live active session: SessionStart immediately stamps
-// the waiting flag (so a fresh agent goes straight to Waiting), and
-// Stop pairs idle with the waiting flag (also Waiting). Both statuses
-// remain valid persisted enum values and are still queryable via
-// /api/agents?status={idle,connected} for legacy / imported data.
+// Columns rendered on the Agents board.
 const AGENT_COLUMNS: EffectiveAgentStatus[] = ["working", "waiting", "completed", "error"];
 const SESSION_COLUMNS: EffectiveSessionStatus[] = [
   "active",
@@ -93,9 +81,8 @@ export function KanbanBoard() {
   }, []);
 
   const loadAgents = useCallback(async () => {
-    // Fetch every persisted status — including idle, which has no column
-    // of its own but produces Waiting cards via the awaiting_input_since
-    // overlay. Bucketing happens below in `groupedAgents`.
+    // Fetch every persisted agent status. Bucketing happens below in
+    // `groupedAgents`.
     //
     // Also fetch sessions so AgentCard can surface model / cwd / cost on
     // main-agent cards (they have no task and a generic name on their
@@ -162,16 +149,17 @@ export function KanbanBoard() {
   const sessionsById = new Map<string, Session>();
   for (const s of sessions) sessionsById.set(s.id, s);
 
-  // Bucket by effective status: agents/sessions blocked on user input fall
-  // into the "waiting" column instead of their underlying lifecycle column.
-  // This keeps the persisted enum stable while letting the UI surface the
-  // attention-required state in a dedicated column.
+  // Bucket by effective status: agents with status "waiting" OR those with
+  // awaiting_input_since set go into the "waiting" column. Other columns
+  // exclude agents that belong in "waiting".
+  const isEffectivelyWaiting = (a: Agent) => a.status === "waiting" || isAgentAwaitingInput(a);
+
   const groupedAgents = AGENT_COLUMNS.reduce(
     (acc, status) => {
       acc[status] =
         status === "waiting"
-          ? agents.filter(isAgentAwaitingInput)
-          : agents.filter((a) => a.status === status && !isAgentAwaitingInput(a));
+          ? agents.filter(isEffectivelyWaiting)
+          : agents.filter((a) => a.status === status && !isEffectivelyWaiting(a));
       return acc;
     },
     {} as Record<EffectiveAgentStatus, Agent[]>

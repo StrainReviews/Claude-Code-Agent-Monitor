@@ -56,7 +56,7 @@ router.post("/", (req, res) => {
     name,
     type || "main",
     subagent_type || null,
-    status || "idle",
+    status || "waiting",
     task || null,
     parent_agent_id || null,
     metadata ? JSON.stringify(metadata) : null

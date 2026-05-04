@@ -249,7 +249,7 @@ router.post("/cleanup", (req, res) => {
       ).run(row.id);
       // Also complete any lingering agents
       db.prepare(
-        "UPDATE agents SET status = 'completed', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND status IN ('idle','connected','working')"
+        "UPDATE agents SET status = 'completed', ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE session_id = ? AND status IN ('waiting','working')"
       ).run(row.id);
     }
     result.abandoned = stale.length;

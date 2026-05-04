@@ -38,8 +38,6 @@
   "type": "Type",
   "statusLabel": "Status",
   "status": {
-    "idle": "Idle",
-    "connected": "Connected",
     "working": "Working",
     "waiting": "Waiting",
     "completed": "Completed",

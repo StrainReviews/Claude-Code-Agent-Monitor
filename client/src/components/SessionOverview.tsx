@@ -183,10 +183,7 @@ export function SessionOverview({ session, agents }: SessionOverviewProps) {
   }, [stats]);
 
   // Active agent (if any)
-  const activeAgent = useMemo(
-    () => agents.find((a) => a.status === "working" || a.status === "connected") ?? null,
-    [agents]
-  );
+  const activeAgent = useMemo(() => agents.find((a) => a.status === "working") ?? null, [agents]);
 
   // Duration: ended_at - started_at, or now - started_at if active
   const durationLabel = useMemo(() => {

@@ -1063,7 +1063,7 @@
                   <h3>Concurrency Timeline</h3>
                   <p>
                     Visualize parallel agent execution with a Gantt-style timeline showing overlapping
-                    subagent lifetimes, tool call concurrency, and idle gaps. Identify bottlenecks in
+                    subagent lifetimes, tool call concurrency, and wait gaps. Identify bottlenecks in
                     multi-agent orchestration and optimize task parallelism across complex sessions.
                   </p>
                 </div>
@@ -1252,8 +1252,8 @@
                   <td><code>Stop</code></td>
                   <td>Claude finishes a turn</td>
                   <td>
-                    Non-error: main agent → <code>idle</code> and <code>awaiting_input_since</code> re-stamped — UI shows
-                    <span class="status-chip chip-idle"
+                    Non-error: main agent → <code>waiting</code> — UI shows
+                    <span class="status-chip chip-waiting"
                       ><span class="chip-dot"></span>Waiting</span
                     > until the next user input. Error: drops the flag, marks the session
                     <span class="status-chip chip-error"
@@ -1435,7 +1435,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                   <td>Sessions</td>
                   <td>
                     Your session listed with status
-                    <span class="status-chip chip-idle"
+                    <span class="status-chip chip-waiting"
                       ><span class="chip-dot"></span>Waiting</span
                     > (a fresh CLI is sitting at the prompt) — flips to
                     <span class="status-chip chip-active"
@@ -1817,21 +1817,22 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
             <!-- prettier-ignore -->
             <div class="mermaid">
               stateDiagram-v2
-                [*] --> connected: ensureSession (first hook)
-                connected --> waiting: SessionStart (stamps awaiting flag)
-                waiting --> working: UserPromptSubmit
-                waiting --> working: PreToolUse
-                working --> working: PreToolUse (subsequent tool)
-                working --> waiting: Stop (non-error, idle + flag)
-                working --> waiting: Permission Notification
-                waiting --> completed: SessionEnd
+                [*] --> waiting: ensureSession (first hook)
+                waiting --> working: PreToolUse / UserPromptSubmit
+                working --> working: PostToolUse (tool completed)
+                working --> waiting: Stop (non-error)
+                waiting --> error: Stop with error
+                working --> error: Stop with error
                 working --> completed: SessionEnd
-                working --> error: Stop (stop_reason=error)
-                completed --> [*]
-                error --> [*]
+                waiting --> completed: SessionEnd
+
+                note right of waiting
+                    Agent is between turns or
+                    awaiting user input
+                end note
             </div>
             <p class="diagram-label">
-              Agent status transitions driven by hook events. <code>waiting</code> is a UI overlay — persisted as <code>idle</code>/<code>connected</code> with <code>awaiting_input_since</code> set.
+              Agent status transitions driven by hook events. <code>waiting</code> is a real persisted status — agents start as <code>waiting</code> and return to it after each turn.
             </p>
           </div>
 
@@ -1883,7 +1884,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                 TX->>TX: ensureSession(session_id)
                 Note over TX: Creates session + main agent<br/>on first contact
                 TX->>TX: process by hook_type
-                Note over TX: SessionStart -> stamp awaiting flag (Waiting)<br/>UserPromptSubmit -> clear flag, agent working<br/>PreToolUse -> clear flag, agent working<br/>PostToolUse -> clear flag, clear current_tool<br/>Stop (non-error) -> idle + flag re-stamped<br/>Stop (error) -> drop flag, session error<br/>SubagentStop -> complete matched subagent (does NOT touch flag);<br/>fire-and-forget scanAndImportSubagents emits<br/>per-tool Pre/PostToolUse events under each<br/>subagent's own agent_id<br/>Notification (permission) -> stamp flag<br/>SessionEnd -> drop flag, mark all completed
+                Note over TX: SessionStart -> stamp awaiting flag (Waiting)<br/>UserPromptSubmit -> clear flag, agent working<br/>PreToolUse -> clear flag, agent working<br/>PostToolUse -> clear flag, clear current_tool<br/>Stop (non-error) -> agent waiting<br/>Stop (error) -> agent error, session error<br/>SubagentStop -> complete matched subagent (does NOT touch flag);<br/>fire-and-forget scanAndImportSubagents emits<br/>per-tool Pre/PostToolUse events under each<br/>subagent's own agent_id<br/>Notification (permission) -> stamp flag<br/>SessionEnd -> drop flag, mark all completed
                 TX->>TX: insertEvent(...)
                 TX->>TX: COMMIT
                 API->>WS: broadcast("agent_updated", agent)
@@ -2320,7 +2321,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                   TEXT name "Display name"
                   TEXT type "main|subagent"
                   TEXT subagent_type "Explore|general-purpose|etc"
-                  TEXT status "idle|connected|working|completed|error"
+                  TEXT status "working|waiting|completed|error"
                   TEXT task "Current task description"
                   TEXT current_tool "Active tool or NULL"
                   TEXT started_at "ISO 8601"

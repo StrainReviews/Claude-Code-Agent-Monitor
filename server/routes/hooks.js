@@ -75,7 +75,7 @@ function ensureSession(sessionId, data) {
       `Main Agent — ${sessionLabel}`,
       "main",
       null,
-      "connected",
+      "working",
       null,
       null,
       null
@@ -98,21 +98,27 @@ const processEvent = db.transaction((hookType, data) => {
   const mainAgentId = mainAgent?.id ?? null;
 
   // Reactivate non-active sessions when we receive hook events proving the session is alive.
-  // - Work events (PreToolUse, PostToolUse, Notification, SessionStart) always reactivate.
+  // - UserPromptSubmit and PreToolUse always reactivate (user actively retried, even from error).
+  // - Other work events (PostToolUse, Notification, SessionStart) reactivate non-error sessions.
   // - Stop/SubagentStop reactivate only if session is completed/abandoned — this handles
   //   sessions imported as "completed" before the server started, where the first hook event
-  //   might be a Stop. For error sessions, Stop should NOT reactivate (the error is intentional).
+  //   might be a Stop. For error sessions, Stop should NOT reactivate.
   // - SessionEnd never reactivates.
+  const isUserAction = hookType === "UserPromptSubmit" || hookType === "PreToolUse";
   const isNonTerminalEvent = hookType !== "SessionEnd";
   const isStopLike = hookType === "Stop" || hookType === "SubagentStop";
   const isImportedOrAbandoned = session.status === "completed" || session.status === "abandoned";
   const needsReactivation =
-    session.status !== "active" && isNonTerminalEvent && (!isStopLike || isImportedOrAbandoned);
+    session.status !== "active" &&
+    isNonTerminalEvent &&
+    (isUserAction ||
+      (!isStopLike && session.status !== "error") ||
+      (isStopLike && isImportedOrAbandoned));
   if (needsReactivation) {
     stmts.reactivateSession.run(sessionId);
     broadcast("session_updated", stmts.getSession.get(sessionId));
 
-    if (mainAgent && mainAgent.status !== "working" && mainAgent.status !== "connected") {
+    if (mainAgent && mainAgent.status !== "working") {
       stmts.reactivateAgent.run(mainAgentId);
       mainAgent = stmts.getAgent.get(mainAgentId);
       broadcast("agent_updated", mainAgent);
@@ -156,7 +162,7 @@ const processEvent = db.transaction((hookType, data) => {
         // Infer which agent is spawning this subagent.
         // Hook events don't carry an explicit agent ID, so we use a heuristic:
         //   - If the main agent is actively working, it's the one spawning (common case).
-        //   - If the main agent is idle/connected (waiting for user or subagent results),
+        //   - If the main agent is waiting (for user or subagent results),
         //     the spawn must come from an already-running subagent — pick the deepest
         //     working subagent (most recently nested active agent).
         //   - Fallback to main if nothing else matches.
@@ -185,22 +191,20 @@ const processEvent = db.transaction((hookType, data) => {
       }
 
       // Update main agent status to "working" — but only when main is the likely
-      // actor. When main is idle and working subagents exist, PreToolUse events
+      // actor. When main is waiting and working subagents exist, PreToolUse events
       // come from subagents, not main. Incorrectly promoting main to "working"
       // would break parent inference for nested agent spawning.
       //
-      // Heuristic: main is idle + working subagents exist → subagent is the actor.
-      //            main is connected/working/idle with no subagents → main is the actor.
+      // Heuristic: main is waiting + working subagents exist → subagent is the actor.
+      //            main is working/waiting with no subagents → main is the actor.
       const subagentIsActor =
         mainAgent &&
-        mainAgent.status === "idle" &&
+        mainAgent.status === "waiting" &&
         !!stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
       if (
         mainAgent &&
         !subagentIsActor &&
-        (mainAgent.status === "working" ||
-          mainAgent.status === "connected" ||
-          mainAgent.status === "idle")
+        (mainAgent.status === "working" || mainAgent.status === "waiting")
       ) {
         stmts.updateAgent.run(null, "working", null, toolName, null, null, mainAgentId);
         broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
@@ -223,7 +227,7 @@ const processEvent = db.transaction((hookType, data) => {
       // Subagent completion is handled by SubagentStop, not here.
 
       // Only clear current_tool on the main agent if it's actively working.
-      // Skip if idle (waiting for subagents) or already completed.
+      // Skip if waiting (waiting for subagents) or already completed.
       if (mainAgent && mainAgent.status === "working") {
         stmts.updateAgent.run(null, null, null, null, null, null, mainAgentId);
         broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
@@ -246,18 +250,16 @@ const processEvent = db.transaction((hookType, data) => {
       //
       // CRITICAL: do all DB writes BEFORE any broadcast, then broadcast the
       // final state once. An earlier version broadcast agent_updated twice
-      // (first with status=idle and no flag, then again after the flag was
-      // set) which made the agent flicker out of every Kanban column for a
+      // which made the agent flicker out of every Kanban column for a
       // tick — visible to users as "agent skipped waiting and went to
-      // completed", because the Idle column no longer exists and Waiting
-      // requires the flag.
+      // completed".
       const now = new Date().toISOString();
       const agentMutable =
         !!mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error";
 
       if (data.stop_reason === "error") {
         if (agentMutable) {
-          stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+          stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
         }
         stmts.updateSession.run(null, "error", now, null, sessionId);
         // Error stop is terminal-ish — drop any waiting flag so the row
@@ -265,11 +267,11 @@ const processEvent = db.transaction((hookType, data) => {
         clearAwaitingInput(sessionId, mainAgentId, false);
       } else {
         if (agentMutable) {
-          stmts.updateAgent.run(null, "idle", null, null, null, null, mainAgentId);
+          stmts.updateAgent.run(null, "waiting", null, null, null, null, mainAgentId);
         }
-        // Stamp the waiting flag in the same DB pass as the idle update so
-        // the post-write read returns a consistent (idle, awaiting=set)
-        // row. Effective status flips working → waiting in one broadcast.
+        // Stamp the waiting flag in the same DB pass as the status update so
+        // the post-write read returns a consistent (waiting, awaiting=set)
+        // row.
         stmts.setSessionAwaitingInput.run(now, sessionId);
         if (mainAgentId) stmts.setAgentAwaitingInput.run(now, mainAgentId);
       }
@@ -344,9 +346,9 @@ const processEvent = db.transaction((hookType, data) => {
       summary = data.source === "resume" ? "Session resumed" : "Session started";
 
       // Reactivation is already handled above for non-active sessions.
-      // Promote main agent from idle → connected if needed.
-      if (mainAgent && mainAgent.status === "idle") {
-        stmts.updateAgent.run(null, "connected", null, null, null, null, mainAgentId);
+      // Promote main agent from waiting → working if needed.
+      if (mainAgent && mainAgent.status === "waiting") {
+        stmts.updateAgent.run(null, "working", null, null, null, null, mainAgentId);
       }
 
       // A just-started or just-resumed session is sitting at a prompt
@@ -390,20 +392,23 @@ const processEvent = db.transaction((hookType, data) => {
       summary = `Session closed: ${endLabel}`;
 
       // Session is terminating — drop any waiting flag so the row lands in
-      // the Completed column without a leftover yellow overlay.
+      // its final column without a leftover yellow overlay.
       clearAwaitingInput(sessionId, mainAgentId, false);
 
       // SessionEnd is the definitive signal that the CLI process exited.
-      // Mark everything as completed.
+      // If the session was in error state, keep it there — the user never
+      // recovered before exiting. Otherwise mark completed.
+      const finalSessionStatus = endSession?.status === "error" ? "error" : "completed";
       const allAgents = stmts.listAgentsBySession.all(sessionId);
       const now = new Date().toISOString();
       for (const agent of allAgents) {
         if (agent.status !== "completed" && agent.status !== "error") {
-          stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
+          const agentFinal = finalSessionStatus === "error" ? "error" : "completed";
+          stmts.updateAgent.run(null, agentFinal, null, null, now, null, agent.id);
           broadcast("agent_updated", stmts.getAgent.get(agent.id));
         }
       }
-      stmts.updateSession.run(null, "completed", now, null, sessionId);
+      stmts.updateSession.run(null, finalSessionStatus, now, null, sessionId);
       broadcast("session_updated", stmts.getSession.get(sessionId));
 
       break;
@@ -441,6 +446,7 @@ const processEvent = db.transaction((hookType, data) => {
         stmts.setSessionAwaitingInput.run(ts, sessionId);
         broadcast("session_updated", stmts.getSession.get(sessionId));
         if (mainAgentId) {
+          stmts.updateAgent.run(null, "waiting", null, null, null, null, mainAgentId);
           stmts.setAgentAwaitingInput.run(ts, mainAgentId);
           broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
         }
@@ -574,6 +580,22 @@ const processEvent = db.transaction((hookType, data) => {
             created_at: apiErr.timestamp || new Date().toISOString(),
           });
         }
+
+        // Any API error immediately puts session + agent into error state.
+        // If the user retries (UserPromptSubmit / PreToolUse), the
+        // reactivation logic at the top of processEvent will recover them.
+        if (result.errors.length > 0) {
+          const curSession = stmts.getSession.get(sessionId);
+          if (curSession && curSession.status === "active") {
+            stmts.updateSession.run(null, "error", null, null, sessionId);
+            broadcast("session_updated", stmts.getSession.get(sessionId));
+          }
+          if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
+            stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
+            clearAwaitingInput(sessionId, mainAgentId, false);
+            broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+          }
+        }
       }
 
       // Register turn duration events from transcript
@@ -703,6 +725,117 @@ router.post("/event", (req, res) => {
       });
   }
 });
+
+// ── Watchdog: detect API errors in active sessions ─────────────────────────
+// Claude CLI doesn't fire a hook after API errors (401, rate limit, etc.) —
+// the session just sits there with the error in the transcript but no Stop
+// or Notification event. This watchdog re-reads transcripts for active
+// sessions every 15s to detect errors that hooks missed.
+const WATCHDOG_INTERVAL_MS = 15_000;
+const STALE_THRESHOLD_MS = 10_000; // only check sessions idle for >10s
+
+function watchdogCheck() {
+  try {
+    const os = require("os");
+    const path = require("path");
+    const fs = require("fs");
+    const cutoff = new Date(Date.now() - STALE_THRESHOLD_MS).toISOString();
+    // Find active sessions whose last event is older than threshold
+    const staleSessions = db
+      .prepare(
+        `SELECT s.id, s.status, s.cwd,
+                (SELECT MAX(e.created_at) FROM events e WHERE e.session_id = s.id) as last_event,
+                (SELECT e.data FROM events e WHERE e.session_id = s.id
+                 AND e.event_type IN ('SessionStart','UserPromptSubmit','PreToolUse','Stop','Notification')
+                 ORDER BY e.created_at DESC LIMIT 1) as last_data
+         FROM sessions s
+         WHERE s.status = 'active' AND s.updated_at < ?`
+      )
+      .all(cutoff);
+
+    for (const sess of staleSessions) {
+      // Try to get transcript_path from event data first
+      let tPath = null;
+      if (sess.last_data) {
+        try {
+          tPath = JSON.parse(sess.last_data).transcript_path;
+        } catch {}
+      }
+      // Fall back: derive from Claude's standard path layout
+      // Claude slugifies cwd by replacing / with - and keeping the leading -
+      if (!tPath && sess.cwd) {
+        const slug = sess.cwd.replace(/[\/\.]/g, "-");
+        const candidate = path.join(os.homedir(), ".claude", "projects", slug, `${sess.id}.jsonl`);
+        if (fs.existsSync(candidate)) tPath = candidate;
+      }
+      if (!tPath) continue;
+
+      // Force a fresh read (invalidate cache so we get latest transcript state)
+      transcriptCache.invalidate(tPath);
+      const result = transcriptCache.extract(tPath);
+      if (!result || !result.errors || result.errors.length === 0) continue;
+
+      // Check if we already recorded these errors
+      const existingErrorCount = db
+        .prepare(
+          "SELECT COUNT(*) as cnt FROM events WHERE session_id = ? AND event_type = 'APIError'"
+        )
+        .get(sess.id).cnt;
+
+      // Record any new errors
+      const mainAgent = db
+        .prepare("SELECT * FROM agents WHERE session_id = ? AND type = 'main' LIMIT 1")
+        .get(sess.id);
+      const mainAgentId = mainAgent?.id ?? null;
+
+      if (existingErrorCount < result.errors.length) {
+        for (const apiErr of result.errors) {
+          const existing = db
+            .prepare(
+              `SELECT 1 FROM events WHERE session_id = ? AND event_type = 'APIError'
+               AND summary = ? LIMIT 1`
+            )
+            .get(sess.id, `${apiErr.type}: ${apiErr.message}`);
+          if (existing) continue;
+
+          stmts.insertEvent.run(
+            sess.id,
+            mainAgentId,
+            "APIError",
+            null,
+            `${apiErr.type}: ${apiErr.message}`,
+            JSON.stringify(apiErr)
+          );
+          broadcast("new_event", {
+            session_id: sess.id,
+            agent_id: mainAgentId,
+            event_type: "APIError",
+            tool_name: null,
+            summary: `${apiErr.type}: ${apiErr.message}`,
+            created_at: apiErr.timestamp || new Date().toISOString(),
+          });
+        }
+      }
+
+      // Mark session + agent as error (whether errors are new or pre-existing)
+      stmts.updateSession.run(null, "error", null, null, sess.id);
+      broadcast("session_updated", stmts.getSession.get(sess.id));
+      if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
+        stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
+        if (mainAgentId) {
+          stmts.clearAgentAwaitingInput.run(mainAgentId);
+          broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        }
+      }
+    }
+  } catch {
+    // watchdog is best-effort — never crash the server
+  }
+}
+
+const watchdogTimer = setInterval(watchdogCheck, WATCHDOG_INTERVAL_MS);
+// Don't keep the process alive just for the watchdog
+if (watchdogTimer.unref) watchdogTimer.unref();
 
 router.transcriptCache = transcriptCache;
 module.exports = router;

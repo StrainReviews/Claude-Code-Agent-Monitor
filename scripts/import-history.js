@@ -974,12 +974,12 @@ function importSession(dbModule, session) {
   }
 
   // If the JSONL file was modified recently (within 10 minutes), the session is likely
-  // still active — import it as active/idle so it appears on the dashboard immediately.
+  // still active — import it as active/waiting so it appears on the dashboard immediately.
   const RECENT_THRESHOLD_MS = 10 * 60 * 1000;
   const isRecentlyActive =
     session.fileModifiedAt && Date.now() - session.fileModifiedAt < RECENT_THRESHOLD_MS;
   const sessionStatus = isRecentlyActive ? "active" : "completed";
-  const agentStatus = isRecentlyActive ? "idle" : "completed";
+  const agentStatus = isRecentlyActive ? "waiting" : "completed";
 
   const metadata = JSON.stringify({
     version: session.version,

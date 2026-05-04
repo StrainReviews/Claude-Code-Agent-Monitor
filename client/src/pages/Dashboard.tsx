@@ -923,16 +923,15 @@ export function Dashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [statsRes, workingRes, connectedRes, idleRes, eventsRes, costRes] = await Promise.all([
+      const [statsRes, workingRes, waitingRes, eventsRes, costRes] = await Promise.all([
         api.stats.get(),
         api.agents.list({ status: "working", limit: 20 }),
-        api.agents.list({ status: "connected", limit: 20 }),
-        api.agents.list({ status: "idle", limit: 20 }),
+        api.agents.list({ status: "waiting", limit: 20 }),
         api.events.list({ limit: 30 }),
         api.pricing.totalCost(),
       ]);
       setStats(statsRes);
-      const active = [...workingRes.agents, ...connectedRes.agents, ...idleRes.agents];
+      const active = [...workingRes.agents, ...waitingRes.agents];
       setActiveAgents(active);
       setRecentEvents(eventsRes.events);
       setTotalCost(costRes.total_cost);
@@ -962,7 +961,7 @@ export function Dashboard() {
   useEffect(() => {
     const parentsWithActive = new Set<string>();
     for (const a of allSubagents) {
-      if (a.parent_agent_id && (a.status === "working" || a.status === "connected")) {
+      if (a.parent_agent_id && a.status === "working") {
         parentsWithActive.add(a.parent_agent_id);
       }
     }
@@ -1085,10 +1084,7 @@ export function Dashboard() {
             />
             <StatCard
               label={t("activeSubagents")}
-              value={
-                allSubagents.filter((a) => a.status === "working" || a.status === "connected")
-                  .length
-              }
+              value={allSubagents.filter((a) => a.status === "working").length}
               icon={GitBranch}
               accentColor="text-violet-400"
               trend={`${allSubagents.length}${t("totalTrend")}`}
@@ -1153,9 +1149,7 @@ export function Dashboard() {
                       const kids = childrenByParent.get(id) || [];
                       return kids.reduce(
                         (sum, k) =>
-                          sum +
-                          (k.status === "working" || k.status === "connected" ? 1 : 0) +
-                          countActiveDescendants(k.id),
+                          sum + (k.status === "working" ? 1 : 0) + countActiveDescendants(k.id),
                         0
                       );
                     }
@@ -1281,7 +1275,7 @@ export function Dashboard() {
                             ? "completed"
                             : event.event_type === "PreToolUse"
                               ? "working"
-                              : "connected"
+                              : "waiting"
                         }
                       />
                       <span className="text-sm text-gray-300 truncate flex-1">

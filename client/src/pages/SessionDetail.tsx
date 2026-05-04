@@ -340,7 +340,7 @@ export function SessionDetail() {
   useEffect(() => {
     const parentsWithActiveChildren = new Set<string>();
     for (const a of agents) {
-      if (a.parent_agent_id && (a.status === "working" || a.status === "connected")) {
+      if (a.parent_agent_id && a.status === "working") {
         parentsWithActiveChildren.add(a.parent_agent_id);
       }
     }

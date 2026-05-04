@@ -59,7 +59,7 @@ db.exec(`
     name TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'main' CHECK(type IN ('main','subagent')),
     subagent_type TEXT,
-    status TEXT NOT NULL DEFAULT 'idle' CHECK(status IN ('idle','connected','working','completed','error')),
+    status TEXT NOT NULL DEFAULT 'waiting' CHECK(status IN ('working','waiting','completed','error')),
     task TEXT,
     current_tool TEXT,
     started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -230,6 +230,63 @@ try {
   db.prepare("ALTER TABLE agents ADD COLUMN awaiting_input_since TEXT").run();
 }
 
+// Migrate: replace legacy idle/connected agent statuses with waiting/working
+// and update the CHECK constraint to the 4-status model.
+// SQLite doesn't support ALTER CHECK, so we detect the old constraint and
+// rebuild the table with rename-copy-drop when needed.
+{
+  const tableInfo = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'")
+    .get();
+  if (tableInfo && tableInfo.sql && tableInfo.sql.includes("'idle'")) {
+    // Old constraint found — rebuild the table
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      BEGIN;
+      -- Map old statuses to new ones in-place (still valid under old constraint isn't needed
+      -- because we're about to drop the table — we do it in the INSERT below)
+      CREATE TABLE agents_new (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'main' CHECK(type IN ('main','subagent')),
+        subagent_type TEXT,
+        status TEXT NOT NULL DEFAULT 'waiting' CHECK(status IN ('working','waiting','completed','error')),
+        task TEXT,
+        current_tool TEXT,
+        started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        ended_at TEXT,
+        parent_agent_id TEXT,
+        metadata TEXT,
+        updated_at TEXT NOT NULL DEFAULT '',
+        awaiting_input_since TEXT,
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_agent_id) REFERENCES agents(id) ON DELETE SET NULL
+      );
+      INSERT INTO agents_new SELECT
+        id, session_id, name, type, subagent_type,
+        CASE status
+          WHEN 'idle' THEN 'waiting'
+          WHEN 'connected' THEN 'working'
+          ELSE status
+        END,
+        task, current_tool, started_at, ended_at, parent_agent_id, metadata,
+        updated_at, awaiting_input_since
+      FROM agents;
+      DROP TABLE agents;
+      ALTER TABLE agents_new RENAME TO agents;
+      COMMIT;
+      PRAGMA foreign_keys = ON;
+    `);
+    // Recreate indexes that were on the old table
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_agents_session ON agents(session_id);
+      CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+      CREATE INDEX IF NOT EXISTS idx_agents_parent ON agents(parent_agent_id);
+    `);
+  }
+}
+
 // Migrate: add compaction baseline columns to token_usage.
 // When conversation compaction rewrites the JSONL, pre-compaction token counts
 // are lost from the transcript. Baselines preserve those counts so the effective
@@ -272,7 +329,7 @@ db.prepare(
   UPDATE agents SET
     status = 'completed',
     ended_at = COALESCE(ended_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-  WHERE status IN ('working', 'connected', 'idle')
+  WHERE status IN ('working', 'waiting')
     AND session_id IN (SELECT id FROM sessions WHERE status IN ('completed', 'error', 'abandoned'))
 `
 ).run();
@@ -321,7 +378,7 @@ const stmts = {
     "UPDATE agents SET name = COALESCE(?, name), status = COALESCE(?, status), task = COALESCE(?, task), current_tool = ?, ended_at = COALESCE(?, ended_at), metadata = COALESCE(?, metadata), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
   reactivateAgent: db.prepare(
-    "UPDATE agents SET status = 'connected', ended_at = NULL, current_tool = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+    "UPDATE agents SET status = 'working', ended_at = NULL, current_tool = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
   // Awaiting-input state. Stamping awaiting_input_since marks the row as
   // "waiting" for user attention without touching the underlying status
@@ -389,7 +446,7 @@ const stmts = {
     SELECT
       (SELECT COUNT(*) FROM sessions) as total_sessions,
       (SELECT COUNT(*) FROM sessions WHERE status = 'active') as active_sessions,
-      (SELECT COUNT(*) FROM agents WHERE status IN ('working', 'connected', 'idle')) as active_agents,
+      (SELECT COUNT(*) FROM agents WHERE status IN ('working', 'waiting')) as active_agents,
       (SELECT COUNT(*) FROM agents) as total_agents,
       (SELECT COUNT(*) FROM events) as total_events
   `),

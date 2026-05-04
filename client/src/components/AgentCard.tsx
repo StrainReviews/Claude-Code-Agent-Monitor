@@ -24,9 +24,9 @@ interface AgentCardProps {
 export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation("kanban");
-  const isWaiting = isAgentAwaitingInput(agent);
+  const isWaiting = agent.status === "waiting" || isAgentAwaitingInput(agent);
   const status = effectiveAgentStatus(agent);
-  const isActive = agent.status === "working" || agent.status === "connected";
+  const isActive = agent.status === "working";
   const isMain = agent.type === "main";
 
   // Session-level metadata applies to every card in the session — main and

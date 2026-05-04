@@ -5,7 +5,7 @@
  */
 
 export type SessionStatus = "active" | "completed" | "error" | "abandoned";
-export type AgentStatus = "idle" | "connected" | "working" | "completed" | "error";
+export type AgentStatus = "working" | "waiting" | "completed" | "error";
 export type AgentType = "main" | "subagent";
 
 /**
@@ -402,18 +402,6 @@ export const STATUS_CONFIG: Record<
   EffectiveAgentStatus,
   { labelKey: string; color: string; bg: string; dot: string }
 > = {
-  idle: {
-    labelKey: "common:status.idle",
-    color: "text-gray-400",
-    bg: "bg-gray-500/10 border-gray-500/20",
-    dot: "bg-gray-400",
-  },
-  connected: {
-    labelKey: "common:status.connected",
-    color: "text-blue-400",
-    bg: "bg-blue-500/10 border-blue-500/20",
-    dot: "bg-blue-400",
-  },
   working: {
     labelKey: "common:status.working",
     color: "text-emerald-400",
@@ -511,7 +499,7 @@ export const SESSION_STATUS_CONFIG: Record<
   },
   abandoned: {
     // Muted slate distinguishes "given up / faded out" from yellow Waiting
-    // (attention required) and gray Idle (still connected, just quiet).
+    // (attention required).
     labelKey: "common:status.abandoned",
     color: "text-slate-400",
     bg: "bg-slate-500/10 border-slate-500/20",

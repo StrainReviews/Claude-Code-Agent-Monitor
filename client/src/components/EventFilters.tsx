@@ -55,12 +55,12 @@ export function isEmptyFilters(f: EventFiltersValue): boolean {
 // preset that doesn't restrict the query (same as no selection).
 export const STATUS_TO_EVENT_TYPES: Record<string, string[]> = {
   working: ["PreToolUse"],
-  connected: ["PostToolUse"],
+  waiting: ["PostToolUse", "Stop"],
   completed: ["Stop", "SubagentStop", "Compaction"],
   error: ["error", "APIError"],
 };
 
-export const STATUS_OPTIONS = ["working", "connected", "completed", "error"] as const;
+export const STATUS_OPTIONS = ["working", "waiting", "completed", "error"] as const;
 
 // Expand the selected status presets into a union of event_type values. The
 // consumer merges this with any explicit event_type selection so both layers
@@ -194,7 +194,7 @@ export function EventFilters({
           options={[...STATUS_OPTIONS]}
           labels={{
             working: t("status.working"),
-            connected: t("status.connected"),
+            waiting: t("status.waiting"),
             completed: t("status.completed"),
             error: t("status.error"),
           }}

@@ -22,7 +22,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: "Main Agent",
     type: "main",
     subagent_type: null,
-    status: "connected",
+    status: "working",
     task: null,
     current_tool: null,
     started_at: "2026-03-05T10:00:00.000Z",
@@ -89,10 +89,11 @@ describe("AgentCard", () => {
     expect(card?.className).toContain("border-l-2");
   });
 
-  it("should apply active border for connected agents", () => {
-    const { container } = renderCard(<AgentCard agent={makeAgent({ status: "connected" })} />);
+  it("should apply yellow border for waiting agents even without awaiting_input_since", () => {
+    const { container } = renderCard(<AgentCard agent={makeAgent({ status: "waiting" })} />);
     const card = container.querySelector(".card-hover");
     expect(card?.className).toContain("border-l-2");
+    expect(card?.className).toContain("border-l-yellow-500/60");
   });
 
   it("should not apply active border for completed agents", () => {
@@ -112,7 +113,7 @@ describe("AgentCard", () => {
     const { container } = renderCard(
       <AgentCard
         agent={makeAgent({
-          status: "idle",
+          status: "waiting",
           awaiting_input_since: "2026-03-05T10:01:00.000Z",
         })}
       />

@@ -19,7 +19,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: "Main Agent",
     type: "main",
     subagent_type: null,
-    status: "connected",
+    status: "working",
     task: null,
     current_tool: null,
     started_at: "2026-03-05T10:00:00.000Z",
@@ -143,7 +143,7 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
 
   it("renders deeply nested agents (depth 3: main → L1 → L2 → L3)", async () => {
     mockAgents = [
-      makeAgent({ id: "main-1", name: "Main", type: "main", status: "idle" }),
+      makeAgent({ id: "main-1", name: "Main", type: "main", status: "waiting" }),
       makeAgent({
         id: "l1",
         name: "Level-1",
@@ -179,7 +179,7 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
 
   it("shows descendant count in collapsed badge for nested agents", async () => {
     mockAgents = [
-      makeAgent({ id: "main-1", name: "Main", type: "main", status: "idle" }),
+      makeAgent({ id: "main-1", name: "Main", type: "main", status: "waiting" }),
       makeAgent({
         id: "l1",
         name: "Level-1",
@@ -217,7 +217,7 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
 
   it("expands and collapses nested agent groups", async () => {
     mockAgents = [
-      makeAgent({ id: "main-1", name: "Main", type: "main", status: "idle" }),
+      makeAgent({ id: "main-1", name: "Main", type: "main", status: "waiting" }),
       makeAgent({
         id: "l1",
         name: "Level-1",
@@ -248,7 +248,7 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
 
   it("renders orphaned subagents in dedicated section", async () => {
     mockAgents = [
-      makeAgent({ id: "main-1", name: "Main", type: "main", status: "idle" }),
+      makeAgent({ id: "main-1", name: "Main", type: "main", status: "waiting" }),
       makeAgent({
         id: "orphan-1",
         name: "Orphan Agent",
@@ -268,7 +268,7 @@ describe("SessionDetail — Nested Agent Tree Rendering", () => {
   it("auto-expands all ancestors when a deeply nested agent is active", async () => {
     // Level-3 is working → Level-2, Level-1, and Main should all auto-expand
     mockAgents = [
-      makeAgent({ id: "main-1", name: "Main", type: "main", status: "idle" }),
+      makeAgent({ id: "main-1", name: "Main", type: "main", status: "waiting" }),
       makeAgent({
         id: "l1",
         name: "Level-1",

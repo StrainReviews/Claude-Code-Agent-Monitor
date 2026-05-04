@@ -95,15 +95,13 @@ export function groupEvents(events: DashboardEvent[]): EventGroup[] {
 
 /** Best-effort status tag per event_type — mirrors the mapping used by
  *  ActivityFeed / SessionDetail so grouped rows can show a status progression. */
-export function statusFromEventType(
-  type: string
-): "working" | "connected" | "completed" | "error" | "idle" {
+export function statusFromEventType(type: string): "working" | "waiting" | "completed" | "error" {
   switch (type) {
     case "PreToolUse":
       return "working";
     case "PostToolUse":
-      return "connected";
     case "Stop":
+      return "waiting";
     case "SubagentStop":
     case "Compaction":
       return "completed";
@@ -111,7 +109,7 @@ export function statusFromEventType(
     case "APIError":
       return "error";
     default:
-      return "idle";
+      return "waiting";
   }
 }
 

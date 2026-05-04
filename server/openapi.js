@@ -124,7 +124,7 @@ function createOpenApiSpec() {
           required: false,
           schema: {
             type: "string",
-            enum: ["idle", "connected", "working", "completed", "error"],
+            enum: ["working", "waiting", "completed", "error"],
           },
           description: "Filter by agent status",
         },
@@ -219,7 +219,7 @@ function createOpenApiSpec() {
             subagent_type: { type: "string", nullable: true },
             status: {
               type: "string",
-              enum: ["idle", "connected", "working", "completed", "error"],
+              enum: ["working", "waiting", "completed", "error"],
             },
             task: { type: "string", nullable: true },
             current_tool: { type: "string", nullable: true },
@@ -544,7 +544,7 @@ function createOpenApiSpec() {
             subagent_type: { type: "string" },
             status: {
               type: "string",
-              enum: ["idle", "connected", "working", "completed", "error"],
+              enum: ["working", "waiting", "completed", "error"],
             },
             task: { type: "string" },
             parent_agent_id: { type: "string" },
@@ -570,7 +570,7 @@ function createOpenApiSpec() {
             name: { type: "string" },
             status: {
               type: "string",
-              enum: ["idle", "connected", "working", "completed", "error"],
+              enum: ["working", "waiting", "completed", "error"],
             },
             task: { type: "string" },
             current_tool: { type: "string", nullable: true },

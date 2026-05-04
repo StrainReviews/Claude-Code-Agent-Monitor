@@ -7,7 +7,7 @@
 import { z } from "zod";
 
 export const SessionStatusSchema = z.enum(["active", "completed", "error", "abandoned"]);
-export const AgentStatusSchema = z.enum(["idle", "connected", "working", "completed", "error"]);
+export const AgentStatusSchema = z.enum(["working", "waiting", "completed", "error"]);
 export const HookTypeSchema = z.enum([
   "PreToolUse",
   "PostToolUse",
