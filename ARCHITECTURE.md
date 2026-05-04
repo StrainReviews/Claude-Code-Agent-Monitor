@@ -401,6 +401,7 @@ graph TD
     DASH --> SC1["StatCard x6<br/>(sessions/agents/subagents/<br/>events today/total events/cost)<br/>3-column grid"]
     DASH --> AC1["AgentCard[]<br/>with collapsible subagent hierarchy"]
     DASH --> EV1["Event rows"]
+    DASH --> HEALTH["SystemHealthTab<br/>(health score ring, storage donut,<br/>cache/error/success gauges,<br/>tool bars, subagent effectiveness,<br/>model tokens, compaction stats)"]
 
     KANBAN --> COL["Agents view: 4 columns<br/>(working/waiting/<br/>completed/error)<br/>Sessions view: 5 columns<br/>(active/waiting/completed/<br/>error/abandoned)"]
     COL --> AC2["AgentCard[]"]
@@ -500,7 +501,7 @@ graph LR
 
 | Route           | Page          | Data Sources                                           |
 | --------------- | ------------- | ------------------------------------------------------ |
-| `/`             | Dashboard     | `GET /api/stats`, `GET /api/agents`, `GET /api/events`, `GET /api/agents?session_id={sid}` (subagent hierarchy) |
+| `/`             | Dashboard     | Two tabs (Monitor / Health). Monitor: `GET /api/stats`, `GET /api/agents`, `GET /api/events`, `GET /api/agents?session_id={sid}` (subagent hierarchy), dynamic item counts via `ResizeObserver`. Health: `GET /api/settings/info` + `GET /api/workflows` (5 s auto-refresh) — composite health score, storage donut, cache/error/success gauges, tool invocation bars, subagent effectiveness, model token distribution, compaction stats |
 | `/kanban`       | KanbanBoard   | View toggle persisted in `localStorage`. Agents view: `GET /api/agents?status={each}` per-status (default 10000 cap). Sessions view: `GET /api/sessions?status={each}&limit=10000` per-status. Each column then paginates client-side at `COLUMN_PAGE_SIZE=10`; the WS subscription scopes to the active view. |
 | `/sessions`     | Sessions      | `GET /api/sessions?status=&q=&limit=PAGE_SIZE&offset=page*PAGE_SIZE` — true server-side pagination. The search box passes `q` to the server (300 ms debounced). Response carries `total` for the paginator UI. Cost computation runs server-side over the visible page only. |
 | `/sessions/:id` | SessionDetail | `GET /api/sessions/:id` (agents + events), `GET /api/sessions/:id/stats` (overview tiles, top tools, subagent breakdown, token totals — debounced live-refresh on `new_event`/`agent_*`/`session_updated`), `GET /api/sessions/:id/transcripts` (Conversation tab transcript list), `GET /api/sessions/:id/transcript` (cursor-paginated message stream) |

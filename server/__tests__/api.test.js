@@ -1580,8 +1580,8 @@ describe("Transcript cache integration", () => {
     const res = await fetch("/api/settings/info");
     assert.strictEqual(res.status, 200);
     assert.ok(res.body.transcript_cache, "response should include transcript_cache");
-    assert.ok(typeof res.body.transcript_cache.entries === "number", "should have entries count");
-    assert.ok(Array.isArray(res.body.transcript_cache.paths), "should have paths array");
+    assert.ok(typeof res.body.transcript_cache.size === "number", "should have size count");
+    assert.ok(Array.isArray(res.body.transcript_cache.keys), "should have keys array");
   });
 
   it("should evict cache entry on SessionEnd", async () => {
@@ -1607,7 +1607,7 @@ describe("Transcript cache integration", () => {
         },
       });
       assert.ok(
-        transcriptCache.stats().paths.includes(tmpTranscript),
+        transcriptCache.stats().keys.includes(tmpTranscript),
         "cache should contain transcript path after event"
       );
 
@@ -1617,7 +1617,7 @@ describe("Transcript cache integration", () => {
         data: { session_id: sessionId, transcript_path: tmpTranscript, cwd: "/tmp" },
       });
       assert.ok(
-        !transcriptCache.stats().paths.includes(tmpTranscript),
+        !transcriptCache.stats().keys.includes(tmpTranscript),
         "cache should NOT contain transcript path after SessionEnd"
       );
     } finally {

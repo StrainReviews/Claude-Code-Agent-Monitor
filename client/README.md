@@ -226,7 +226,7 @@ graph TB
     App[App.tsx<br/>Router + WS + Notifications]
     Layout[Layout.tsx<br/>Sidebar + Outlet]
 
-    Dashboard[Dashboard<br/>stats + agents + events]
+    Dashboard[Dashboard<br/>Monitor tab: stats + agents + events<br/>Health tab: SystemHealthTab]
     Kanban[KanbanBoard<br/>5-column agent board]
     Sessions[Sessions<br/>filterable table]
     Detail[SessionDetail<br/>agent hierarchy + timeline]
@@ -240,6 +240,7 @@ graph TB
 
     Dashboard --> StatCard[StatCard × 6]
     Dashboard --> AgentCard[AgentCard × N]
+    Dashboard --> HealthTab["SystemHealthTab<br/>(health score, storage donut,<br/>gauges, tool bars, subagent<br/>effectiveness, model tokens)"]
     Detail --> AgentCard
     Feed --> EventDetail[EventDetail<br/>inline payload viewer]
     Detail --> EventDetail

@@ -816,8 +816,12 @@
                   <div class="feature-icon ic-indigo">📡</div>
                   <h3>Live Dashboard</h3>
                   <p>
-                    Overview stats, active agent cards with collapsible subagent hierarchy, and recent
-                    activity feed — all updating in real-time via WebSocket.
+                    Two tabs: <strong>Monitor</strong> — overview stats, active agent cards with
+                    collapsible subagent hierarchy, and recent activity feed with dynamic item counts
+                    that fill available viewport height. <strong>Health</strong> — composite system
+                    health score ring, storage engine donut chart, cache/error/success gauges, tool
+                    invocation bars, subagent effectiveness, model token distribution, and compaction
+                    stats — all auto-refreshing every 5 seconds via WebSocket.
                   </p>
                 </div>
                 <div class="feature-card">
@@ -1098,7 +1102,11 @@
           <div class="screenshot-gallery">
             <div class="screenshot-card">
               <img src="images/dashboard.png" alt="Dashboard Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard</strong> — overview stats, active agent cards, and recent activity feed</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard · Monitor</strong> — overview stats, active agent cards, and recent activity feed</span></div>
+            </div>
+            <div class="screenshot-card">
+              <img src="images/dashboard-health.png" alt="Dashboard — System Health tab" width="100%" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">🩺</span> <span><strong>Dashboard · Health</strong> — composite health score, storage engine donut, cache/error/success gauges, tool invocation bars, subagent effectiveness, model token distribution</span></div>
             </div>
             <div class="screenshot-card">
               <img src="images/board.png" alt="Kanban Board — Agents view" width="100%" loading="lazy" decoding="async" />
@@ -3730,11 +3738,12 @@ ccam-export all --output backup.json</code></pre>
             </div>
             <div class="feature-card">
               <div class="feature-icon ic-blue">🖧</div>
-              <h3>System Info</h3>
+              <h3>System Health</h3>
               <p>
-                Server uptime, Node.js version, platform, and active WebSocket connections.
-                At-a-glance health monitoring for the dashboard server itself, with database
-                statistics and memory usage displayed in real-time.
+                Dedicated Health tab on the Dashboard with a composite health score (weighted from
+                success rate, cache hit rate, error rate, and heap usage), storage engine donut chart,
+                tool invocation frequency bars, subagent effectiveness, model token distribution, and
+                compaction impact — all with cursor-following tooltips and 5-second auto-refresh.
               </p>
             </div>
             <div class="feature-card">
@@ -4548,7 +4557,7 @@ npm run install-hooks</code></pre>
         var nextBtn = carousel.querySelector(".carousel-next");
         var currentPage = 0;
         var autoInterval = null;
-        var AUTO_DELAY = 2500;
+        var AUTO_DELAY = 6000;
         var GAP = 12;
         function getPerPage() {
           var w = viewport.offsetWidth;

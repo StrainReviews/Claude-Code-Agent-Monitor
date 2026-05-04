@@ -464,7 +464,7 @@ Request body shape:
 
 | Method | Path                           | Description                                      |
 | ------ | ------------------------------ | ------------------------------------------------ |
-| `GET`  | `/api/settings/info`           | System info, DB stats, hooks status, cache stats |
+| `GET`  | `/api/settings/info`           | System info, DB stats, hooks status, cache stats. Also powers the Dashboard Health tab (server uptime, memory, CPU, DB record counts, WAL/journal mode, transcript cache hit/miss rates) |
 | `POST` | `/api/settings/clear-data`     | Delete all sessions/agents/events/token usage    |
 | `POST` | `/api/settings/reimport`       | Re-import legacy sessions from `~/.claude/`      |
 | `POST` | `/api/settings/reinstall-hooks`| Reinstall Claude Code hooks                      |

@@ -137,7 +137,13 @@ flowchart LR
 <p align="center">
   <img src="images/dashboard.png" alt="Dashboard 概览" width="100%">
   <br>
-  <em>📡 <strong>Dashboard</strong> — 总览统计、活跃 Agent 卡片与最近活动流</em>
+  <em>📡 <strong>Dashboard · Monitor</strong> — 总览统计、活跃 Agent 卡片与最近活动流</em>
+</p>
+
+<p align="center">
+  <img src="images/dashboard-health.png" alt="Dashboard — 系统健康标签页" width="100%">
+  <br>
+  <em>🩺 <strong>Dashboard · Health</strong> — 综合健康评分环、存储引擎甜甜圈图、缓存/错误/成功率仪表、工具调用条形图、子Agent效能、模型Token分布、压缩统计 — 每 5 秒自动刷新</em>
 </p>
 
 <p align="center">
@@ -210,7 +216,7 @@ Dashboard 提供全面的功能来监控和分析你的 Claude Code 会话和 Ag
 
 | 功能 | 描述 |
 |------|------|
-| **Dashboard** | 概览统计、可折叠子 Agent 层级的活跃 Agent 卡片、近期活动流 |
+| **Dashboard** | 两个标签页（存储于 `localStorage`）：**Monitor** — 概览统计（6 张统计卡片）、可折叠子 Agent 层级的活跃 Agent 卡片、近期活动流，项目数量通过 `ResizeObserver` 动态填满视口高度。**Health** — 综合系统健康评分环（加权：0.4 × 成功率 + 0.25 × 缓存命中率 + 0.25 × (100 − 错误率) + 0.1 × (100 − 堆内存 %)）、存储引擎甜甜圈图（记录分布）、缓存性能 / 错误率 / 成功率仪表、Top 8 工具调用水平条形图、子 Agent 效能条、模型 Token 分布、压缩影响统计。所有健康指标每 5 秒从 `/api/settings/info` 和 `/api/workflows` 自动刷新。所有图表均有跟随光标的工具提示并自动避免视口边缘溢出 |
 | **看板** | 顶部带视图切换（在 `localStorage` 中持久化）：**Agent 视图** — 4 列（工作中 / 等待中 / 已完成 / 错误），以及**会话视图** — 5 列（活跃 / 等待中 / 已完成 / 错误 / 已废弃）。黄色的**等待中**列是从会话和 Agent 的 `awaiting_input_since` 字段派生出的 UI 覆盖层 — 当 Claude Code 停在提示符前(新会话、回合之间或被权限 Notification 阻塞)时被填充,在用户继续操作(UserPromptSubmit / PreToolUse)时立即清除。每个列标题都有 `?` 图标的工具提示解释生命周期。每列按状态从服务端独立获取(每列实际无上限),随后客户端按每列 10 张卡片分页,附「显示更多」按钮。WebSocket 订阅范围跟随当前视图(`agent_*` 与 `session_*` 帧),切换视图后另一类的更新不会触发重新加载。闲置和已连接仍是有效的持久化状态(仍可通过 `/api/agents?status=…` 查询),但故意没有专属列 — 实时状态机不会让活跃的主 Agent 落入这两种状态。 |
 | **会话** | 可搜索、可筛选、**服务端分页**的全量会话表。每次翻页请求 `/api/sessions?status=&q=&limit=10&offset=…`，因此费用计算只针对当前可见页运行——与数据库中会话总量无关。搜索框（`q=`）在服务端对 `id` / `name` / `cwd` 做不区分大小写匹配，附 300 毫秒防抖；响应包含 `total` 计数供分页器使用。状态筛选、搜索与翻页可组合 |
 | **会话详情** | 单会话实时概览面板，包含活跃 Agent 横幅（当前工具 + 任务）、六个统计卡片（事件数及事件/分钟速率、工具调用数、子 Agent 数、压缩次数、错误数、滚动计时的运行时长）、Top 工具使用条形图、子 Agent 类型分布、堆叠 Token 流图，以及事件类型胶囊云——所有内容均根据 Hook 事件实时刷新。下方：Agent 层级树（父/子）、完整事件时间线（多维筛选：状态、事件类型、工具、Agent、文本搜索、日期范围）、按 `tool_use_id` 进行 Pre/Post 分组、人类可读摘要块、工具感知的输入/响应渲染器（Bash 用终端、Edit 用统一 diff、Read/Write 用带行号代码、Grep 用匹配列表、MCP 工具用键值卡片），以及对话标签页：使用 markdown（标题、列表、引用块、表格、任务列表）、带行号和复制按钮的语法高亮代码块（js/ts、python、json、bash、html、css、sql、yaml、diff），以及按工具样式化的工具调用块（Bash → 终端、Edit → 旧/新并排、Write → 文件标签、Read → 路径胶囊、Grep → pattern 卡片）渲染对话记录 |
