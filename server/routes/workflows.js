@@ -8,6 +8,9 @@ const { db, stmts } = require("../db");
 
 const router = Router();
 
+const cache = { data: null, filter: null, ts: 0 };
+const CACHE_TTL_MS = 30_000;
+
 // ── Helper: compute session duration in seconds ──
 function durationSec(s) {
   if (!s.started_at) return 0;
@@ -18,8 +21,11 @@ function durationSec(s) {
 // ── GET / — Aggregate workflow intelligence ──
 router.get("/", (req, res) => {
   try {
-    // Optional status filter: "active", "completed", or omit for all
     const statusFilter = req.query.status || null;
+    const now = Date.now();
+    if (cache.data && cache.filter === statusFilter && now - cache.ts < CACHE_TTL_MS) {
+      return res.json(cache.data);
+    }
     const data = {
       stats: getWorkflowStats(statusFilter),
       orchestration: getOrchestrationData(statusFilter),
@@ -33,6 +39,9 @@ router.get("/", (req, res) => {
       compaction: getCompactionImpact(statusFilter),
       cooccurrence: getAgentCooccurrence(statusFilter),
     };
+    cache.data = data;
+    cache.filter = statusFilter;
+    cache.ts = now;
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: { message: err.message } });
@@ -166,17 +175,18 @@ function getWorkflowStats(statusFilter) {
     .get(...sf.params).c;
   const avgCompactions = totalSessions > 0 ? +(totalCompactions / totalSessions).toFixed(1) : 0;
 
-  // Most common tool flow (top 2-tool sequence)
   const topFlow = db
     .prepare(
-      `SELECT e1.tool_name as source, e2.tool_name as target, COUNT(*) as c
-       FROM events e1
-       JOIN events e2 ON e2.session_id = e1.session_id AND e2.id = (
-         SELECT MIN(e3.id) FROM events e3
-         WHERE e3.session_id = e1.session_id AND e3.id > e1.id AND e3.tool_name IS NOT NULL
+      `WITH tool_events AS (
+         SELECT tool_name,
+           LEAD(tool_name) OVER (PARTITION BY session_id ORDER BY id) as next_tool
+         FROM events
+         WHERE tool_name IS NOT NULL${sf.clause}
        )
-       WHERE e1.tool_name IS NOT NULL AND e2.tool_name IS NOT NULL${sf.clause.replace("session_id", "e1.session_id")}
-       GROUP BY e1.tool_name, e2.tool_name
+       SELECT tool_name as source, next_tool as target, COUNT(*) as c
+       FROM tool_events
+       WHERE next_tool IS NOT NULL
+       GROUP BY source, target
        ORDER BY c DESC LIMIT 1`
     )
     .get(...sf.params);
@@ -268,23 +278,23 @@ function getOrchestrationData(statusFilter) {
 function getToolFlowData(statusFilter) {
   const sf = sessionIdFilter(statusFilter);
 
-  // Tool-to-tool transitions (next tool in same session)
   const transitions = db
     .prepare(
-      `SELECT e1.tool_name as source, e2.tool_name as target, COUNT(*) as value
-       FROM events e1
-       JOIN events e2 ON e2.session_id = e1.session_id AND e2.id = (
-         SELECT MIN(e3.id) FROM events e3
-         WHERE e3.session_id = e1.session_id AND e3.id > e1.id AND e3.tool_name IS NOT NULL
+      `WITH tool_events AS (
+         SELECT tool_name,
+           LEAD(tool_name) OVER (PARTITION BY session_id ORDER BY id) as next_tool
+         FROM events
+         WHERE tool_name IS NOT NULL${sf.clause}
        )
-       WHERE e1.tool_name IS NOT NULL AND e2.tool_name IS NOT NULL${sf.clause.replace("session_id", "e1.session_id")}
-       GROUP BY e1.tool_name, e2.tool_name
+       SELECT tool_name as source, next_tool as target, COUNT(*) as value
+       FROM tool_events
+       WHERE next_tool IS NOT NULL
+       GROUP BY source, target
        ORDER BY value DESC
        LIMIT 50`
     )
     .all(...sf.params);
 
-  // Tool counts for sizing nodes
   const toolCounts = db
     .prepare(
       `SELECT tool_name, COUNT(*) as count FROM events

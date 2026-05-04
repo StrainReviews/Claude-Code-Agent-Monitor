@@ -42,11 +42,11 @@ db.pragma("foreign_keys = ON");
 db.pragma("busy_timeout = 5000");
 // Conditional WAL checkpoint: only run if WAL file exists and is > 1 MB.
 // Use PASSIVE mode to avoid blocking active readers.
-const walPath = DB_PATH + '-wal';
+const walPath = DB_PATH + "-wal";
 if (fs.existsSync(walPath)) {
   const walSize = fs.statSync(walPath).size;
   if (walSize > 1024 * 1024) {
-    db.pragma('wal_checkpoint(PASSIVE)');
+    db.pragma("wal_checkpoint(PASSIVE)");
   }
 }
 
@@ -136,12 +136,17 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_agents_session ON agents(session_id);
   CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+  CREATE INDEX IF NOT EXISTS idx_agents_parent ON agents(parent_agent_id);
+  CREATE INDEX IF NOT EXISTS idx_agents_subagent_type ON agents(subagent_type);
+  CREATE INDEX IF NOT EXISTS idx_agents_type_subtype ON agents(type, subagent_type);
   CREATE INDEX IF NOT EXISTS idx_subagent_tokens_session ON subagent_token_usage(session_id);
   CREATE INDEX IF NOT EXISTS idx_subagent_tokens_model ON subagent_token_usage(model);
   CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
   CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
   CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_events_dedup ON events(session_id, event_type, created_at);
+  CREATE INDEX IF NOT EXISTS idx_events_tool ON events(tool_name) WHERE tool_name IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_events_session_tool ON events(session_id, id, tool_name) WHERE tool_name IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
   CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
 `);
