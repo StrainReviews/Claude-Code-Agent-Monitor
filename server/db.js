@@ -118,6 +118,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
   CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
+
+  -- Composite indexes for frequent query patterns (columns that exist at table creation time)
+  CREATE INDEX IF NOT EXISTS idx_events_session_type ON events(session_id, event_type);
+  CREATE INDEX IF NOT EXISTS idx_agents_session_type ON agents(session_id, type);
 `);
 
 // Default model pricing — shared by initial seed + startup top-up + reset endpoint
@@ -211,6 +215,11 @@ try {
   db.prepare("ALTER TABLE agents ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''").run();
   db.prepare("UPDATE agents SET updated_at = COALESCE(ended_at, started_at)").run();
 }
+
+// Composite index on (status, updated_at) — must be AFTER migration adds updated_at
+db.exec(
+  `CREATE INDEX IF NOT EXISTS idx_sessions_status_updated ON sessions(status, updated_at DESC)`
+);
 
 // Migrate: add `awaiting_input_since` columns to sessions and agents.
 // When Claude Code emits a Notification asking for permission or user input,
@@ -438,8 +447,10 @@ const stmts = {
   ),
   countEvents: db.prepare("SELECT COUNT(*) as count FROM events"),
   countEventsSince: db.prepare("SELECT COUNT(*) as count FROM events WHERE created_at >= ?"),
+  // Accepts tz modifier (e.g. '-420 minutes') to compute local midnight in UTC.
+  // Pattern: shift now→local, truncate to day start, shift back→UTC.
   countEventsToday: db.prepare(
-    "SELECT COUNT(*) as count FROM events WHERE created_at >= strftime('%Y-%m-%dT00:00:00.000Z', 'now', 'start of day')"
+    "SELECT COUNT(*) as count FROM events WHERE created_at >= datetime('now', ?, 'start of day', ?)"
   ),
 
   stats: db.prepare(`
@@ -523,18 +534,19 @@ const stmts = {
     ORDER BY count DESC
     LIMIT 20
   `),
+  // Accept a timezone modifier (e.g. '-420 minutes') so GROUP BY uses local dates
   dailyEventCounts: db.prepare(`
-    SELECT DATE(created_at) as date, COUNT(*) as count
+    SELECT DATE(created_at, ?) as date, COUNT(*) as count
     FROM events
     WHERE created_at >= DATE('now', '-365 days')
-    GROUP BY DATE(created_at)
+    GROUP BY 1
     ORDER BY date ASC
   `),
   dailySessionCounts: db.prepare(`
-    SELECT DATE(started_at) as date, COUNT(*) as count
+    SELECT DATE(started_at, ?) as date, COUNT(*) as count
     FROM sessions
     WHERE started_at >= DATE('now', '-365 days')
-    GROUP BY DATE(started_at)
+    GROUP BY 1
     ORDER BY date ASC
   `),
   agentTypeDistribution: db.prepare(`

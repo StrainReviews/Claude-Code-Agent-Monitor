@@ -106,7 +106,7 @@ function SystemHealthTab() {
 
   useEffect(() => {
     loadData();
-    const int = setInterval(loadData, 5000);
+    const int = setInterval(loadData, 30000); // 30s is sufficient for health metrics
     return () => clearInterval(int);
   }, [loadData]);
 
@@ -165,12 +165,20 @@ function SystemHealthTab() {
     memUsedPct,
     heapUsedPct,
   } = stats;
-  const successRate = workflow.stats.successRate;
-  const errorRate = workflow.errorPropagation?.errorRate ?? 100 - successRate;
-  const cacheHitRate =
-    ((info.transcript_cache?.hits ?? 0) /
-      ((info.transcript_cache?.hits ?? 0) + (info.transcript_cache?.misses ?? 0) || 1)) *
-    100;
+  const successRate = Math.max(0, Math.min(100, workflow.stats.successRate));
+  const errorRate = Math.max(
+    0,
+    Math.min(100, workflow.errorPropagation?.errorRate ?? 100 - successRate)
+  );
+  const cacheHitRate = Math.max(
+    0,
+    Math.min(
+      100,
+      ((info.transcript_cache?.hits ?? 0) /
+        ((info.transcript_cache?.hits ?? 0) + (info.transcript_cache?.misses ?? 0) || 1)) *
+        100
+    )
+  );
 
   // Concurrency histogram data
   const lanes = workflow.concurrency?.aggregateLanes || [];
@@ -183,9 +191,17 @@ function SystemHealthTab() {
   // Subagent effectiveness
   const effectiveness = (workflow.effectiveness || []).slice(0, 6);
 
-  // Composite health score
-  const healthScore =
-    successRate * 0.4 + cacheHitRate * 0.25 + (100 - errorRate) * 0.25 + (100 - heapUsedPct) * 0.1;
+  // Composite health score — clamped to [0, 100] for display safety
+  const healthScore = Math.max(
+    0,
+    Math.min(
+      100,
+      successRate * 0.4 +
+        cacheHitRate * 0.25 +
+        Math.max(0, 100 - errorRate) * 0.25 +
+        Math.max(0, 100 - Math.min(100, heapUsedPct)) * 0.1
+    )
+  );
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -965,22 +981,28 @@ export function Dashboard() {
         parentsWithActive.add(a.parent_agent_id);
       }
     }
-    if (parentsWithActive.size > 0) {
-      const subMap = new Map(allSubagents.map((a) => [a.id, a]));
-      const toExpand = new Set<string>();
-      for (const pid of parentsWithActive) {
-        let cur = pid;
-        while (cur) {
-          toExpand.add(cur);
-          const parent = subMap.get(cur);
-          cur = parent?.parent_agent_id ?? "";
-        }
+    if (parentsWithActive.size === 0) return; // No-op: skip state update entirely
+
+    const subMap = new Map(allSubagents.map((a) => [a.id, a]));
+    const toExpand = new Set<string>();
+    for (const pid of parentsWithActive) {
+      let cur = pid;
+      while (cur) {
+        toExpand.add(cur);
+        const parent = subMap.get(cur);
+        cur = parent?.parent_agent_id ?? "";
       }
-      setExpandedAgents((prev) => new Set([...prev, ...toExpand]));
     }
+    setExpandedAgents((prev) => {
+      // Only update if there are genuinely new IDs to add
+      const newIds = [...toExpand].filter((id) => !prev.has(id));
+      if (newIds.length === 0) return prev; // Stable reference — no re-render
+      return new Set([...prev, ...newIds]);
+    });
   }, [allSubagents]);
 
   useEffect(() => {
+    const debounceRef = { timer: null as ReturnType<typeof setTimeout> | null };
     return eventBus.subscribe((msg: WSMessage) => {
       if (
         msg.type === "agent_created" ||
@@ -988,15 +1010,57 @@ export function Dashboard() {
         msg.type === "session_created" ||
         msg.type === "session_updated"
       ) {
-        load();
+        // Debounce rapid-fire updates (e.g., 5 agents created in 100ms)
+        if (debounceRef.timer) clearTimeout(debounceRef.timer);
+        debounceRef.timer = setTimeout(load, 300);
       }
       if (msg.type === "new_event") {
-        setRecentEvents((prev) => [msg.data as DashboardEvent, ...prev.slice(0, 14)]);
+        setRecentEvents((prev) => {
+          const newEvent = msg.data as DashboardEvent;
+          // Deduplicate by event ID to prevent WS + polling race condition
+          if (newEvent.id && prev.some((e) => e.id === newEvent.id)) return prev;
+          return [newEvent, ...prev.slice(0, 14)];
+        });
       }
     });
   }, [load]);
 
   const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
+
+  // Memoize agent tree structure to avoid recalculating on every render
+  const agentTree = useMemo(() => {
+    const childrenByParent = new Map<string, Agent[]>();
+    for (const a of allSubagents) {
+      if (a.parent_agent_id) {
+        const list = childrenByParent.get(a.parent_agent_id) || [];
+        list.push(a);
+        childrenByParent.set(a.parent_agent_id, list);
+      }
+    }
+
+    // Pre-compute descendant counts with memoization (avoids exponential recursion)
+    const descendantCache = new Map<string, { total: number; active: number }>();
+    function getDescendants(id: string): { total: number; active: number } {
+      if (descendantCache.has(id)) return descendantCache.get(id)!;
+      const kids = childrenByParent.get(id) || [];
+      const result = kids.reduce(
+        (acc, k) => {
+          const child = getDescendants(k.id);
+          return {
+            total: acc.total + 1 + child.total,
+            active: acc.active + (k.status === "working" ? 1 : 0) + child.active,
+          };
+        },
+        { total: 0, active: 0 }
+      );
+      descendantCache.set(id, result);
+      return result;
+    }
+    // Pre-warm cache for all nodes
+    for (const a of allSubagents) getDescendants(a.id);
+
+    return { childrenByParent, getDescendants };
+  }, [allSubagents]);
 
   if (error) {
     return (
@@ -1130,37 +1194,16 @@ export function Dashboard() {
               ) : (
                 <div className="space-y-2">
                   {(() => {
-                    // Build parent→children map across all subagents for recursive rendering
-                    const childrenByParent = new Map<string, Agent[]>();
-                    for (const a of allSubagents) {
-                      if (a.parent_agent_id) {
-                        const list = childrenByParent.get(a.parent_agent_id) || [];
-                        list.push(a);
-                        childrenByParent.set(a.parent_agent_id, list);
-                      }
-                    }
-
-                    function countDescendants(id: string): number {
-                      const kids = childrenByParent.get(id) || [];
-                      return kids.reduce((sum, k) => sum + 1 + countDescendants(k.id), 0);
-                    }
-
-                    function countActiveDescendants(id: string): number {
-                      const kids = childrenByParent.get(id) || [];
-                      return kids.reduce(
-                        (sum, k) =>
-                          sum + (k.status === "working" ? 1 : 0) + countActiveDescendants(k.id),
-                        0
-                      );
-                    }
+                    const { childrenByParent, getDescendants } = agentTree;
 
                     function renderAgentNode(agent: Agent, depth: number) {
                       const children = childrenByParent.get(agent.id) || [];
                       const isExpanded = expandedAgents.has(agent.id);
                       const hasChildren = children.length > 0;
                       const isSubagent = depth > 0;
-                      const totalDesc = hasChildren ? countDescendants(agent.id) : 0;
-                      const activeDesc = hasChildren ? countActiveDescendants(agent.id) : 0;
+                      const { total: totalDesc, active: activeDesc } = hasChildren
+                        ? getDescendants(agent.id)
+                        : { total: 0, active: 0 };
                       const toggleExpanded = () =>
                         setExpandedAgents((prev) => {
                           const next = new Set(prev);

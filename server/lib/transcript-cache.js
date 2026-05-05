@@ -436,11 +436,13 @@ class TranscriptCache {
 
   /** Return cache stats for diagnostics */
   stats() {
+    const total = this._hits + this._misses;
     return {
       size: this._cache.size,
       maxSize: this._maxEntries,
       hits: this._hits,
       misses: this._misses,
+      hitRate: total > 0 ? +((this._hits / total) * 100).toFixed(1) : 0,
       keys: [...this._cache.keys()],
     };
   }

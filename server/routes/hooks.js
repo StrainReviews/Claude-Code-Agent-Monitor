@@ -64,6 +64,10 @@ function ensureSession(sessionId, data) {
       null
     );
     session = stmts.getSession.get(sessionId);
+    if (!session) {
+      console.error(`[HOOKS] Failed to create session ${sessionId} — insert returned no row`);
+      return null;
+    }
     broadcast("session_created", session);
 
     // Create main agent for new session
@@ -80,7 +84,8 @@ function ensureSession(sessionId, data) {
       null,
       null
     );
-    broadcast("agent_created", stmts.getAgent.get(mainAgentId));
+    const mainAgent = stmts.getAgent.get(mainAgentId);
+    if (mainAgent) broadcast("agent_created", mainAgent);
   }
   return session;
 }
@@ -782,8 +787,8 @@ function watchdogCheck() {
       }
       if (!tPath) continue;
 
-      // Force a fresh read (invalidate cache so we get latest transcript state)
-      transcriptCache.invalidate(tPath);
+      // Use cache directly (stat-based detection handles staleness automatically).
+      // Don't invalidate — it defeats caching and forces full re-reads every 15s.
       const result = transcriptCache.extract(tPath);
       if (!result || !result.errors || result.errors.length === 0) continue;
 
@@ -801,21 +806,24 @@ function watchdogCheck() {
       const mainAgentId = mainAgent?.id ?? null;
 
       if (existingErrorCount < result.errors.length) {
+        // Batch-fetch existing error summaries to avoid per-error SELECT
+        const existingSummaries = new Set(
+          db
+            .prepare(`SELECT summary FROM events WHERE session_id = ? AND event_type = 'APIError'`)
+            .all(sess.id)
+            .map((r) => r.summary)
+        );
+
         for (const apiErr of result.errors) {
-          const existing = db
-            .prepare(
-              `SELECT 1 FROM events WHERE session_id = ? AND event_type = 'APIError'
-               AND summary = ? LIMIT 1`
-            )
-            .get(sess.id, `${apiErr.type}: ${apiErr.message}`);
-          if (existing) continue;
+          const summary = `${apiErr.type}: ${apiErr.message}`;
+          if (existingSummaries.has(summary)) continue;
 
           stmts.insertEvent.run(
             sess.id,
             mainAgentId,
             "APIError",
             null,
-            `${apiErr.type}: ${apiErr.message}`,
+            summary,
             JSON.stringify(apiErr)
           );
           broadcast("new_event", {
@@ -823,7 +831,7 @@ function watchdogCheck() {
             agent_id: mainAgentId,
             event_type: "APIError",
             tool_name: null,
-            summary: `${apiErr.type}: ${apiErr.message}`,
+            summary,
             created_at: apiErr.timestamp || new Date().toISOString(),
           });
         }
@@ -840,8 +848,9 @@ function watchdogCheck() {
         }
       }
     }
-  } catch {
-    // watchdog is best-effort — never crash the server
+  } catch (err) {
+    // Watchdog is best-effort — log but never crash the server
+    console.warn("[WATCHDOG] Error during check:", err?.message || err);
   }
 }
 

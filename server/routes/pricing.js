@@ -120,7 +120,10 @@ router.delete("/:pattern", (req, res) => {
 });
 
 // GET /api/pricing/cost - Get total cost across all sessions
-router.get("/cost", (_req, res) => {
+router.get("/cost", (req, res) => {
+  const rawOffset = parseInt(req.query.tz_offset, 10);
+  const tzModifier = Number.isFinite(rawOffset) ? `${-rawOffset} minutes` : "+0 minutes";
+
   const allTokens = db
     .prepare(
       "SELECT model, SUM(input_tokens + baseline_input) as input_tokens, SUM(output_tokens + baseline_output) as output_tokens, SUM(cache_read_tokens + baseline_cache_read) as cache_read_tokens, SUM(cache_write_tokens + baseline_cache_write) as cache_write_tokens FROM token_usage GROUP BY model"
@@ -129,7 +132,7 @@ router.get("/cost", (_req, res) => {
   const dailyTokens = db
     .prepare(
       `SELECT
-        DATE(s.started_at) as date,
+        DATE(s.started_at, ?) as date,
         tu.model as model,
         SUM(tu.input_tokens + tu.baseline_input) as input_tokens,
         SUM(tu.output_tokens + tu.baseline_output) as output_tokens,
@@ -137,9 +140,9 @@ router.get("/cost", (_req, res) => {
         SUM(tu.cache_write_tokens + tu.baseline_cache_write) as cache_write_tokens
       FROM token_usage tu
       JOIN sessions s ON s.id = tu.session_id
-      GROUP BY DATE(s.started_at), tu.model`
+      GROUP BY 1, tu.model`
     )
-    .all();
+    .all(tzModifier);
   const rules = stmts.listPricing.all();
   const result = calculateCost(allTokens, rules);
   const daily_costs = calculateDailyCosts(dailyTokens, rules);
@@ -148,12 +151,15 @@ router.get("/cost", (_req, res) => {
 
 // GET /api/pricing/cost/:sessionId - Get cost for a specific session
 router.get("/cost/:sessionId", (req, res) => {
+  const rawOffset = parseInt(req.query.tz_offset, 10);
+  const tzModifier = Number.isFinite(rawOffset) ? `${-rawOffset} minutes` : "+0 minutes";
+
   const tokenRows = stmts.getTokensBySession.all(req.params.sessionId);
   const rules = stmts.listPricing.all();
   const result = calculateCost(tokenRows, rules);
   const started = db
-    .prepare("SELECT DATE(started_at) as date FROM sessions WHERE id = ?")
-    .get(req.params.sessionId);
+    .prepare("SELECT DATE(started_at, ?) as date FROM sessions WHERE id = ?")
+    .get(tzModifier, req.params.sessionId);
   const daily_costs = started ? [{ date: started.date, cost: result.total_cost }] : [];
   res.json({ ...result, daily_costs });
 });

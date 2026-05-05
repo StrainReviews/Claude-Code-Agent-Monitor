@@ -221,10 +221,14 @@ router.get("/:id/stats", (req, res) => {
   // Compactions: count agents whose subagent_type === 'compaction'
   const compactionRow = subagentTypes.find((r) => r.subagent_type === "compaction");
   agentCounts.compaction = compactionRow?.count ?? 0;
-  // Main vs sub: derive from agents list
-  const allAgents = stmts.listAgentsBySession.all(sessionId);
-  agentCounts.main = allAgents.filter((a) => a.type === "main").length;
-  agentCounts.subagent = allAgents.filter((a) => a.type === "subagent").length;
+  // Main vs sub: count by type in SQL (avoids loading all agents)
+  const typeCounts = db
+    .prepare(`SELECT type, COUNT(*) as count FROM agents WHERE session_id = ? GROUP BY type`)
+    .all(sessionId);
+  for (const row of typeCounts) {
+    if (row.type === "main") agentCounts.main = row.count;
+    else if (row.type === "subagent") agentCounts.subagent = row.count;
+  }
 
   res.json({
     session_id: sessionId,

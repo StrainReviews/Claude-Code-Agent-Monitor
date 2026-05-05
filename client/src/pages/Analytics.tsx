@@ -586,8 +586,7 @@ export function Analytics() {
     URL.revokeObjectURL(url);
   }
 
-  // Local date string helper — avoids UTC offset issues where toISOString()
-  // can show tomorrow's date if the user is behind UTC.
+  // Format a local Date object as a YYYY-MM-DD string for heatmap lookups
   function localDateStr(d: Date): string {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -595,14 +594,11 @@ export function Analytics() {
     return `${y}-${m}-${day}`;
   }
 
-  // Server returns UTC dates — reindex events by local date so the heatmap
-  // and sparkline align with the user's calendar.
+  // Server now returns dates grouped by the user's local timezone (via tz_offset),
+  // so we can use them directly without conversion.
   const dailyMap: Record<string, number> = {};
   for (const d of data?.daily_events ?? []) {
-    // d.date is "YYYY-MM-DD" in UTC — parse as noon UTC to avoid DST edge cases,
-    // then convert to local date string
-    const local = localDateStr(new Date(d.date + "T12:00:00Z"));
-    dailyMap[local] = (dailyMap[local] ?? 0) + d.count;
+    dailyMap[d.date] = (dailyMap[d.date] ?? 0) + d.count;
   }
 
   // Build heatmap: 52 weeks × 7 days
@@ -637,24 +633,22 @@ export function Analytics() {
     return { date: dateStr, count: dailyMap[dateStr] ?? 0 };
   });
 
-  // Convert daily_sessions from UTC to local dates
+  // Convert daily_sessions — server already returns local dates
   const dailySessionsLocal: Array<{ date: string; count: number }> = [];
   const sessMap: Record<string, number> = {};
   for (const d of data?.daily_sessions ?? []) {
-    const local = localDateStr(new Date(d.date + "T12:00:00Z"));
-    sessMap[local] = (sessMap[local] ?? 0) + d.count;
+    sessMap[d.date] = (sessMap[d.date] ?? 0) + d.count;
   }
   for (const [date, count] of Object.entries(sessMap)) {
     dailySessionsLocal.push({ date, count });
   }
   dailySessionsLocal.sort((a, b) => a.date.localeCompare(b.date));
 
-  // Convert daily_costs from UTC to local dates
+  // Convert daily_costs — server already returns local dates
   const dailyCostsLocal: Array<{ date: string; cost: number }> = [];
   const costMap: Record<string, number> = {};
   for (const d of costData?.daily_costs ?? []) {
-    const local = localDateStr(new Date(d.date + "T12:00:00Z"));
-    costMap[local] = (costMap[local] ?? 0) + d.cost;
+    costMap[d.date] = (costMap[d.date] ?? 0) + d.cost;
   }
   for (const [date, cost] of Object.entries(costMap)) {
     dailyCostsLocal.push({ date, cost });

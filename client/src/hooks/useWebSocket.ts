@@ -16,6 +16,7 @@ export function useWebSocket(onMessage: MessageHandler) {
   const [connected, setConnected] = useState(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const mountedRef = useRef(true);
+  const reconnectAttempts = useRef(0);
 
   handlersRef.current = onMessage;
 
@@ -31,6 +32,7 @@ export function useWebSocket(onMessage: MessageHandler) {
       if (mountedRef.current) {
         setConnected(true);
         eventBus.setConnected(true);
+        reconnectAttempts.current = 0; // Reset on successful connection
       }
     };
 
@@ -47,7 +49,10 @@ export function useWebSocket(onMessage: MessageHandler) {
       if (mountedRef.current) {
         setConnected(false);
         eventBus.setConnected(false);
-        reconnectTimer.current = setTimeout(connect, 2000);
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+        reconnectAttempts.current++;
+        reconnectTimer.current = setTimeout(connect, delay);
       }
     };
 

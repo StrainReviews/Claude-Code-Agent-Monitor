@@ -90,6 +90,7 @@ export function truncate(str: string, max: number): string {
 
 /** Format large numbers with B/M/K suffixes. */
 export function fmt(n: number): string {
+  if (!Number.isFinite(n)) return "0";
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -98,6 +99,7 @@ export function fmt(n: number): string {
 
 /** Format dollar amounts with K/M suffixes. */
 export function fmtCost(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "$0.00";
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(2)}K`;
   return `$${n.toFixed(2)}`;
@@ -105,6 +107,7 @@ export function fmtCost(n: number): string {
 
 /** Format dollar amounts with commas (for tooltips / full display). */
 export function fmtCostFull(n: number, decimals = 2): string {
+  if (!Number.isFinite(n) || n < 0) return "$0.00";
   return `$${n.toLocaleString(getCurrentLocale(), {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,

@@ -8,14 +8,19 @@ const { WebSocketServer } = require("ws");
 let wss = null;
 
 function initWebSocket(server) {
-  wss = new WebSocketServer({ server, path: "/ws" });
+  wss = new WebSocketServer({ server, path: "/ws", maxPayload: 64 * 1024 });
 
   wss.on("connection", (ws) => {
     ws.isAlive = true;
     ws.on("pong", () => {
       ws.isAlive = true;
     });
-    ws.on("error", () => {});
+    ws.on("error", (err) => {
+      // Log but don't crash — client disconnects are normal
+      if (err.code !== "ECONNRESET") {
+        console.warn("[WS] client error:", err.code || err.message);
+      }
+    });
   });
 
   // Heartbeat every 30s to detect dead connections
@@ -47,7 +52,11 @@ function broadcast(type, data) {
   const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
   wss.clients.forEach((client) => {
     if (client.readyState === 1) {
-      client.send(message);
+      try {
+        client.send(message);
+      } catch {
+        // Client closed between readyState check and send — safe to ignore
+      }
     }
   });
 }

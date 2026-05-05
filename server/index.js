@@ -114,11 +114,33 @@ function startServer(app, port) {
 if (require.main === module) {
   const PORT = parseInt(process.env.DASHBOARD_PORT || "4820", 10);
   const app = createApp();
-  startServer(app, PORT).then(() => {
+  let httpServer = null;
+
+  startServer(app, PORT).then((server) => {
+    httpServer = server;
     const { startUpdateScheduler } = require("./update-scheduler");
     const { broadcast } = require("./websocket");
     startUpdateScheduler({ broadcast });
   });
+
+  // Graceful shutdown — close connections and DB cleanly
+  const shutdown = (signal) => {
+    console.log(`\n${signal} received — shutting down gracefully…`);
+    if (httpServer) {
+      httpServer.close(() => {
+        console.log("HTTP server closed.");
+      });
+    }
+    try {
+      require("./db").db.close();
+    } catch {
+      /* already closed */
+    }
+    // Give in-flight work 5s to finish, then force exit
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 
   // Auto-install Claude Code hooks on every startup so users don't have to
   try {
@@ -156,27 +178,43 @@ if (require.main === module) {
   const { importCompactions } = require("../scripts/import-history");
   const { transcriptCache } = require("./routes/hooks");
   setInterval(() => {
-    // 1. Stale session cleanup
+    // 1. Stale session cleanup — batch agent updates to avoid N+1 queries
     const stale = cleanupDb.stmts.findStaleSessions.all("__periodic__", STALE_MINUTES);
     const now = new Date().toISOString();
-    for (const s of stale) {
-      const agents = cleanupDb.stmts.listAgentsBySession.all(s.id);
-      for (const agent of agents) {
-        if (agent.status !== "completed" && agent.status !== "error") {
-          cleanupDb.stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
-          broadcast("agent_updated", cleanupDb.stmts.getAgent.get(agent.id));
+    if (stale.length > 0) {
+      const staleIds = stale.map((s) => s.id);
+      const placeholders = staleIds.map(() => "?").join(",");
+
+      // Batch update all non-terminal agents across all stale sessions
+      cleanupDb.db
+        .prepare(
+          `UPDATE agents SET status = 'completed', ended_at = COALESCE(ended_at, ?), updated_at = ?
+           WHERE session_id IN (${placeholders}) AND status NOT IN ('completed', 'error')`
+        )
+        .run(now, now, ...staleIds);
+
+      for (const s of stale) {
+        cleanupDb.stmts.updateSession.run(null, "abandoned", now, null, s.id);
+        broadcast("session_updated", cleanupDb.stmts.getSession.get(s.id));
+
+        // Evict transcript cache for abandoned sessions to bound memory growth
+        const tpRow = cleanupDb.db
+          .prepare(
+            "SELECT json_extract(data, '$.transcript_path') as tp FROM events WHERE session_id = ? AND json_extract(data, '$.transcript_path') IS NOT NULL LIMIT 1"
+          )
+          .get(s.id);
+        if (tpRow?.tp) transcriptCache.invalidate(tpRow.tp);
+      }
+
+      // Broadcast updated agents once per stale session (not per-agent)
+      for (const s of stale) {
+        const agents = cleanupDb.stmts.listAgentsBySession.all(s.id);
+        for (const agent of agents) {
+          if (agent.status === "completed") {
+            broadcast("agent_updated", agent);
+          }
         }
       }
-      cleanupDb.stmts.updateSession.run(null, "abandoned", now, null, s.id);
-      broadcast("session_updated", cleanupDb.stmts.getSession.get(s.id));
-
-      // Evict transcript cache for abandoned sessions to bound memory growth
-      const tpRow = cleanupDb.db
-        .prepare(
-          "SELECT json_extract(data, '$.transcript_path') as tp FROM events WHERE session_id = ? AND json_extract(data, '$.transcript_path') IS NOT NULL LIMIT 1"
-        )
-        .get(s.id);
-      if (tpRow?.tp) transcriptCache.invalidate(tpRow.tp);
     }
 
     // 2. Scan active sessions for new compaction entries
@@ -200,7 +238,11 @@ if (require.main === module) {
             )
           );
         }
-      } catch {
+      } catch (err) {
+        console.warn(
+          `[SWEEP] Compaction scan failed for session ${row.session_id}:`,
+          err?.message || err
+        );
         continue;
       }
     }
