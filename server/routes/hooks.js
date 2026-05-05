@@ -197,10 +197,14 @@ const processEvent = db.transaction((hookType, data) => {
       //
       // Heuristic: main is waiting + working subagents exist → subagent is the actor.
       //            main is working/waiting with no subagents → main is the actor.
-      const subagentIsActor =
-        mainAgent &&
-        mainAgent.status === "waiting" &&
-        !!stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
+      const deepestWorking =
+        mainAgent && mainAgent.status === "waiting"
+          ? stmts.findDeepestWorkingAgent.get(sessionId, sessionId)
+          : null;
+      const subagentIsActor = !!deepestWorking;
+      if (subagentIsActor && toolName !== "Agent") {
+        agentId = deepestWorking.id;
+      }
       if (
         mainAgent &&
         !subagentIsActor &&
@@ -225,6 +229,14 @@ const processEvent = db.transaction((hookType, data) => {
       // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
       // backgrounded — it does NOT mean the subagent finished its work.
       // Subagent completion is handled by SubagentStop, not here.
+
+      // Attribute to the working subagent when main is waiting (same heuristic as PreToolUse).
+      if (mainAgent && mainAgent.status === "waiting" && toolName !== "Agent") {
+        const deepest = stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
+        if (deepest) {
+          agentId = deepest.id;
+        }
+      }
 
       // Only clear current_tool on the main agent if it's actively working.
       // Skip if waiting (waiting for subagents) or already completed.

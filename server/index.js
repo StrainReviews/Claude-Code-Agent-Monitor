@@ -206,21 +206,25 @@ if (require.main === module) {
     }
   }, SWEEP_INTERVAL_MS);
 
-  // Auto-import legacy sessions and backfill compaction tracking on startup
+  // Auto-import legacy sessions and backfill compaction tracking on startup.
+  // Skipped when DB already has sessions — the import is a one-time bootstrap
+  // that blocks the event loop for minutes on large ~/.claude/ dirs (700+ files).
   const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
   const dbModule = require("./db");
-  importAllSessions(dbModule)
-    .then(({ imported, skipped, errors }) => {
-      if (imported > 0) console.log(`Imported ${imported} legacy sessions from ~/.claude/`);
-      if (errors > 0) console.log(`${errors} session files had errors during import`);
-    })
-    .then(() => backfillCompactions(dbModule))
-    .then(({ backfilled }) => {
-      if (backfilled > 0) console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
-    })
-    .catch(() => {
-      // Non-fatal — legacy import is best-effort
-    });
+  const existingCount = dbModule.db.prepare("SELECT COUNT(*) AS c FROM sessions").get().c;
+  if (existingCount === 0) {
+    importAllSessions(dbModule)
+      .then(({ imported, skipped, errors }) => {
+        if (imported > 0) console.log(`Imported ${imported} legacy sessions from ~/.claude/`);
+        if (errors > 0) console.log(`${errors} session files had errors during import`);
+      })
+      .then(() => backfillCompactions(dbModule))
+      .then(({ backfilled }) => {
+        if (backfilled > 0)
+          console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
+      })
+      .catch(() => {});
+  }
 }
 
 module.exports = { createApp, startServer };
