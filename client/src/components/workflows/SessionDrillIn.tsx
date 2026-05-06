@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { X, GitFork, Wrench, List, Search, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../../lib/api";
-import { formatDateTime, formatMs } from "../../lib/format";
+import { formatDateTime, formatMs, formatModelName } from "../../lib/format";
 import type {
   SessionDrillIn as SessionDrillInData,
   DashboardEvent,
@@ -393,7 +393,7 @@ function SessionHeader({ drillIn, onClose, activeTab, onTabChange }: SessionHead
             {session.name ?? session.id}
           </p>
           <p className="text-xs text-gray-500 mt-0.5 truncate">
-            {session.model ?? t("drillIn.unknownModel")} &middot;{" "}
+            {formatModelName(session.model) ?? t("drillIn.unknownModel")} &middot;{" "}
             {t(`common:status.${session.status}`, { defaultValue: session.status })}
             {session.started_at && ` \u00b7 ${safeTimestamp(session.started_at)}`}
           </p>
@@ -581,7 +581,7 @@ function SessionSelector({ onSelectSession }: SessionSelectorProps) {
                       </span>
                       {s.model && (
                         <span className="flex-shrink-0 text-[10px] text-gray-500 truncate max-w-[80px]">
-                          {s.model}
+                          {formatModelName(s.model)}
                         </span>
                       )}
                       {s.started_at && (

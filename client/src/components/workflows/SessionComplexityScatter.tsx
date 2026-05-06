@@ -8,6 +8,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import * as d3 from "d3";
 import type { SessionComplexityItem } from "../../lib/types";
+import { formatModelName } from "../../lib/format";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -91,7 +92,7 @@ function Tooltip({ state }: { state: TooltipState }) {
         </span>
         {state.item.model && (
           <span>
-            {t("complexity.tooltip.model")} {state.item.model}
+            {t("complexity.tooltip.model")} {formatModelName(state.item.model)}
           </span>
         )}
       </div>

@@ -16,6 +16,7 @@ import {
   formatDateTime,
   formatTime,
   getCurrentLocale,
+  formatModelName,
 } from "../format";
 
 describe("formatMs", () => {
@@ -205,5 +206,52 @@ describe("fmtCost", () => {
 
   it("should format millions with M suffix", () => {
     expect(fmtCost(1_000_000)).toBe("$1.00M");
+  });
+});
+
+describe("formatModelName", () => {
+  it("returns null for falsy input", () => {
+    expect(formatModelName(null)).toBeNull();
+    expect(formatModelName(undefined)).toBeNull();
+    expect(formatModelName("")).toBeNull();
+  });
+
+  it("formats Claude model names with version dots", () => {
+    expect(formatModelName("claude-opus-4-7")).toBe("Claude Opus 4.7");
+    expect(formatModelName("claude-sonnet-4-5")).toBe("Claude Sonnet 4.5");
+    expect(formatModelName("claude-haiku-3-5")).toBe("Claude Haiku 3.5");
+  });
+
+  it("strips date suffixes", () => {
+    expect(formatModelName("claude-opus-4-7-20260101")).toBe("Claude Opus 4.7");
+    expect(formatModelName("claude-sonnet-4-5-20250514")).toBe("Claude Sonnet 4.5");
+  });
+
+  it("strips -latest suffix", () => {
+    expect(formatModelName("claude-sonnet-4-5-latest")).toBe("Claude Sonnet 4.5");
+  });
+
+  it("handles context-window [1m] tag", () => {
+    expect(formatModelName("claude-opus-4-7[1m]")).toBe("Claude Opus 4.7 (1M)");
+    expect(formatModelName("claude-opus-4-7-20260101[1m]")).toBe("Claude Opus 4.7 (1M)");
+  });
+
+  it("formats GPT model names with hyphenated brand-version", () => {
+    expect(formatModelName("gpt-4o")).toBe("GPT-4o");
+    expect(formatModelName("gpt-4o-mini")).toBe("GPT-4o Mini");
+    expect(formatModelName("gpt-4-turbo")).toBe("GPT-4 Turbo");
+  });
+
+  it("formats Gemini model names", () => {
+    expect(formatModelName("gemini-1-5-pro")).toBe("Gemini 1.5 Pro");
+  });
+
+  it("strips provider prefix", () => {
+    expect(formatModelName("anthropic/claude-opus-4-7")).toBe("Claude Opus 4.7");
+  });
+
+  it("title-cases unknown models", () => {
+    expect(formatModelName("o1-mini")).toBe("O1 Mini");
+    expect(formatModelName("o1-preview")).toBe("O1 Preview");
   });
 });

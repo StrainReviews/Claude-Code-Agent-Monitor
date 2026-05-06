@@ -47,7 +47,13 @@ import {
   statusFromEventType,
 } from "../lib/event-grouping";
 import type { AgentInfo } from "../lib/event-grouping";
-import { formatDateTime, formatDuration, fmtCostFull, timeAgo } from "../lib/format";
+import {
+  formatDateTime,
+  formatDuration,
+  fmtCostFull,
+  timeAgo,
+  formatModelName,
+} from "../lib/format";
 import type { Session, Agent, DashboardEvent, CostResult, TranscriptInfo } from "../lib/types";
 
 type DetailTab = "agents" | "conversation" | "timeline";
@@ -449,7 +455,7 @@ export function SessionDetail() {
             {session.model && (
               <span className="inline-flex items-center gap-1.5 text-xs text-gray-400 bg-surface-2 px-2 py-1 rounded">
                 <Cpu className="w-3 h-3 text-gray-500" />
-                {session.model}
+                {formatModelName(session.model)}
               </span>
             )}
             <span className="inline-flex items-center gap-1.5 text-xs text-gray-400 bg-surface-2 px-2 py-1 rounded">
@@ -727,7 +733,9 @@ export function SessionDetail() {
                   <tbody className="divide-y divide-border">
                     {cost.breakdown.map((row) => (
                       <tr key={row.model} className="hover:bg-surface-4 transition-colors">
-                        <td className="px-5 py-2.5 text-sm font-mono text-gray-300">{row.model}</td>
+                        <td className="px-5 py-2.5 text-sm font-mono text-gray-300">
+                          {formatModelName(row.model)}
+                        </td>
                         <td className="px-5 py-2.5 text-sm text-gray-400 text-right font-mono">
                           {row.input_tokens.toLocaleString()}
                         </td>

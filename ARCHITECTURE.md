@@ -429,7 +429,7 @@ graph TD
     NOTIF["useNotifications.ts<br/>Browser notification triggers"]
     API["api.ts<br/>Typed fetch client"]
     TYPES["types.ts<br/>Interfaces + configs"]
-    FMT["format.ts<br/>Date/time utilities"]
+    FMT["format.ts<br/>Date/time/model-name utilities"]
 
     MAIN --> APP
     APP --> WS
@@ -613,7 +613,7 @@ flowchart LR
     C --> D["Namespace resources<br/>common/nav/dashboard/sessions/..."]
     D --> E["React pages/components<br/>useTranslation(ns)"]
     E --> F["format.ts locale mapping<br/>en-US | zh-CN | vi-VN"]
-    F --> G["Localized labels,<br/>dates, and number formatting"]
+    F --> G["Localized labels,<br/>dates, number formatting,<br/>and model name display"]
 ```
 
 See [docs/I18N.md](docs/I18N.md) for resource strategy, key naming conventions, localization tests, troubleshooting, and rollout checklists.
@@ -1937,6 +1937,33 @@ graph TB
 ## Statusline Utility
 
 The `statusline/` directory contains a standalone CLI statusline for Claude Code, separate from the web dashboard. It renders a color-coded bar at the bottom of the Claude Code terminal showing model, user, working directory, git branch, context window usage, per-direction token counts, and session cost in USD.
+
+### Model Name Formatting (Client)
+
+The `client/src/lib/format.ts` module exports a `formatModelName()` utility that converts raw model identifiers stored in the database into human-readable display names throughout the UI (everywhere **except** the Settings page, which shows raw patterns for pricing rule configuration).
+
+**Transformation rules:**
+
+| Raw identifier | Formatted display |
+| -------------- | ----------------- |
+| `claude-opus-4-7-20260101` | Claude Opus 4.7 |
+| `claude-sonnet-4-5-20250514` | Claude Sonnet 4.5 |
+| `claude-haiku-3-5-latest` | Claude Haiku 3.5 |
+| `claude-opus-4-7[1m]` | Claude Opus 4.7 (1M) |
+| `gpt-4o-mini` | GPT-4o Mini |
+| `gemini-1-5-pro` | Gemini 1.5 Pro |
+| `anthropic/claude-opus-4-7` | Claude Opus 4.7 |
+
+The function handles:
+- Provider prefix stripping (`anthropic/`, `openai/`)
+- Date suffix removal (`-YYYYMMDD`)
+- `-latest` suffix removal
+- Context-window tag extraction (`[1m]` → `(1M)`)
+- Brand capitalization (Claude, GPT, Gemini)
+- Version number dot-joining (hyphen-separated digits → dotted)
+- Title-casing for word segments
+
+Components that consume this: SessionDetail, Analytics (donut chart + breakdown), Dashboard (model stats), MessageList, SessionCard, AgentCard, SessionComplexityScatter, SessionDrillIn, ModelDelegationFlow, and EventDetail.
 
 ### Data Flow
 
