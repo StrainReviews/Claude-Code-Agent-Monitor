@@ -5,8 +5,6 @@
 
 const { Router } = require("express");
 const { v4: uuidv4 } = require("uuid");
-const fs = require("fs");
-const path = require("path");
 const dbModule = require("../db");
 const { stmts, db } = dbModule;
 const { broadcast } = require("../websocket");
@@ -17,67 +15,6 @@ const router = Router();
 
 // Shared cache instance — reused by periodic compaction scanner via router.transcriptCache
 const transcriptCache = new TranscriptCache();
-
-// Scan the nested subagents/ directory next to the main transcript and fill
-// in model + token usage for any subagent row that is still "working" and
-// has no model yet. Runs OUTSIDE the main processEvent transaction to avoid
-// extending its lock with disk I/O.
-function backfillWorkingSubagents(sessionId, mainTranscriptPath) {
-  if (!mainTranscriptPath) return;
-  const subDir = mainTranscriptPath.replace(/\.jsonl$/i, "") + path.sep + "subagents";
-  let files;
-  try {
-    files = fs.readdirSync(subDir);
-  } catch {
-    return;
-  }
-
-  const working = db
-    .prepare(
-      "SELECT * FROM agents WHERE session_id = ? AND type = 'subagent' AND model IS NULL AND status != 'error'"
-    )
-    .all(sessionId);
-  if (working.length === 0) return;
-
-  const index = [];
-  for (const f of files) {
-    if (!f.endsWith(".meta.json")) continue;
-    try {
-      const meta = JSON.parse(fs.readFileSync(path.join(subDir, f), "utf8"));
-      if (!meta.description) continue;
-      const jsonl = path.join(subDir, f.replace(/\.meta\.json$/, ".jsonl"));
-      index.push({ description: meta.description, jsonl });
-    } catch {
-      // ignore unreadable meta
-    }
-  }
-  if (index.length === 0) return;
-
-  for (const sub of working) {
-    const bare = sub.name.endsWith("...") ? sub.name.slice(0, -3) : sub.name;
-    const match =
-      index.find((e) => sub.name.startsWith(e.description.slice(0, 57))) ||
-      index.find((e) => e.description === bare);
-    if (!match) continue;
-
-    const summary = transcriptCache.extractSubagentSummary(match.jsonl);
-    if (!summary) continue;
-
-    stmts.updateAgentModel.run(summary.primaryModel, sub.id);
-    for (const [model, tokens] of Object.entries(summary.tokensByModel)) {
-      stmts.replaceSubagentTokens.run(
-        sub.id,
-        sessionId,
-        model,
-        tokens.input,
-        tokens.output,
-        tokens.cacheRead,
-        tokens.cacheWrite
-      );
-    }
-    broadcast("agent_updated", stmts.getAgent.get(sub.id));
-  }
-}
 
 // Stale-session threshold for the SessionStart cleanup pass. Mirrors the
 // periodic sweep in server/index.js so both code paths agree on what counts
@@ -127,6 +64,10 @@ function ensureSession(sessionId, data) {
       null
     );
     session = stmts.getSession.get(sessionId);
+    if (!session) {
+      console.error(`[HOOKS] Failed to create session ${sessionId} — insert returned no row`);
+      return null;
+    }
     broadcast("session_created", session);
 
     // Create main agent for new session
@@ -143,7 +84,8 @@ function ensureSession(sessionId, data) {
       null,
       null
     );
-    broadcast("agent_created", stmts.getAgent.get(mainAgentId));
+    const mainAgent = stmts.getAgent.get(mainAgentId);
+    if (mainAgent) broadcast("agent_created", mainAgent);
   }
   return session;
 }
@@ -260,10 +202,14 @@ const processEvent = db.transaction((hookType, data) => {
       //
       // Heuristic: main is waiting + working subagents exist → subagent is the actor.
       //            main is working/waiting with no subagents → main is the actor.
-      const subagentIsActor =
-        mainAgent &&
-        mainAgent.status === "waiting" &&
-        !!stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
+      const deepestWorking =
+        mainAgent && mainAgent.status === "waiting"
+          ? stmts.findDeepestWorkingAgent.get(sessionId, sessionId)
+          : null;
+      const subagentIsActor = !!deepestWorking;
+      if (subagentIsActor && toolName !== "Agent") {
+        agentId = deepestWorking.id;
+      }
       if (
         mainAgent &&
         !subagentIsActor &&
@@ -288,6 +234,14 @@ const processEvent = db.transaction((hookType, data) => {
       // NOTE: PostToolUse for "Agent" tool fires immediately when a subagent is
       // backgrounded — it does NOT mean the subagent finished its work.
       // Subagent completion is handled by SubagentStop, not here.
+
+      // Attribute to the working subagent when main is waiting (same heuristic as PreToolUse).
+      if (mainAgent && mainAgent.status === "waiting" && toolName !== "Agent") {
+        const deepest = stmts.findDeepestWorkingAgent.get(sessionId, sessionId);
+        if (deepest) {
+          agentId = deepest.id;
+        }
+      }
 
       // Only clear current_tool on the main agent if it's actively working.
       // Skip if waiting (waiting for subagents) or already completed.
@@ -802,16 +756,6 @@ router.post("/event", (req, res) => {
 
   res.json({ ok: true, event: result });
 
-  // Backfill model + tokens for in-flight subagents by scanning the subagents/
-  // directory. Runs outside the main transaction to avoid extending its lock.
-  if (data.transcript_path && data.session_id) {
-    try {
-      backfillWorkingSubagents(data.session_id, data.transcript_path);
-    } catch {
-      // non-fatal — partial subagent dirs during live runs are expected
-    }
-  }
-
   // After SubagentStop, scan the session's subagent JSONL files and ingest any
   // tool calls that aren't yet in the events table. Subagent tool_use blocks
   // never fire hooks on the parent session — this scan is the only path that
@@ -882,8 +826,8 @@ function watchdogCheck() {
       }
       if (!tPath) continue;
 
-      // Force a fresh read (invalidate cache so we get latest transcript state)
-      transcriptCache.invalidate(tPath);
+      // Use cache directly (stat-based detection handles staleness automatically).
+      // Don't invalidate — it defeats caching and forces full re-reads every 15s.
       const result = transcriptCache.extract(tPath);
       if (!result || !result.errors || result.errors.length === 0) continue;
 
@@ -901,21 +845,24 @@ function watchdogCheck() {
       const mainAgentId = mainAgent?.id ?? null;
 
       if (existingErrorCount < result.errors.length) {
+        // Batch-fetch existing error summaries to avoid per-error SELECT
+        const existingSummaries = new Set(
+          db
+            .prepare(`SELECT summary FROM events WHERE session_id = ? AND event_type = 'APIError'`)
+            .all(sess.id)
+            .map((r) => r.summary)
+        );
+
         for (const apiErr of result.errors) {
-          const existing = db
-            .prepare(
-              `SELECT 1 FROM events WHERE session_id = ? AND event_type = 'APIError'
-               AND summary = ? LIMIT 1`
-            )
-            .get(sess.id, `${apiErr.type}: ${apiErr.message}`);
-          if (existing) continue;
+          const summary = `${apiErr.type}: ${apiErr.message}`;
+          if (existingSummaries.has(summary)) continue;
 
           stmts.insertEvent.run(
             sess.id,
             mainAgentId,
             "APIError",
             null,
-            `${apiErr.type}: ${apiErr.message}`,
+            summary,
             JSON.stringify(apiErr)
           );
           broadcast("new_event", {
@@ -923,7 +870,7 @@ function watchdogCheck() {
             agent_id: mainAgentId,
             event_type: "APIError",
             tool_name: null,
-            summary: `${apiErr.type}: ${apiErr.message}`,
+            summary,
             created_at: apiErr.timestamp || new Date().toISOString(),
           });
         }
@@ -940,8 +887,9 @@ function watchdogCheck() {
         }
       }
     }
-  } catch {
-    // watchdog is best-effort — never crash the server
+  } catch (err) {
+    // Watchdog is best-effort — log but never crash the server
+    console.warn("[WATCHDOG] Error during check:", err?.message || err);
   }
 }
 

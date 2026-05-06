@@ -91,7 +91,7 @@
     "ws": "^8.18.0"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^11.7.0"
+    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

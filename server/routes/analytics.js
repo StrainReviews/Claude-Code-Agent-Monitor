@@ -10,11 +10,16 @@ const { calculateCost } = require("./pricing");
 
 const router = Router();
 
-router.get("/", (_req, res) => {
+router.get("/", (req, res) => {
+  // Client sends tz_offset (minutes from getTimezoneOffset(), e.g. 420 for PDT)
+  // Negate it to get the SQLite modifier: 420 → '-420 minutes'
+  const rawOffset = parseInt(req.query.tz_offset, 10);
+  const tzModifier = Number.isFinite(rawOffset) ? `${-rawOffset} minutes` : "+0 minutes";
+
   const tokenTotals = stmts.getTokenTotals.get();
   const toolUsage = stmts.toolUsageCounts.all();
-  const dailyEvents = stmts.dailyEventCounts.all();
-  const dailySessions = stmts.dailySessionCounts.all();
+  const dailyEvents = stmts.dailyEventCounts.all(tzModifier);
+  const dailySessions = stmts.dailySessionCounts.all(tzModifier);
   const agentTypes = stmts.agentTypeDistribution.all();
   const overview = stmts.stats.get();
   const agentsByStatus = stmts.agentStatusCounts.all();

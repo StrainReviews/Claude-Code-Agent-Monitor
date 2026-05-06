@@ -114,11 +114,33 @@ function startServer(app, port) {
 if (require.main === module) {
   const PORT = parseInt(process.env.DASHBOARD_PORT || "4820", 10);
   const app = createApp();
-  startServer(app, PORT).then(() => {
+  let httpServer = null;
+
+  startServer(app, PORT).then((server) => {
+    httpServer = server;
     const { startUpdateScheduler } = require("./update-scheduler");
     const { broadcast } = require("./websocket");
     startUpdateScheduler({ broadcast });
   });
+
+  // Graceful shutdown — close connections and DB cleanly
+  const shutdown = (signal) => {
+    console.log(`\n${signal} received — shutting down gracefully…`);
+    if (httpServer) {
+      httpServer.close(() => {
+        console.log("HTTP server closed.");
+      });
+    }
+    try {
+      require("./db").db.close();
+    } catch {
+      /* already closed */
+    }
+    // Give in-flight work 5s to finish, then force exit
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 
   // Auto-install Claude Code hooks on every startup so users don't have to
   try {
@@ -156,22 +178,24 @@ if (require.main === module) {
   const { importCompactions } = require("../scripts/import-history");
   const { transcriptCache } = require("./routes/hooks");
   setInterval(() => {
-    // 1. Stale session cleanup
+    // 1. Stale session cleanup — batch agent updates to avoid N+1 queries
     const stale = cleanupDb.stmts.findStaleSessions.all("__periodic__", STALE_MINUTES);
     const now = new Date().toISOString();
-    // Collect broadcast payloads so we can fire them after the transaction commits
-    const broadcasts = [];
-    const sweepTransaction = cleanupDb.db.transaction(() => {
+    if (stale.length > 0) {
+      const staleIds = stale.map((s) => s.id);
+      const placeholders = staleIds.map(() => "?").join(",");
+
+      // Batch update all non-terminal agents across all stale sessions
+      cleanupDb.db
+        .prepare(
+          `UPDATE agents SET status = 'completed', ended_at = COALESCE(ended_at, ?), updated_at = ?
+           WHERE session_id IN (${placeholders}) AND status NOT IN ('completed', 'error')`
+        )
+        .run(now, now, ...staleIds);
+
       for (const s of stale) {
-        const agents = cleanupDb.stmts.listAgentsBySession.all(s.id);
-        for (const agent of agents) {
-          if (agent.status !== "completed" && agent.status !== "error") {
-            cleanupDb.stmts.updateAgent.run(null, "completed", null, null, now, null, agent.id);
-            broadcasts.push({ type: "agent_updated", id: agent.id });
-          }
-        }
         cleanupDb.stmts.updateSession.run(null, "abandoned", now, null, s.id);
-        broadcasts.push({ type: "session_updated", id: s.id });
+        broadcast("session_updated", cleanupDb.stmts.getSession.get(s.id));
 
         // Evict transcript cache for abandoned sessions to bound memory growth
         const tpRow = cleanupDb.db
@@ -181,14 +205,15 @@ if (require.main === module) {
           .get(s.id);
         if (tpRow?.tp) transcriptCache.invalidate(tpRow.tp);
       }
-    });
-    sweepTransaction();
-    // Broadcast after transaction commits so clients see consistent state
-    for (const b of broadcasts) {
-      if (b.type === "agent_updated") {
-        broadcast("agent_updated", cleanupDb.stmts.getAgent.get(b.id));
-      } else {
-        broadcast("session_updated", cleanupDb.stmts.getSession.get(b.id));
+
+      // Broadcast updated agents once per stale session (not per-agent)
+      for (const s of stale) {
+        const agents = cleanupDb.stmts.listAgentsBySession.all(s.id);
+        for (const agent of agents) {
+          if (agent.status === "completed") {
+            broadcast("agent_updated", agent);
+          }
+        }
       }
     }
 
@@ -213,71 +238,34 @@ if (require.main === module) {
             )
           );
         }
-      } catch {
+      } catch (err) {
+        console.warn(
+          `[SWEEP] Compaction scan failed for session ${row.session_id}:`,
+          err?.message || err
+        );
         continue;
       }
     }
   }, SWEEP_INTERVAL_MS);
 
-  // Periodic subagent reconciliation: re-bind Agent <-> JSONL from first-line
-  // timestamps and repair any token rows the hook race may have swapped.
-  // Runs independently from the 2-min maintenance sweep because it's more
-  // expensive (reads JSONL headers) and only needs to run every 5 min.
-  const { reconcileAll } = require("./lib/subagent-reconciler");
-  const RECONCILER_INTERVAL_MS = parseInt(
-    process.env.RECONCILER_INTERVAL_MS || `${30 * 60 * 1000}`,
-    10
-  );
-  const RECONCILER_ENABLED = process.env.RECONCILER_ENABLED !== "false";
-  function runReconciler(label) {
-    if (!RECONCILER_ENABLED) return;
-    try {
-      const r = reconcileAll({
-        db: cleanupDb.db,
-        stmts: cleanupDb.stmts,
-        transcriptCache,
-        maxAgeMs: 30 * 60 * 1000,
-      });
-      if (r.sessionsChanged > 0) {
-        console.log(
-          `[reconciler:${label}] scanned=${r.sessionsScanned} changed=${r.sessionsChanged} model_fix=${r.totalModelUpdates} token_fix=${r.totalTokenUpdates}`
-        );
-        for (const res of r.results) {
-          if ((res.modelUpdates || 0) + (res.tokenUpdates || 0) === 0) continue;
-          const sess = cleanupDb.stmts.getSession.get(res.sessionId);
-          if (sess) broadcast("session_updated", sess);
-        }
-      }
-    } catch (e) {
-      console.error(`[reconciler:${label}] failed:`, e.message);
-    }
-  }
-  // Run once at startup (after a short delay so import-history can settle)
-  setTimeout(() => runReconciler("startup"), 10 * 1000);
-  // Then periodically
-  setInterval(() => runReconciler("periodic"), RECONCILER_INTERVAL_MS);
-
   // Auto-import legacy sessions and backfill compaction tracking on startup.
-  // Disabled by default for large ~/.claude/projects/ trees (thousands of
-  // JSONL files block the event loop). Enable with STARTUP_IMPORT=1 or run
-  // `npm run setup` for one-time historical backfill.
-  if (process.env.STARTUP_IMPORT === "1") {
-    const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
-    const dbModule = require("./db");
-    setTimeout(() => {
-      importAllSessions(dbModule)
-        .then(({ imported, skipped, errors }) => {
-          if (imported > 0) console.log(`Imported ${imported} legacy sessions from ~/.claude/`);
-          if (errors > 0) console.log(`${errors} session files had errors during import`);
-        })
-        .then(() => backfillCompactions(dbModule))
-        .then(({ backfilled }) => {
-          if (backfilled > 0) console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
-        })
-        .catch(() => {
-          // Non-fatal — legacy import is best-effort
-        });
-    }, 30_000);
+  // Skipped when DB already has sessions — the import is a one-time bootstrap
+  // that blocks the event loop for minutes on large ~/.claude/ dirs (700+ files).
+  const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
+  const dbModule = require("./db");
+  const existingCount = dbModule.db.prepare("SELECT COUNT(*) AS c FROM sessions").get().c;
+  if (existingCount === 0) {
+    importAllSessions(dbModule)
+      .then(({ imported, skipped, errors }) => {
+        if (imported > 0) console.log(`Imported ${imported} legacy sessions from ~/.claude/`);
+        if (errors > 0) console.log(`${errors} session files had errors during import`);
+      })
+      .then(() => backfillCompactions(dbModule))
+      .then(({ backfilled }) => {
+        if (backfilled > 0)
+          console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
+      })
+      .catch(() => {});
   }
 }
 

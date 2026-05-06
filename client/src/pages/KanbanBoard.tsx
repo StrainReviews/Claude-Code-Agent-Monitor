@@ -8,7 +8,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Columns3, ChevronDown, HelpCircle } from "lucide-react";
 import { api } from "../lib/api";
@@ -125,29 +125,33 @@ export function KanbanBoard() {
   }, [load]);
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     return eventBus.subscribe((msg: WSMessage) => {
       if (view === "agents") {
-        // Agent changes always reload; session changes also reload because
-        // AgentCard surfaces session metadata (cost, cwd, model) and we
-        // want those to track in real time.
         if (
           msg.type === "agent_created" ||
           msg.type === "agent_updated" ||
           msg.type === "session_updated" ||
           msg.type === "session_created"
         ) {
-          loadAgents();
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(loadAgents, 300);
         }
       } else {
-        if (msg.type === "session_created" || msg.type === "session_updated") loadSessions();
+        if (msg.type === "session_created" || msg.type === "session_updated") {
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(loadSessions, 300);
+        }
       }
     });
   }, [view, loadAgents, loadSessions]);
 
-  // Lookup map for AgentCard's session prop — built once per render of the
-  // agents view rather than walking the array per card.
-  const sessionsById = new Map<string, Session>();
-  for (const s of sessions) sessionsById.set(s.id, s);
+  // Lookup map for AgentCard's session prop — memoized to avoid rebuilding on every render
+  const sessionsById = useMemo(() => {
+    const map = new Map<string, Session>();
+    for (const s of sessions) map.set(s.id, s);
+    return map;
+  }, [sessions]);
 
   // Bucket by effective status: agents with status "waiting" OR those with
   // awaiting_input_since set go into the "waiting" column. Other columns

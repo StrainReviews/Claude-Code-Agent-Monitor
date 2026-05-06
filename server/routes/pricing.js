@@ -120,11 +120,10 @@ router.delete("/:pattern", (req, res) => {
 });
 
 // GET /api/pricing/cost - Get total cost across all sessions
-router.get("/cost", (_req, res) => {
-  // Combined totals: main-session tokens + per-subagent tokens, grouped by
-  // model. Subagent JSONL files are disjoint from the main transcript so
-  // additive summation is correct — a Haiku subagent spawned inside an Opus
-  // session yields one row per model, not a subtracted one.
+router.get("/cost", (req, res) => {
+  const rawOffset = parseInt(req.query.tz_offset, 10);
+  const tzModifier = Number.isFinite(rawOffset) ? `${-rawOffset} minutes` : "+0 minutes";
+
   const allTokens = db
     .prepare(
       `SELECT model,
@@ -154,7 +153,7 @@ router.get("/cost", (_req, res) => {
         SUM(cache_read_tokens)  as cache_read_tokens,
         SUM(cache_write_tokens) as cache_write_tokens
       FROM (
-        SELECT DATE(s.started_at) as date, tu.model as model,
+        SELECT DATE(s.started_at, ?) as date, tu.model as model,
           tu.input_tokens + tu.baseline_input       as input_tokens,
           tu.output_tokens + tu.baseline_output     as output_tokens,
           tu.cache_read_tokens + tu.baseline_cache_read  as cache_read_tokens,
@@ -162,14 +161,14 @@ router.get("/cost", (_req, res) => {
         FROM token_usage tu
         JOIN sessions s ON s.id = tu.session_id
         UNION ALL
-        SELECT DATE(s.started_at) as date, st.model as model,
+        SELECT DATE(s.started_at, ?) as date, st.model as model,
           st.input_tokens, st.output_tokens, st.cache_read_tokens, st.cache_write_tokens
         FROM subagent_token_usage st
         JOIN sessions s ON s.id = st.session_id
       )
       GROUP BY date, model`
     )
-    .all();
+    .all(tzModifier, tzModifier);
   const rules = stmts.listPricing.all();
   const result = calculateCost(allTokens, rules);
   const daily_costs = calculateDailyCosts(dailyTokens, rules);
@@ -178,12 +177,15 @@ router.get("/cost", (_req, res) => {
 
 // GET /api/pricing/cost/:sessionId - Get cost for a specific session
 router.get("/cost/:sessionId", (req, res) => {
+  const rawOffset = parseInt(req.query.tz_offset, 10);
+  const tzModifier = Number.isFinite(rawOffset) ? `${-rawOffset} minutes` : "+0 minutes";
+
   const tokenRows = stmts.getTokensBySession.all(req.params.sessionId);
   const rules = stmts.listPricing.all();
   const result = calculateCost(tokenRows, rules);
   const started = db
-    .prepare("SELECT DATE(started_at) as date FROM sessions WHERE id = ?")
-    .get(req.params.sessionId);
+    .prepare("SELECT DATE(started_at, ?) as date FROM sessions WHERE id = ?")
+    .get(tzModifier, req.params.sessionId);
   const daily_costs = started ? [{ date: started.date, cost: result.total_cost }] : [];
   res.json({ ...result, daily_costs });
 });

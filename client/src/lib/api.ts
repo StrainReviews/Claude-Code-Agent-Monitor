@@ -45,7 +45,7 @@ export const api = {
   },
 
   stats: {
-    get: () => request<Stats>("/stats"),
+    get: () => request<Stats>(`/stats?tz_offset=${new Date().getTimezoneOffset()}`),
   },
 
   sessions: {
@@ -153,7 +153,7 @@ export const api = {
   },
 
   analytics: {
-    get: () => request<Analytics>("/analytics"),
+    get: () => request<Analytics>(`/analytics?tz_offset=${new Date().getTimezoneOffset()}`),
   },
 
   settings: {
@@ -249,9 +249,12 @@ export const api = {
       request<{ ok: boolean }>(`/pricing/${encodeURIComponent(pattern)}`, {
         method: "DELETE",
       }),
-    totalCost: () => request<CostResult>("/pricing/cost"),
+    totalCost: () =>
+      request<CostResult>(`/pricing/cost?tz_offset=${new Date().getTimezoneOffset()}`),
     sessionCost: (sessionId: string) =>
-      request<CostResult>(`/pricing/cost/${encodeURIComponent(sessionId)}`),
+      request<CostResult>(
+        `/pricing/cost/${encodeURIComponent(sessionId)}?tz_offset=${new Date().getTimezoneOffset()}`
+      ),
   },
 
   import: {

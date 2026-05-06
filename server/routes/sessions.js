@@ -10,7 +10,6 @@ const readline = require("readline");
 const { stmts, db } = require("../db");
 const { broadcast } = require("../websocket");
 const { calculateCost } = require("./pricing");
-const { reconcileSession, reconcileAll } = require("../lib/subagent-reconciler");
 const { transcriptCache } = require("./hooks");
 const {
   getClaudeHome,
@@ -234,10 +233,14 @@ router.get("/:id/stats", (req, res) => {
   // Compactions: count agents whose subagent_type === 'compaction'
   const compactionRow = subagentTypes.find((r) => r.subagent_type === "compaction");
   agentCounts.compaction = compactionRow?.count ?? 0;
-  // Main vs sub: derive from agents list
-  const allAgents = stmts.listAgentsBySession.all(sessionId);
-  agentCounts.main = allAgents.filter((a) => a.type === "main").length;
-  agentCounts.subagent = allAgents.filter((a) => a.type === "subagent").length;
+  // Main vs sub: count by type in SQL (avoids loading all agents)
+  const typeCounts = db
+    .prepare(`SELECT type, COUNT(*) as count FROM agents WHERE session_id = ? GROUP BY type`)
+    .all(sessionId);
+  for (const row of typeCounts) {
+    if (row.type === "main") agentCounts.main = row.count;
+    else if (row.type === "subagent") agentCounts.subagent = row.count;
+  }
 
   res.json({
     session_id: sessionId,
@@ -301,50 +304,6 @@ router.patch("/:id", (req, res) => {
 // binding from first-line timestamps and repairs any drift in
 // `subagent_token_usage` / `agents.model`. Safe to call repeatedly.
 // Query `dry_run=1` returns the would-be changes without writing.
-router.post("/:id/reconcile", (req, res) => {
-  const session = stmts.getSession.get(req.params.id);
-  if (!session) {
-    return res.status(404).json({ error: { code: "NOT_FOUND", message: "Session not found" } });
-  }
-  const dryRun = req.query.dry_run === "1" || req.query.dry_run === "true";
-  try {
-    const result = reconcileSession({
-      db,
-      stmts,
-      transcriptCache,
-      session,
-      projectsRoot:
-        process.env.CLAUDE_PROJECTS_ROOT ||
-        require("path").join(require("os").homedir(), ".claude", "projects"),
-      dryRun,
-    });
-    if (!dryRun && (result.modelUpdates > 0 || result.tokenUpdates > 0)) {
-      broadcast("session_updated", stmts.getSession.get(req.params.id));
-    }
-    res.json({ ok: true, dry_run: dryRun, result });
-  } catch (e) {
-    res.status(500).json({ error: { code: "RECONCILE_FAILED", message: e.message } });
-  }
-});
-
-// Run the reconciler across every recent/active session in one call.
-router.post("/reconcile-all", (req, res) => {
-  const dryRun = req.query.dry_run === "1" || req.query.dry_run === "true";
-  try {
-    const result = reconcileAll({
-      db,
-      stmts,
-      transcriptCache,
-      projectsRoot:
-        process.env.CLAUDE_PROJECTS_ROOT ||
-        require("path").join(require("os").homedir(), ".claude", "projects"),
-      dryRun,
-    });
-    res.json({ ok: true, dry_run: dryRun, result });
-  } catch (e) {
-    res.status(500).json({ error: { code: "RECONCILE_FAILED", message: e.message } });
-  }
-});
 
 // GET /:id/transcripts — List available transcript files for a session (main + sub-agents)
 router.get("/:id/transcripts", async (req, res) => {
