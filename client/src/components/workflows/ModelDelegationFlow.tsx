@@ -8,6 +8,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import * as d3 from "d3";
 import type { ModelDelegationData } from "../../lib/types";
+import { formatModelName } from "../../lib/format";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -25,13 +26,7 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function shortModelName(name: string): string {
-  // Strip vendor prefix like "claude-" and shorten
-  return name
-    .replace(/^claude-/i, "")
-    .replace(/-\d{8}$/, "") // strip date suffixes
-    .replace(/-latest$/i, "");
-}
+// Model formatting is handled by the shared formatModelName utility.
 
 // ── Color palette per model family ───────────────────────────────────────────
 
@@ -217,7 +212,7 @@ function renderFlow(
       .attr("font-size", 11)
       .attr("font-weight", "600")
       .attr("font-family", "Inter, sans-serif")
-      .text(shortModelName(node.label));
+      .text(formatModelName(node.label) ?? node.label);
 
     // Agent count pill
     ng.append("rect")
@@ -317,7 +312,7 @@ export function ModelDelegationFlow({ data }: ModelDelegationFlowProps) {
 
     const mainNodes: NodeDatum[] = data.mainModels.map((m, i) => ({
       id: `main-${m.model}`,
-      label: m.model,
+      label: formatModelName(m.model) ?? m.model,
       family: modelFamily(m.model),
       agentCount: m.agent_count,
       sessionCount: m.session_count,
@@ -329,7 +324,7 @@ export function ModelDelegationFlow({ data }: ModelDelegationFlowProps) {
 
     const subNodes: NodeDatum[] = data.subagentModels.map((m, i) => ({
       id: `sub-${m.model}`,
-      label: m.model,
+      label: formatModelName(m.model) ?? m.model,
       family: modelFamily(m.model),
       agentCount: m.agent_count,
       sessionCount: 0,

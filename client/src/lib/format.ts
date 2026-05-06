@@ -139,6 +139,74 @@ export function shortModel(model: string | null | undefined): string | null {
   return m?.[1] ?? model;
 }
 
+const MODEL_BRANDS: Record<string, string> = {
+  claude: "Claude",
+  gpt: "GPT",
+  gemini: "Gemini",
+};
+
+/** Human-friendly model name:
+ *  "claude-opus-4-7-20260101" → "Claude Opus 4.7"
+ *  "gpt-4o-mini"              → "GPT-4o Mini"
+ *  Returns null for falsy input. */
+export function formatModelName(model: string | null | undefined): string | null {
+  if (!model) return null;
+
+  // Strip provider prefix ("anthropic/claude-opus-4-7" → "claude-opus-4-7")
+  let name = model.includes("/") ? model.split("/").pop()! : model;
+
+  // Extract bracketed context-window tag like "[1m]" → suffix " (1M)"
+  let ctxSuffix = "";
+  const ctxMatch = name.match(/\[(\d+[mk])\]$/i);
+  if (ctxMatch) {
+    ctxSuffix = ` (${(ctxMatch[1] as string).toUpperCase()})`;
+    name = name.slice(0, -ctxMatch[0].length);
+  }
+
+  // Strip date suffix and "-latest"
+  name = name.replace(/-\d{8}$/, "").replace(/-latest$/i, "");
+
+  const parts: string[] = name.split("-");
+  const first = parts[0] ?? name;
+  const brand = MODEL_BRANDS[first.toLowerCase()];
+
+  // GPT-style names keep the brand hyphenated with the version token:
+  // "gpt-4o-mini" → "GPT-4o Mini"
+  if (brand === "GPT" && parts.length >= 2) {
+    const versionToken = parts[1] as string;
+    const rest = parts.slice(2);
+    const suffix = rest
+      .map((seg) => (/^\d+$/.test(seg) ? seg : seg.charAt(0).toUpperCase() + seg.slice(1)))
+      .join(" ");
+    const base = suffix ? `${brand}-${versionToken} ${suffix}` : `${brand}-${versionToken}`;
+    return base + ctxSuffix;
+  }
+
+  // Claude / Gemini / generic: title-case words, dot-join version digits
+  const result: string[] = [brand ?? first.charAt(0).toUpperCase() + first.slice(1)];
+
+  let i = 1;
+  while (i < parts.length) {
+    const seg = parts[i] as string;
+    if (/^\d+$/.test(seg)) {
+      const ver = [seg];
+      while (i + 1 < parts.length && /^\d+$/.test(parts[i + 1] as string)) {
+        i++;
+        ver.push(parts[i] as string);
+      }
+      result.push(ver.join("."));
+    } else if (/^\d+\w+$/.test(seg)) {
+      result.push(seg);
+    } else {
+      result.push(seg.charAt(0).toUpperCase() + seg.slice(1));
+    }
+    i++;
+  }
+
+  return result.join(" ") + ctxSuffix;
+}
+
+
 export function pathBasename(p: string | null | undefined): string | null {
   if (!p) return null;
   const trimmed = p.replace(/\/+$/, "");

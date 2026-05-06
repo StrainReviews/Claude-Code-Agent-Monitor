@@ -63,7 +63,7 @@ Tài liệu đã bản địa hóa: [`README.md`](./README.md) · [`README-CN.md
 
 - [Tổng quan](#tổng-quan)
 - [Quốc tế hóa (i18n)](#quốc-tế-hóa-i18n)
-- [Đặc trưng](#đặc-trưng)
+- [Tính Năng](#tính-năng)
 - [Bắt đầu nhanh](#bắt-đầu-nhanh)
 - [Nó hoạt động như thế nào](#nó-hoạt-động-như-thế-nào)
 - [Cấu hình](#cấu-hình)
@@ -208,7 +208,7 @@ Thanh bên cung cấp quyền truy cập nhanh vào Trang tổng quan, Bảng Ka
 
 ---
 
-## Đặc trưng
+## Tính Năng
 
 Bảng điều khiển cung cấp một bộ tính năng toàn diện để giám sát và phân tích các phiên và Agent Claude Code của bạn:
 
@@ -240,6 +240,7 @@ Bảng điều khiển cung cấp một bộ tính năng toàn diện để giá
 | **Bản địa hóa giao diện người dùng**                | Chuyển đổi ngôn ngữ tích hợp với bản sao giao diện người dùng được dịch và nhãn trợ năng cho tiếng Anh (`en`), tiếng Trung (`zh`) và tiếng Việt (`vi`). Phạm vi đa ngôn ngữ trải dài hết toàn bộ tooltip ở trang Workflows: cách tính của các thẻ thống kê và các diễn giải theo bucket giá trị, popover "Cái gì / Cách đọc / Vì sao" cho mỗi biểu đồ, mọi tooltip hover trên đồ thị (orchestration, tool flow, pipeline, model delegation, concurrency), bảng chi tiết Workflow Patterns với mô tả và gợi ý, popover thông tin Settings → Định giá mô hình, khung CLAUDE_HOME và toàn bộ luồng Import History                                                                                                                                                                       |
 | **Dữ liệu hạt giống**                      | Tập lệnh hạt giống tích hợp cho các bản demo và phát triển                                                                                                                                                                                                                               |
 | **Dòng trạng thái**                     | Dòng trạng thái CLI được mã hóa màu hiển thị mô hình, cách sử dụng ngữ cảnh, nhánh git, mã thông báo                                                                                                                                                                                                  |
+| **Định dạng tên mô hình**          | Tên mô hình thân thiện trong toàn bộ giao diện: các định danh thô như `claude-opus-4-7-20260101` hoặc `claude-opus-4-7[1m]` hiển thị dạng "Claude Opus 4.7" hoặc "Claude Opus 4.7 (1M)". Hỗ trợ các họ Claude, GPT và Gemini với tự động nối phiên bản bằng dấu chấm, loại bỏ hậu tố ngày/latest, xóa tiền tố nhà cung cấp và định dạng thẻ cửa sổ ngữ cảnh. Trang Cài đặt giữ nguyên tên thô để cấu hình quy tắc giá |
 | **Thị trường plugin**             | Thị trường plugin Claude Code chính thức với 5 plugin (ccam-analytics, ccam-productivity, ccam-devtools, ccam-insights, ccam-dashboard). 18 kỹ năng, 4 tác nhân, 3 công cụ CLI, 2 cấu hình hook. Tất cả đều dựa trên mô hình dữ liệu thực tế — đường cơ sở của mã thông báo, công cụ định giá, thông tin quy trình làm việc (11 bộ dữ liệu), siêu dữ liệu phiên. Cài đặt qua `claude plugin marketplace add` |
 
 ---

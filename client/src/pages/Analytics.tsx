@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
-import { fmt, fmtCost, fmtCostFull } from "../lib/format";
+import { fmt, fmtCost, fmtCostFull, formatModelName } from "../lib/format";
 import { Tip } from "../components/Tip";
 import type { Analytics as AnalyticsData, CostResult } from "../lib/types";
 
@@ -1083,7 +1083,7 @@ export function Analytics() {
                 <>
                   <DonutChart
                     segments={costBreakdown.map((b, i) => ({
-                      label: b.model,
+                      label: formatModelName(b.model) ?? b.model,
                       value: Math.round(b.cost * 100),
                       color:
                         ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"][i % 6] ??
@@ -1094,7 +1094,9 @@ export function Analytics() {
                   <div className="mt-4 pt-4 border-t border-border space-y-2">
                     {costBreakdown.map((b) => (
                       <div key={b.model} className="flex justify-between text-xs">
-                        <span className="text-gray-400 font-mono truncate">{b.model}</span>
+                        <span className="text-gray-400 font-mono truncate">
+                          {formatModelName(b.model)}
+                        </span>
                         <span className="text-emerald-400 font-mono font-medium ml-2">
                           <Tip raw={fmtCostFull(b.cost)}>{fmtCost(b.cost)}</Tip>
                         </span>

@@ -35,7 +35,7 @@ import { AgentCard } from "../components/AgentCard";
 import { AgentStatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
 import { Tip } from "../components/Tip";
-import { timeAgo, fmt, fmtCost } from "../lib/format";
+import { timeAgo, fmt, fmtCost, formatModelName } from "../lib/format";
 import type { Stats, Agent, DashboardEvent, WSMessage, WorkflowData } from "../lib/types";
 
 interface SystemInfo {
@@ -563,14 +563,14 @@ function SystemHealthTab() {
                 <Tip
                   block
                   key={i}
-                  raw={`${m.model}\nInput: ${m.input_tokens.toLocaleString()}\nOutput: ${m.output_tokens.toLocaleString()}\nCache Read: ${m.cache_read_tokens.toLocaleString()}\nShare: ${pct.toFixed(1)}%`}
+                  raw={`${formatModelName(m.model) ?? m.model}\nInput: ${m.input_tokens.toLocaleString()}\nOutput: ${m.output_tokens.toLocaleString()}\nCache Read: ${m.cache_read_tokens.toLocaleString()}\nShare: ${pct.toFixed(1)}%`}
                 >
                   <div className="flex items-center gap-3 cursor-default">
                     <span
                       className="text-xs text-gray-400 w-28 truncate flex-shrink-0"
-                      title={m.model}
+                      title={formatModelName(m.model) ?? m.model}
                     >
-                      {m.model.split("/").pop()}
+                      {formatModelName(m.model) ?? m.model}
                     </span>
                     <div className="flex-1 bg-surface-3 rounded-full h-2">
                       <div

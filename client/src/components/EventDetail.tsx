@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import type { DashboardEvent } from "../lib/types";
 import type { AgentInfo } from "../lib/event-grouping";
 import { buildEventSummary } from "../lib/event-summary";
+import { formatModelName } from "../lib/format";
 import { CopyButton } from "./event-views/primitives";
 import { ToolInputView, ToolResponseView } from "./event-views/tool-views";
 
@@ -150,7 +151,11 @@ export function EventDetail({ event, agentInfoById, sessionNameById }: EventDeta
       // identifiers in the row labels.
       const i18nKey = PAYLOAD_LABEL_KEYS[k];
       const label = i18nKey ? t(i18nKey) : humanizeKey(k);
-      result.push({ key: k, label, value: v });
+      result.push({
+        key: k,
+        label,
+        value: k === "model" && typeof v === "string" ? (formatModelName(v) ?? v) : v,
+      });
     }
 
     // If JSON parse failed, show the raw data as a single row using the

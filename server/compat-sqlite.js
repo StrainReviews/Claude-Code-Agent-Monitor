@@ -16,6 +16,8 @@ const { DatabaseSync } = require("node:sqlite");
 class Database {
   constructor(filePath) {
     this._db = new DatabaseSync(filePath);
+    this._transactionDepth = 0;
+    this._spCounter = 0;
   }
 
   exec(sql) {
@@ -40,16 +42,37 @@ class Database {
   }
 
   transaction(fn) {
-    const db = this._db;
+    const self = this;
     const wrapper = (...args) => {
-      db.exec("BEGIN");
-      try {
-        const result = fn(...args);
-        db.exec("COMMIT");
-        return result;
-      } catch (err) {
-        db.exec("ROLLBACK");
-        throw err;
+      const nested = self._transactionDepth > 0;
+      if (nested) {
+        const sp = `_sp_${++self._spCounter}`;
+        self._db.exec(`SAVEPOINT ${sp}`);
+        self._transactionDepth++;
+        try {
+          const result = fn(...args);
+          self._db.exec(`RELEASE ${sp}`);
+          self._transactionDepth--;
+          return result;
+        } catch (err) {
+          self._db.exec(`ROLLBACK TO ${sp}`);
+          self._db.exec(`RELEASE ${sp}`);
+          self._transactionDepth--;
+          throw err;
+        }
+      } else {
+        self._db.exec("BEGIN");
+        self._transactionDepth++;
+        try {
+          const result = fn(...args);
+          self._db.exec("COMMIT");
+          self._transactionDepth--;
+          return result;
+        } catch (err) {
+          self._db.exec("ROLLBACK");
+          self._transactionDepth--;
+          throw err;
+        }
       }
     };
     return wrapper;

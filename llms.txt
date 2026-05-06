@@ -8,6 +8,14 @@ Important context for tools and answers:
 - **Pipelines to preserve** when changing code: `hooks → HTTP API → SQLite → WebSocket → UI` and optional `MCP` for the same data/actions.
 - **Module map**: `server/` (API, hooks ingest, DB, WS), `client/` (Vite React app), `scripts/` (hook installer, utilities), `mcp/` (local MCP server), root `index.html` + `wiki/` assets = human wiki on GitHub Pages.
 
+Techniques and patterns used:
+- Local-first architecture: runs on the developer machine, data stored in SQLite, no cloud dependencies.
+- Hooks-based integration: native hooks POST to the Express server for real-time data capture.
+- WebSocket updates: server pushes updates to the React UI for real-time monitoring.
+- Optional MCP server: exposes safe tools for interacting with the dashboard data and actions.
+- Modular structure: clear separation of concerns across `server/`, `client/`, `mcp/`, and `scripts/` directories.
+- Comprehensive documentation: detailed Markdown files covering installation, setup, architecture, API, hooks, database schema, MCP integration, plugins, deployment, and internationalization.
+
 ## Core documentation
 
 - [README](https://raw.githubusercontent.com/hoangsonww/Claude-Code-Agent-Monitor/master/README.md): Install, features, npm scripts, API summary, deployment overview, troubleshooting.
