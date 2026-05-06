@@ -80,7 +80,7 @@ erDiagram
     sessions {
         integer id PK "Primary key"
         text session_id UK "Unique session identifier"
-        text model "Model name (e.g., claude-sonnet-4)"
+        text model "Raw model slug (e.g., claude-sonnet-4-5-20250514); UI displays via formatModelName()"
         text status "active | completed"
         real total_cost "Aggregated cost from all agents"
         text created_at "ISO8601 timestamp"

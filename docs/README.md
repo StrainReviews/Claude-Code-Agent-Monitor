@@ -225,6 +225,7 @@ flowchart LR
     C --> D["React useTranslation hooks"]
     D --> E["Localized UI + a11y labels"]
     E --> F["Locale-aware date/number formatting"]
+    F --> G["formatModelName() — human-friendly model display"]
 ```
 
 Supported language codes are explicitly `en`, `zh`, and `vi`. Use [I18N.md](./I18N.md) for architecture details, naming conventions, language switching flow, localization behavior, and rollout guidance.
