@@ -9,7 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { AgentStatusBadge } from "./StatusBadge";
 import { effectiveAgentStatus, isAgentAwaitingInput } from "../lib/types";
 import type { Agent, Session } from "../lib/types";
-import { formatDuration, timeAgo, shortModel, pathBasename, fmtCost } from "../lib/format";
+import { formatDuration, timeAgo, formatModelName, pathBasename, fmtCost } from "../lib/format";
 
 interface AgentCardProps {
   agent: Agent;
@@ -33,7 +33,7 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
   // subagents alike. Subtitle differs by type: main uses model+cwd (its
   // auto-generated name carries no info), subagents stick with their
   // subagent_type label (more useful than repeating the session model).
-  const model = shortModel(session?.model);
+  const model = formatModelName(session?.model);
   const cwdBase = pathBasename(session?.cwd);
   const cost = typeof session?.cost === "number" ? session.cost : 0;
   const subtitle = isMain

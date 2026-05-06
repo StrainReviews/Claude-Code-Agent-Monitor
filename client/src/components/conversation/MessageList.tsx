@@ -22,7 +22,7 @@ import {
 import type { TranscriptMessage, TranscriptContent } from "../../lib/types";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { MarkdownContent } from "./MarkdownContent";
-import { fmt } from "../../lib/format";
+import { fmt, formatModelName } from "../../lib/format";
 import { parseTuiSegments, stripAnsi, hasTuiTags, type TuiSegment } from "./tuiSegments";
 
 interface MessageListProps {
@@ -265,7 +265,7 @@ export function MessageList({ messages, loading }: MessageListProps) {
                 </span>
                 {msg.model && (
                   <span className="text-[10px] text-gray-400 font-mono bg-surface-3/60 border border-surface-3 rounded px-1.5 py-0.5">
-                    {msg.model}
+                    {formatModelName(msg.model)}
                   </span>
                 )}
                 {msg.usage && (

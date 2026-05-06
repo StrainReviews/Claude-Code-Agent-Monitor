@@ -12,7 +12,7 @@ import { FolderOpen, Bot, Clock, Coins, Cpu } from "lucide-react";
 import { SessionStatusBadge } from "./StatusBadge";
 import { effectiveSessionStatus, isSessionAwaitingInput } from "../lib/types";
 import type { Session } from "../lib/types";
-import { formatDuration, timeAgo, shortModel } from "../lib/format";
+import { formatDuration, timeAgo, formatModelName } from "../lib/format";
 
 interface SessionCardProps {
   session: Session;
@@ -34,7 +34,7 @@ export function SessionCard({ session, onClick }: SessionCardProps) {
   const status = effectiveSessionStatus(session);
   const title = session.name?.trim() || t("session.anonymous");
   const agentCount = session.agent_count ?? 0;
-  const model = shortModel(session.model);
+  const model = formatModelName(session.model);
   const lastActivity = session.last_activity || session.ended_at || session.started_at;
 
   function handleClick() {
