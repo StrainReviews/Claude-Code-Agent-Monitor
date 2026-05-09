@@ -1459,8 +1459,11 @@
 git clone https://github.com/hoangsonww/Claude-Code-Agent-Monitor.git
 cd Claude-Code-Agent-Monitor
 
-# 2. Install all dependencies (server + client) + install hooks
+# 2. Install all dependencies (server + client)
 npm run setup
+
+# Optional: manually install hooks for container deployments
+# or if auto-install on server startup fails
 npm run install-hooks
 
 # 3. Start in development mode
