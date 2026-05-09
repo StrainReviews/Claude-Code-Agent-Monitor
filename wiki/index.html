@@ -4730,7 +4730,6 @@ npm run install-hooks</code></pre>
 
     <script src="script.js?v=17" defer></script>
     <script>
-      /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {
         var carousel = document.getElementById("feature-carousel");
         if (!carousel) return;
@@ -4842,7 +4841,6 @@ npm run install-hooks</code></pre>
         });
         layout();
         startAuto();
-
         function scrollToFeatureHash() {
           var hash = window.location.hash;
           if (!hash || hash.indexOf("#feat-") !== 0) return;
@@ -4869,8 +4867,6 @@ npm run install-hooks</code></pre>
         scrollToFeatureHash();
         window.addEventListener("hashchange", scrollToFeatureHash);
       })();
-
-      /* ─── Screenshot hash highlight (#ss-*) ──────────────────────────────── */
       (function () {
         function openScreenshot() {
           var hash = window.location.hash;
@@ -4895,8 +4891,6 @@ npm run install-hooks</code></pre>
         });
         window.addEventListener("hashchange", openScreenshot);
       })();
-
-      /* ─── Sidebar Toggle ────────────────────────────────────────────────── */
       (function () {
         const btn = document.getElementById("sidebar-toggle");
         const scrim = document.getElementById("sidebar-scrim");
@@ -4915,7 +4909,6 @@ npm run install-hooks</code></pre>
             scrim.setAttribute("aria-hidden", String(collapsed || !isMobile));
           }
         }
-        // On load: auto-collapse if narrow, otherwise respect saved preference
         if (shouldAutoCollapse()) {
           applyCollapsed(true);
         } else {
