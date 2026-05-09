@@ -186,6 +186,23 @@ To install or develop the extension:
 > [!TIP]
 > Extension on VS Code Marketplace: [Claude Code Agent Monitor](https://marketplace.visualstudio.com/items?itemName=hoangsonw.claude-code-agent-monitor)
 
+### PWA configuration (optional)
+
+The dashboard, landing page, and wiki each ship as independent Progressive Web Apps. No configuration is required — manifests and service workers are included out of the box.
+
+**Customising the manifest:** Edit the `manifest.json` in the relevant directory (`client/public/` for dashboard, root for landing, `wiki/` for wiki). Common fields to change:
+
+- `name` / `short_name` — displayed on the home screen / dock
+- `theme_color` — address bar / title bar tint (default: `#6366f1`)
+- `background_color` — splash screen background
+- `start_url` — entry point when launched from home screen
+
+**Updating the service worker cache:** Each SW has a `CACHE_NAME` constant (e.g. `dashboard-v1`). After deploying new assets, bump the version string to force browsers to re-fetch.
+
+**Browser support:** PWA install prompts appear in Chrome 107+, Edge 107+, and Firefox 110+ (desktop and Android). Safari supports `apple-mobile-web-app-capable` for iOS home-screen mode but does not show an install banner.
+
+**Verifying PWA status:** Open DevTools → Application → Manifest to confirm the manifest loads. Check the Service Workers section to verify the SW is registered and active. The Lighthouse PWA audit should pass all core checks.
+
 ---
 
 ## Database

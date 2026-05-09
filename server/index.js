@@ -147,8 +147,14 @@ if (require.main === module) {
   });
 
   // Graceful shutdown — close connections and DB cleanly
+  let shutdownInProgress = false;
   const shutdown = (signal) => {
-    console.log(`\n${signal} received — shutting down gracefully…`);
+    if (shutdownInProgress) {
+      console.log(`\n${signal} received again — forcing immediate exit.`);
+      process.exit(1);
+    }
+    shutdownInProgress = true;
+    console.log(`\n${signal} received — shutting down gracefully… (hit Ctrl+C again to force)`);
     if (httpServer) {
       httpServer.close(() => {
         console.log("HTTP server closed.");
