@@ -425,6 +425,49 @@ graph TD
     style LAYOUT fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
 ```
 
+### PWA Architecture
+
+The project ships three independent Progressive Web Apps. Each has its own Web App Manifest and Service Worker, so the browser treats them as separate installable applications with isolated caches.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        PWA Surface Map                          │
+├──────────────────┬──────────────────┬───────────────────────────┤
+│   Dashboard      │   Landing Page   │         Wiki              │
+│   (client/)      │   (root)         │         (wiki/)           │
+├──────────────────┼──────────────────┼───────────────────────────┤
+│ manifest.json    │ manifest.json    │ manifest.json             │
+│ sw.js            │ sw.js            │ sw.js                     │
+│ id: dashboard    │ id: landing      │ id: wiki                  │
+├──────────────────┼──────────────────┼───────────────────────────┤
+│ Precache:        │ Precache:        │ Precache:                 │
+│ /, manifest,     │ index.html,      │ index.html, style.css,    │
+│ favicon.svg      │ favicon, og-img, │ script.js, manifest,      │
+│                  │ manifest         │ favicon                   │
+│ Runtime cache:   │ Runtime cache:   │ Runtime cache:            │
+│ JS/CSS bundles   │ screenshot PNGs  │ (all precached)           │
+│ (cache-first)    │ (cache-first)    │                           │
+│                  │                  │                           │
+│ Skip: /api/*,    │ N/A              │ N/A                       │
+│ /ws, __vite      │                  │                           │
+│                  │                  │                           │
+│ + Push notifs    │                  │                           │
+│ (VAPID pipeline) │                  │                           │
+└──────────────────┴──────────────────┴───────────────────────────┘
+```
+
+**Service Worker lifecycle (all three):**
+
+1. **Install** → `skipWaiting()` — new SW activates immediately, no waiting for tabs to close.
+2. **Activate** → old caches deleted (keyed by `CACHE_NAME`: `dashboard-v1`, `landing-v1`, `wiki-v1`). Bump the version string to force a cache bust.
+3. **Fetch** → Navigation requests are network-first with offline fallback to cached HTML. Static assets are cache-first with runtime caching on miss.
+
+**Dashboard SW specifics:** The fetch handler skips `/api/*`, `/ws`, and Vite HMR (`__vite`) URLs so live data and development tooling are never cached. Only responses with `response.type === "basic"` (same-origin) are stored. The existing push notification handlers (`push`, `notificationclick`) are preserved alongside the caching logic.
+
+**Manifest icons:** All three manifests reference `favicon.svg` with `sizes="any"` and `type="image/svg+xml"` — supported in Chrome 107+, Firefox 110+, Edge 107+. Two icon entries per manifest: one with `purpose: "any"` and one with `purpose: "maskable"`.
+
+**iOS meta tags:** All HTML files include `<meta name="apple-mobile-web-app-capable" content="yes">` and `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">` for standalone home-screen mode on Safari.
+
 ### Client Module Graph
 
 ```mermaid
@@ -1512,6 +1555,16 @@ Notification preferences remain in `localStorage` (`agent-monitor-notifications`
 | Session Error | `onSessionError` | Filtered during push fan-out |
 | Session Complete | `onSessionComplete` | Filtered during push fan-out |
 | Subagent Spawn | `onSubagentSpawn` | Filtered during push fan-out |
+
+### Service Worker Caching
+
+The dashboard's Service Worker (`client/public/sw.js`) serves dual purposes: push notification delivery (described above) and offline caching. On install it precaches the app shell (`/`, `/manifest.json`, `/favicon.svg`). The fetch handler uses:
+
+- **Network-first** for navigation requests — falls back to cached `/` when offline (SPA routing).
+- **Cache-first** for static assets (JS/CSS bundles, images) — cached on first load, served from cache on repeat visits. Only same-origin (`response.type === "basic"`) responses are stored.
+- **Bypass** for `/api/*`, `/ws`, and Vite HMR (`__vite`) — these are never cached.
+
+Cache versioning is controlled by the `CACHE_NAME` constant (`dashboard-v1`). On activate, any caches whose key doesn't match are deleted, so bumping the version string forces a clean refresh. `skipWaiting()` ensures the new SW takes over immediately.
 
 ---
 

@@ -606,6 +606,24 @@ document.querySelectorAll(".diagram-toggle").forEach((toggle) => {
 
 /* ─── Lightbox for Screenshots ──────────────────────────────────────────── */
 (function () {
+  /* ── Collect all slides ──────────────────────────────────────────────── */
+  const slides = [];
+  document
+    .querySelectorAll(".screenshot-card img, .hero-gallery img, .screenshot-gallery img")
+    .forEach((thumb) => {
+      const card = thumb.closest(".screenshot-card");
+      let caption = "";
+      if (card) {
+        const capEl = card.querySelector(".screenshot-caption");
+        if (capEl) caption = capEl.textContent.trim();
+      }
+      if (!caption) caption = thumb.alt || "";
+      slides.push({ src: thumb.src, alt: thumb.alt || "", caption: caption });
+    });
+
+  let current = 0;
+
+  /* ── Build DOM ───────────────────────────────────────────────────────── */
   const overlay = document.createElement("div");
   overlay.className = "lightbox-overlay";
   overlay.setAttribute("aria-hidden", "true");
@@ -613,46 +631,112 @@ document.querySelectorAll(".diagram-toggle").forEach((toggle) => {
   const closeBtn = document.createElement("button");
   closeBtn.className = "lightbox-close";
   closeBtn.innerHTML = "&times;";
-  closeBtn.setAttribute("aria-label", "Close full screen");
+  closeBtn.setAttribute("aria-label", "Close lightbox");
+
+  const prevBtn = document.createElement("button");
+  prevBtn.className = "lightbox-nav lightbox-prev";
+  prevBtn.innerHTML =
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>';
+  prevBtn.setAttribute("aria-label", "Previous image");
+
+  const nextBtn = document.createElement("button");
+  nextBtn.className = "lightbox-nav lightbox-next";
+  nextBtn.innerHTML =
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"></polyline></svg>';
+  nextBtn.setAttribute("aria-label", "Next image");
+
+  const body = document.createElement("div");
+  body.className = "lightbox-body";
 
   const img = document.createElement("img");
   img.className = "lightbox-image";
-  img.setAttribute("alt", "Enlarged screenshot");
 
+  const captionEl = document.createElement("div");
+  captionEl.className = "lightbox-caption";
+
+  body.appendChild(img);
+  body.appendChild(captionEl);
   overlay.appendChild(closeBtn);
-  overlay.appendChild(img);
+  overlay.appendChild(prevBtn);
+  overlay.appendChild(nextBtn);
+  overlay.appendChild(body);
   document.body.appendChild(overlay);
+
+  /* ── Helpers ─────────────────────────────────────────────────────────── */
+  function showSlide(idx) {
+    current = idx;
+    const s = slides[current];
+    img.src = s.src;
+    img.alt = s.alt;
+
+    /* Parse caption: split emoji + bold title from description */
+    const m = s.caption.match(/^([^\u2014—-]+(?:[—\u2014-]\s*)?)(.*)$/);
+    let html = "";
+    if (m && m[1]) {
+      html += '<span class="lightbox-caption-title">' + m[1].trim() + "</span>";
+      if (m[2]) html += m[2].trim();
+    } else {
+      html = s.caption;
+    }
+    html += '<span class="lightbox-counter">' + (current + 1) + " / " + slides.length + "</span>";
+    captionEl.innerHTML = html;
+  }
+
+  function openAt(idx) {
+    showSlide(idx);
+    overlay.classList.add("active");
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
 
   function closeLightbox() {
     overlay.classList.remove("active");
     overlay.setAttribute("aria-hidden", "true");
-    document.body.style.overflow = ""; // restore scrolling
+    document.body.style.overflow = "";
     setTimeout(() => {
       img.src = "";
     }, 300);
   }
 
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay || e.target === closeBtn) {
-      closeLightbox();
-    }
+  function goPrev() {
+    showSlide((current - 1 + slides.length) % slides.length);
+  }
+  function goNext() {
+    showSlide((current + 1) % slides.length);
+  }
+
+  /* ── Events ──────────────────────────────────────────────────────────── */
+  closeBtn.addEventListener("click", closeLightbox);
+  prevBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    goPrev();
+  });
+  nextBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    goNext();
   });
 
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && overlay.classList.contains("active")) {
-      closeLightbox();
-    }
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) closeLightbox();
   });
 
+  document.addEventListener("keydown", function (e) {
+    if (!overlay.classList.contains("active")) return;
+    if (e.key === "Escape") closeLightbox();
+    if (e.key === "ArrowLeft") goPrev();
+    if (e.key === "ArrowRight") goNext();
+  });
+
+  /* ── Bind thumbnails ─────────────────────────────────────────────────── */
   document
     .querySelectorAll(".screenshot-card img, .hero-gallery img, .screenshot-gallery img")
-    .forEach((thumbnail) => {
-      thumbnail.addEventListener("click", () => {
-        img.src = thumbnail.src;
-        img.alt = thumbnail.alt;
-        overlay.classList.add("active");
-        overlay.setAttribute("aria-hidden", "false");
-        document.body.style.overflow = "hidden"; // prevent background scrolling
+    .forEach((thumb, i) => {
+      thumb.addEventListener("click", function () {
+        openAt(i);
       });
     });
+
+  /* Expose for hash-nav script */
+  window.__lightboxOpenAt = openAt;
+  window.__lightboxSlides = slides;
 })();

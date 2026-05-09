@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="apple-touch-icon" href="favicon.svg" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Claude Code Agent Monitor - real-time dashboard for Claude Code</title>
     <meta
       name="description"
@@ -574,6 +578,7 @@
         position: relative;
         margin: 56px auto 0;
         max-width: 1140px;
+        cursor: pointer;
         border: 1px solid var(--border-strong);
         border-radius: 18px;
         background: var(--surface-1);
@@ -733,6 +738,8 @@
         transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
           border-color 0.22s, background 0.22s, box-shadow 0.22s;
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
       }
       .feature-card::before {
         content: "";
@@ -781,41 +788,101 @@
         color: var(--text-muted);
         font-size: 14px;
         line-height: 1.6;
-      }
-      .feature-tag {
-        position: absolute;
-        top: 14px;
-        right: 14px;
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        padding: 3px 7px;
-        border-radius: 4px;
-        background: rgba(52, 211, 153, 0.12);
-        color: var(--emerald);
-        border: 1px solid rgba(52, 211, 153, 0.3);
+        flex: 1;
       }
 
       /* ── SHOWCASE ─────────────────────────────────────── */
+
+      /* Filter pills */
+      .showcase-filters {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 36px;
+      }
+      .showcase-pill {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: var(--surface-1);
+        color: var(--text-muted);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        padding: 7px 18px;
+        border-radius: 100px;
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        white-space: nowrap;
+      }
+      .showcase-pill:hover {
+        border-color: var(--border-strong);
+        color: var(--text);
+        background: var(--bg-2);
+      }
+      .showcase-pill.active {
+        background: linear-gradient(135deg, var(--indigo), var(--violet));
+        border-color: transparent;
+        color: #fff;
+        box-shadow: 0 4px 20px -4px rgba(99, 102, 241, 0.5);
+      }
+
+      /* Grid */
       .showcase-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-        gap: 20px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
       }
+
+      /* Card */
       .showcase-card {
+        --sc-mx: 50%;
+        --sc-my: 50%;
+        position: relative;
         background: var(--surface-1);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         overflow: hidden;
-        transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-          border-color 0.22s, box-shadow 0.22s;
+        cursor: pointer;
+        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+          border-color 0.25s, box-shadow 0.32s;
+      }
+      .showcase-card::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border-radius: inherit;
+        background: radial-gradient(
+          480px circle at var(--sc-mx) var(--sc-my),
+          rgba(129, 140, 248, 0.18),
+          transparent 50%
+        );
+        opacity: 0;
+        transition: opacity 0.35s;
+        z-index: 3;
+        pointer-events: none;
+      }
+      .showcase-card:hover::before {
+        opacity: 1;
+      }
+      .showcase-card.hidden {
+        display: none;
+      }
+      .showcase-card.entering {
+        animation: showcaseIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @keyframes showcaseIn {
+        from { opacity: 0; transform: scale(0.93) translateY(18px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
       }
       .showcase-card:hover {
-        transform: translateY(-5px);
-        border-color: var(--border-strong);
-        box-shadow: 0 30px 56px -22px rgba(99, 102, 241, 0.4);
+        transform: translateY(-6px);
+        border-color: rgba(129, 140, 248, 0.35);
+        box-shadow: 0 28px 56px -16px rgba(99, 102, 241, 0.4),
+          0 0 0 1px rgba(99, 102, 241, 0.1);
       }
+
+      /* Image area */
       .showcase-img {
         position: relative;
         aspect-ratio: 16 / 9;
@@ -830,27 +897,78 @@
         display: block;
         transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
       }
-      .showcase-card:hover .showcase-img img { transform: scale(1.04); }
+      .showcase-card:hover .showcase-img img {
+        transform: scale(1.05);
+      }
       .showcase-img::after {
         content: "";
         position: absolute;
         inset: 0;
-        background: linear-gradient(180deg, transparent 60%, rgba(7, 7, 11, 0.6));
+        background: linear-gradient(180deg, transparent 30%, rgba(7, 7, 11, 0.75));
         pointer-events: none;
+        transition: opacity 0.3s;
       }
-      .showcase-body { padding: 18px 20px 22px; }
-      .showcase-body h4 {
-        margin: 0 0 6px;
-        font-size: 15px;
+
+      /* Overlay — always visible for title, description fades in on hover */
+      .showcase-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 16px 18px;
+        z-index: 2;
+      }
+      .showcase-overlay h4 {
+        margin: 0 0 2px;
+        font-size: 14px;
         font-weight: 600;
-        letter-spacing: -0.01em;
+        color: #fff;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
       }
-      .showcase-body p {
+      .showcase-overlay p {
         margin: 0;
-        font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.55;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.72);
+        line-height: 1.45;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        max-height: 0;
+        opacity: 0;
+        overflow: hidden;
+        transition: max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.3s;
       }
+      .showcase-card:hover .showcase-overlay p {
+        max-height: 60px;
+        opacity: 1;
+      }
+      .showcase-expand-icon {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 18px;
+        padding: 2px;
+        opacity: 0;
+        transform: scale(0.8);
+        transition: opacity 0.25s, transform 0.25s;
+        z-index: 3;
+      }
+      .showcase-card:hover .showcase-expand-icon {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      /* Tags */
       .showcase-tag {
         display: inline-block;
         font-size: 10px;
@@ -859,17 +977,126 @@
         letter-spacing: 0.1em;
         padding: 2px 7px;
         border-radius: 4px;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
       }
       .showcase-tag.new {
-        background: rgba(52, 211, 153, 0.12);
+        background: rgba(52, 211, 153, 0.18);
         color: var(--emerald);
-        border: 1px solid rgba(52, 211, 153, 0.3);
+        border: 1px solid rgba(52, 211, 153, 0.35);
       }
       .showcase-tag.live {
-        background: rgba(244, 114, 182, 0.12);
+        background: rgba(244, 114, 182, 0.18);
         color: var(--pink);
-        border: 1px solid rgba(244, 114, 182, 0.3);
+        border: 1px solid rgba(244, 114, 182, 0.35);
+      }
+      .showcase-tag.ext {
+        background: rgba(59, 130, 246, 0.18);
+        color: var(--blue);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+      }
+
+      /* Lightbox */
+      .showcase-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s, visibility 0.3s;
+        cursor: zoom-out;
+      }
+      .showcase-lightbox.open {
+        opacity: 1;
+        visibility: visible;
+      }
+      .showcase-lightbox img {
+        max-width: 92vw;
+        max-height: 88vh;
+        border-radius: 12px;
+        box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
+        transform: scale(0.92);
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+        cursor: default;
+      }
+      .showcase-lightbox.open img {
+        transform: scale(1);
+      }
+      .showcase-lightbox-caption {
+        position: absolute;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(15, 15, 20, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 10px 20px;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+      .showcase-lightbox-close {
+        position: absolute;
+        top: 20px;
+        right: 24px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.2s;
+      }
+      .showcase-lightbox-close:hover {
+        background: rgba(255, 255, 255, 0.16);
+        transform: scale(1.1);
+      }
+      .showcase-lightbox-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.2s;
+      }
+      .showcase-lightbox-nav:hover {
+        background: rgba(255, 255, 255, 0.16);
+        transform: translateY(-50%) scale(1.1);
+      }
+      .showcase-lightbox-nav.prev { left: 20px; }
+      .showcase-lightbox-nav.next { right: 20px; }
+      .showcase-counter {
+        position: absolute;
+        top: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.05em;
       }
 
       /* ── INSTALL ──────────────────────────────────────── */
@@ -893,7 +1120,7 @@
         margin: 0 0 24px;
         font-size: 15px;
       }
-      .install-text .btn { margin-right: 10px; }
+      .install-text .btn { margin-right: 10px; margin-bottom: 8px; white-space: nowrap; }
       /* macOS-styled terminal window */
       .code-window {
         position: relative;
@@ -1162,91 +1389,104 @@
         line-height: 1.6;
       }
 
-      /* ── PAGES (one row per route) ───────────────────── */
+      /* ── PAGES (route cards) ─────────────────────────── */
       .pages-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px;
+      }
+      .page-card {
+        position: relative;
         display: flex;
         flex-direction: column;
-        gap: 8px;
-      }
-      .page-chip {
-        position: relative;
-        display: grid;
-        grid-template-columns: auto 1fr auto auto;
-        align-items: center;
-        gap: 16px;
-        padding: 16px 22px;
+        gap: 10px;
+        padding: 24px 22px 20px;
         background: var(--surface-1);
         border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
+        border-radius: var(--radius);
         text-decoration: none;
         color: var(--text);
-        transition:
-          transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
-          border-color 0.18s,
-          background 0.18s,
-          box-shadow 0.18s;
         overflow: hidden;
+        transition:
+          transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+          border-color 0.22s,
+          box-shadow 0.25s;
       }
-      .page-chip::before {
-        /* Soft left-edge accent that lights up on hover, taking the dot's
-           color via currentColor on the dot's parent. */
+      .page-card::before {
         content: "";
         position: absolute;
+        top: 0;
         left: 0;
-        top: 12%;
-        bottom: 12%;
-        width: 2px;
-        border-radius: 0 2px 2px 0;
-        background: transparent;
-        transition: background 0.2s;
+        right: 0;
+        height: 2px;
+        background: var(--page-accent, var(--accent));
+        opacity: 0;
+        transition: opacity 0.25s;
       }
-      .page-chip:hover {
-        transform: translateX(2px);
+      .page-card:hover {
+        transform: translateY(-4px);
         border-color: var(--border-strong);
-        background: var(--surface-2);
-        box-shadow: 0 10px 24px -14px rgba(99, 102, 241, 0.45);
+        box-shadow: 0 24px 48px -16px rgba(99, 102, 241, 0.35);
       }
-      .page-chip-dot {
-        width: 9px;
-        height: 9px;
+      .page-card:hover::before {
+        opacity: 1;
+      }
+      .page-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .page-card-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .page-card-dot {
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
+        background: var(--page-accent, var(--accent));
+        box-shadow: 0 0 8px var(--page-accent, var(--accent));
         flex-shrink: 0;
-        box-shadow: 0 0 8px currentColor;
       }
-      /* Drive the left-edge accent off the dot's color via the dot's
-         color: property — set inline in the markup. */
-      .page-chip:hover::before { background: currentColor; }
-      .page-chip-name {
+      .page-card-name {
         font-size: 15px;
         font-weight: 600;
-        letter-spacing: -0.005em;
-        color: var(--text);
+        letter-spacing: -0.01em;
       }
-      .page-chip-desc {
-        font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.5;
-      }
-      .page-chip code {
+      .page-card-route {
         font-family: "JetBrains Mono", ui-monospace, monospace;
-        font-size: 12.5px;
+        font-size: 11.5px;
         color: var(--text-dim);
         background: var(--bg-2);
-        padding: 4px 10px;
+        padding: 3px 10px;
         border-radius: 6px;
         border: 1px solid var(--border);
         white-space: nowrap;
-      }
-      .page-chip-arrow {
-        width: 18px;
-        height: 18px;
-        color: var(--text-dim);
         flex-shrink: 0;
-        transition: transform 0.2s, color 0.2s;
       }
-      .page-chip:hover .page-chip-arrow {
-        color: var(--accent);
-        transform: translateX(3px);
+      .page-card-desc {
+        font-size: 13.5px;
+        color: var(--text-muted);
+        line-height: 1.55;
+        margin: 0;
+      }
+      .page-card-arrow {
+        position: absolute;
+        bottom: 18px;
+        right: 18px;
+        width: 16px;
+        height: 16px;
+        color: var(--text-dim);
+        opacity: 0;
+        transform: translateX(-4px);
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .page-card:hover .page-card-arrow {
+        opacity: 1;
+        transform: translateX(0);
+        color: var(--page-accent, var(--accent));
       }
 
       /* ── STACK ──────────────────────────────────────── */
@@ -1262,6 +1502,15 @@
         padding: 18px;
         text-align: center;
         transition: transform 0.18s, border-color 0.18s, background 0.18s;
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      .stack-grid.visible .stack-item {
+        opacity: 1;
+        transform: translateY(0);
+        transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+          border-color 0.18s, background 0.18s;
       }
       .stack-item:hover {
         transform: translateY(-3px);
@@ -1295,7 +1544,7 @@
         border-radius: var(--radius);
         margin-bottom: 12px;
         overflow: hidden;
-        transition: border-color 0.2s;
+        transition: border-color 0.25s;
       }
       .faq-item[open] { border-color: var(--border-strong); }
       .faq-item summary {
@@ -1314,14 +1563,27 @@
         content: "+";
         font-size: 22px;
         color: var(--accent);
-        transition: transform 0.2s;
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
         line-height: 1;
         font-weight: 400;
+        flex-shrink: 0;
       }
-      .faq-item[open] summary::after {
+      .faq-item.faq-open summary::after {
         content: "−";
+        transform: rotate(180deg);
       }
-      .faq-item p {
+      .faq-answer {
+        display: grid;
+        grid-template-rows: 0fr;
+        transition: grid-template-rows 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .faq-item[open] .faq-answer {
+        /* JS controls grid-template-rows inline; this is the fallback */
+      }
+      .faq-answer-inner {
+        overflow: hidden;
+      }
+      .faq-answer-inner p {
         margin: 0;
         padding: 0 24px 22px;
         color: var(--text-muted);
@@ -1634,6 +1896,15 @@
       .reveal-stagger.visible > *:nth-child(10) { transition-delay: 540ms; }
       .reveal-stagger.visible > *:nth-child(11) { transition-delay: 600ms; }
       .reveal-stagger.visible > *:nth-child(12) { transition-delay: 660ms; }
+      .reveal-stagger.visible > *:nth-child(13) { transition-delay: 720ms; }
+      .reveal-stagger.visible > *:nth-child(14) { transition-delay: 780ms; }
+      .reveal-stagger.visible > *:nth-child(15) { transition-delay: 840ms; }
+      .reveal-stagger.visible > *:nth-child(16) { transition-delay: 900ms; }
+      .reveal-stagger.visible > *:nth-child(17) { transition-delay: 960ms; }
+      .reveal-stagger.visible > *:nth-child(18) { transition-delay: 1020ms; }
+      .reveal-stagger.visible > *:nth-child(19) { transition-delay: 1080ms; }
+      .reveal-stagger.visible > *:nth-child(20) { transition-delay: 1140ms; }
+      .reveal-stagger.visible > *:nth-child(21) { transition-delay: 1200ms; }
 
       @media (prefers-reduced-motion: reduce) {
         .reveal, .reveal-stagger > * {
@@ -1869,8 +2140,9 @@
         .feature-card h3 { font-size: 16.5px; }
         .feature-card p { font-size: 13.5px; }
 
-        .showcase-grid { gap: 16px; }
-        .showcase-body { padding: 16px 18px 20px; }
+        .showcase-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+        .showcase-overlay p { max-height: 60px; opacity: 1; }
+        .showcase-expand-icon { opacity: 1; transform: scale(1); }
 
         .install {
           grid-template-columns: 1fr;
@@ -1878,14 +2150,14 @@
           gap: 24px;
         }
         .install-text h3 { font-size: 24px; }
-        .install-text .btn { margin-right: 8px; margin-bottom: 8px; }
+        .install-text .btn { margin-right: 8px; margin-bottom: 8px; white-space: nowrap; }
 
         .values-grid, .archetype-grid, .how-grid, .pages-grid, .stack-grid { gap: 14px; }
         .archetype { padding: 22px 20px; }
         .how-step { padding: 22px 20px; }
 
         .faq-item summary { padding: 18px 20px; font-size: 14.5px; }
-        .faq-item p { padding: 0 20px 18px; }
+        .faq-answer-inner p { padding: 0 20px 18px; }
 
         .big-cta { padding: 64px 18px; }
         .big-cta-card { border-radius: 22px; }
@@ -1960,8 +2232,8 @@
         .feature-card { padding: 22px 18px 18px; }
 
         .showcase-grid { grid-template-columns: 1fr; gap: 14px; }
-        .showcase-body h4 { font-size: 16px; }
-        .showcase-body p { font-size: 13.5px; }
+        .showcase-filters { gap: 6px; }
+        .showcase-pill { font-size: 12px; padding: 6px 14px; }
 
         .install { padding: 22px 18px; border-radius: 14px; }
         .install-text h3 { font-size: 22px; }
@@ -1979,22 +2251,14 @@
         .values-grid, .archetype-grid, .how-grid {
           grid-template-columns: 1fr;
         }
-        /* Pages list — collapse the 4-col row to a 2-col stacked row so
-           the route code wraps under name+desc instead of getting squashed. */
-        .page-chip {
-          grid-template-columns: auto 1fr auto;
-          grid-template-areas:
-            "dot title arrow"
-            "dot desc  arrow"
-            "dot code  arrow";
-          gap: 4px 14px;
-          padding: 14px 18px;
+        .pages-grid { grid-template-columns: 1fr; }
+        .page-card {
+          padding: 18px 16px 16px;
+          gap: 8px;
         }
-        .page-chip-dot { grid-area: dot; align-self: start; margin-top: 6px; }
-        .page-chip-name { grid-area: title; }
-        .page-chip-desc { grid-area: desc; }
-        .page-chip code { grid-area: code; justify-self: start; margin-top: 4px; font-size: 11.5px; padding: 3px 8px; }
-        .page-chip-arrow { grid-area: arrow; align-self: center; }
+        .page-card-header { flex-wrap: wrap; gap: 8px; }
+        .page-card-name { font-size: 14px; }
+        .page-card-desc { font-size: 13px; }
         .stack-grid { grid-template-columns: repeat(2, 1fr); }
 
         .archetype { padding: 20px 18px; }
@@ -2005,7 +2269,7 @@
         .faq { padding: 0; }
         .faq-item summary { padding: 16px 18px; font-size: 14px; gap: 12px; }
         .faq-item summary::after { font-size: 20px; }
-        .faq-item p { padding: 0 18px 16px; font-size: 13.5px; }
+        .faq-answer-inner p { padding: 0 18px 16px; font-size: 13.5px; }
 
         .big-cta { padding: 48px 16px; }
         .big-cta-card { border-radius: 20px; }
@@ -2069,6 +2333,7 @@
         .archetype:hover,
         .how-step:hover,
         .stack-item:hover,
+        .page-card:hover,
         .nav-link:hover,
         .nav-cta:hover,
         .nav-wiki:hover,
@@ -2454,21 +2719,15 @@
             </p>
           </div>
           <div class="feature-card">
-            <span class="feature-tag">New</span>
             <div class="feature-icon emerald">▶</div>
             <h3>Run Claude in-browser</h3>
             <p>
               Spawn <code>claude</code> subprocesses with a chat-style streaming UI. Conversation
-              (multi-turn) or one-shot. Resume any past conversation in one click — the run page
-              spawns <code>claude --resume</code> and seeds the chat with the prior transcript. View
-              past one-shots inline as read-only. Re-attach is durable: leaving a resumed run and
-              coming back keeps the full chat and the token meter populated (no more 0/200k).
-              Slash-command + <code>@</code>-file autocomplete, live token meter, thinking-effort
-              field, and a limitations banner that tells you exactly which TUI features carry over.
+              or one-shot mode. Resume any past session in one click. Slash + <code>@</code>-file
+              autocomplete, live token meter, thinking-effort dial, and model picker.
             </p>
           </div>
           <div class="feature-card">
-            <span class="feature-tag">New</span>
             <div class="feature-icon amber">🧰</div>
             <h3>Claude Config Explorer</h3>
             <p>
@@ -2530,6 +2789,33 @@
               tooltip, Settings flow, Workflow narrative, Config Explorer tab, and Run page.
             </p>
           </div>
+          <div class="feature-card">
+            <div class="feature-icon cyan">📋</div>
+            <h3>Kanban board</h3>
+            <p>
+              Agents and sessions in toggleable views. Working / Waiting / Completed / Error /
+              Abandoned columns with card cost, model, and current tool at a glance. WebSocket-scoped
+              updates avoid unnecessary refetches.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon amber">📡</div>
+            <h3>Swagger API docs</h3>
+            <p>
+              Full OpenAPI 3.0 spec with interactive Swagger UI. Try-it-out controls for every
+              endpoint, request/response schemas, and collapsible endpoint groups - all served
+              locally alongside the dashboard.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon rose">🧩</div>
+            <h3>VS Code extension</h3>
+            <p>
+              Full dashboard sidebar inside VS Code. Monitor active sessions, view agents, and
+              track tool calls without leaving your editor. Ships as a VSIX with zero external
+              dependencies.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -2539,98 +2825,258 @@
           <div class="section-eyebrow">In action</div>
           <h2 class="section-title">See it for yourself.</h2>
           <p class="section-lead">
-            Six of the dashboard's most important pages - including the two newest: the in-browser
-            Run page with real character-by-character streaming and the 12-tab Config Explorer.
+            Every page of the dashboard, from real-time monitoring to config editing,
+            API docs, and even the VS Code extension. Click any screenshot to expand.
           </p>
         </div>
-        <div class="showcase-grid reveal-stagger">
-          <div class="showcase-card">
+
+        <div class="showcase-filters reveal">
+          <button class="showcase-pill active" data-filter="all">All</button>
+          <button class="showcase-pill" data-filter="dashboard">Dashboard</button>
+          <button class="showcase-pill" data-filter="sessions">Sessions</button>
+          <button class="showcase-pill" data-filter="board">Board &amp; Feed</button>
+          <button class="showcase-pill" data-filter="tools">Tools</button>
+          <button class="showcase-pill" data-filter="system">System &amp; Extensions</button>
+        </div>
+
+        <div class="showcase-grid reveal-stagger" id="showcase-grid">
+
+          <!-- ── Dashboard ──────────────────────── -->
+          <div class="showcase-card" data-cat="dashboard" data-title="Dashboard · Monitor">
             <div class="showcase-img">
-              <img src="images/run.png" alt="Run Claude - pre-run configuration screen" loading="lazy" />
-            </div>
-            <div class="showcase-body">
-              <span class="showcase-tag new">New</span>
-              <h4>Run Claude - pre-run config</h4>
-              <p>
-                Pick mode (Conversation / One-shot), source (new vs resume from history), working
-                directory with autocomplete, model, permission mode, and thinking effort.
-                Same-origin guard prevents drive-by spawning.
-              </p>
+              <img src="images/dashboard.png" alt="Dashboard overview with active agent cards and stats" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Dashboard · Monitor</h4>
+                <p>Overview stats, active agent cards, and recent activity feed</p>
+              </div>
             </div>
           </div>
-          <div class="showcase-card">
+          <div class="showcase-card" data-cat="dashboard" data-title="Dashboard · Health">
             <div class="showcase-img">
-              <img src="images/run-results.png" alt="Run Claude - live streaming output" loading="lazy" />
-            </div>
-            <div class="showcase-body">
-              <span class="showcase-tag live">Live</span>
-              <h4>Run Claude - live stream</h4>
-              <p>
-                Real character-by-character streaming via
-                <code>--include-partial-messages</code>. Slash + <code>@</code>-file autocomplete,
-                a live token meter, and a TUI-limitations banner come along for the ride. Tool uses,
-                tool results, and thinking blocks all collapsible.
-              </p>
+              <img src="images/dashboard-health.png" alt="Dashboard system health tab" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Dashboard · Health</h4>
+                <p>Composite health score, storage donut, cache/error/success gauges</p>
+              </div>
             </div>
           </div>
-          <div class="showcase-card">
+          <div class="showcase-card" data-cat="dashboard" data-title="Analytics">
             <div class="showcase-img">
-              <img src="images/config.png" alt="Claude Config Explorer - 12-tab inspector" loading="lazy" />
-            </div>
-            <div class="showcase-body">
-              <span class="showcase-tag new">New</span>
-              <h4>Claude Config Explorer</h4>
-              <p>
-                Twelve tabs covering plugins, skills, subagents, slash commands, output styles,
-                marketplaces, MCP servers, hooks, settings, memory, keybindings, and statusline.
-                Edits land with mandatory timestamped backups.
-              </p>
+              <img src="images/analytics.png" alt="Analytics page with token usage and heatmap" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Analytics</h4>
+                <p>Token usage, tool frequency, activity heatmap, session trends</p>
+              </div>
             </div>
           </div>
-          <div class="showcase-card">
+
+          <!-- ── Sessions ───────────────────────── -->
+          <div class="showcase-card" data-cat="sessions" data-title="Sessions List">
             <div class="showcase-img">
-              <img src="images/workflows.png" alt="Workflows visualization page" loading="lazy" />
-            </div>
-            <div class="showcase-body">
-              <h4>Workflows</h4>
-              <p>
-                D3-powered orchestration DAG, tool execution Sankey, collaboration network, error
-                propagation, concurrency timeline - 11 datasets with rich i18n tooltips.
-              </p>
+              <img src="images/sessions.png" alt="Sessions overview table" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Sessions</h4>
+                <p>Searchable, filterable, server-paginated table of recorded sessions</p>
+              </div>
             </div>
           </div>
-          <div class="showcase-card">
+          <div class="showcase-card" data-cat="sessions" data-title="Session Detail">
             <div class="showcase-img">
-              <img
-                src="images/session-conversation.png"
-                alt="Session Detail - Conversation tab"
-                loading="lazy"
-              />
-            </div>
-            <div class="showcase-body">
-              <h4>Session Conversation</h4>
-              <p>
-                Live transcript viewer with markdown rendering, syntax-highlighted code blocks,
-                line numbers, copy-to-clipboard, and per-tool styled tool calls (Bash terminal,
-                Edit diffs, Read paths).
-              </p>
+              <img src="images/session.png" alt="Session detail overview" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Session Detail</h4>
+                <p>Full session overview with metadata, cost, model, and tool breakdown</p>
+              </div>
             </div>
           </div>
-          <div class="showcase-card">
+          <div class="showcase-card" data-cat="sessions" data-title="Session · Conversation">
             <div class="showcase-img">
-              <img src="images/board.png" alt="Kanban Board - agents view" loading="lazy" />
-            </div>
-            <div class="showcase-body">
-              <h4>Kanban board</h4>
-              <p>
-                Agents and Sessions toggleable views - Working / Waiting / Completed / Error /
-                Abandoned. Card cost, model, and current tool at a glance. WebSocket-scoped so
-                off-view updates don't trigger refetches.
-              </p>
+              <img src="images/session-conversation.png" alt="Session conversation tab" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Session · Conversation</h4>
+                <p>Live transcript with markdown, syntax-highlighted code, and styled tool calls</p>
+              </div>
             </div>
           </div>
+          <div class="showcase-card" data-cat="sessions" data-title="Session · Agents">
+            <div class="showcase-img">
+              <img src="images/session-agents.png" alt="Session agents tab" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Session · Agents</h4>
+                <p>Overview tiles, subagent breakdown, and hierarchy tree</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="sessions" data-title="Session · Timeline">
+            <div class="showcase-img">
+              <img src="images/session-timeline.png" alt="Session timeline tab" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Session · Timeline</h4>
+                <p>Chronological event timeline with multi-dimension filters</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Board & Feed ───────────────────── -->
+          <div class="showcase-card" data-cat="board" data-title="Kanban Board · Agents">
+            <div class="showcase-img">
+              <img src="images/board.png" alt="Kanban board agents view" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Kanban Board · Agents</h4>
+                <p>Working / Waiting / Completed / Error columns with live WebSocket updates</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="board" data-title="Kanban Board · Sessions">
+            <div class="showcase-img">
+              <img src="images/board-sessions.png" alt="Kanban board sessions view" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Kanban Board · Sessions</h4>
+                <p>Sessions grouped by status across 5 columns</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="board" data-title="Activity Feed">
+            <div class="showcase-img">
+              <img src="images/feed.png" alt="Activity feed" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Activity Feed</h4>
+                <p>Real-time event log with pause/resume and multi-dimension filters</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Tools ──────────────────────────── -->
+          <div class="showcase-card" data-cat="tools" data-title="Run Claude · Config">
+            <div class="showcase-img">
+              <img src="images/run.png" alt="Run Claude pre-run configuration" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <span class="showcase-tag new">New</span>
+                <h4>Run Claude · Config</h4>
+                <p>Pick mode, source, cwd, model, permissions, and thinking effort</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="tools" data-title="Run Claude · Live Stream">
+            <div class="showcase-img">
+              <img src="images/run-results.png" alt="Run Claude live streaming output" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <span class="showcase-tag live">Live</span>
+                <h4>Run Claude · Live Stream</h4>
+                <p>Character-by-character streaming with collapsible tool calls and thinking blocks</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="tools" data-title="Claude Config Explorer">
+            <div class="showcase-img">
+              <img src="images/config.png" alt="Claude Config Explorer 12-tab inspector" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <span class="showcase-tag new">New</span>
+                <h4>Claude Config Explorer</h4>
+                <p>12 tabs: plugins, skills, subagents, slash commands, MCP servers, hooks, and more</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="tools" data-title="Workflows">
+            <div class="showcase-img">
+              <img src="images/workflows.png" alt="Workflows visualization" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Workflows</h4>
+                <p>D3-powered orchestration DAG, tool Sankey, collaboration network</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── System & Extensions ────────────── -->
+          <div class="showcase-card" data-cat="system" data-title="Settings">
+            <div class="showcase-img">
+              <img src="images/settings.png" alt="Settings page" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Settings</h4>
+                <p>Model pricing rules, data management, and system information</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="system" data-title="Swagger API Docs">
+            <div class="showcase-img">
+              <img src="images/swagger.png" alt="Swagger OpenAPI documentation" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Swagger API Docs</h4>
+                <p>Interactive OpenAPI 3.0 spec with try-it-out controls</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="system" data-title="MCP Server">
+            <div class="showcase-img">
+              <img src="images/mcp.png" alt="MCP Server interactive REPL" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>MCP Server</h4>
+                <p>Interactive REPL exposing dashboard tools for Claude Code integration</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="system" data-title="Update Checker">
+            <div class="showcase-img">
+              <img src="images/update.png" alt="Update checker modal" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Update Checker</h4>
+                <p>Commits-behind count with one-click copy-to-clipboard update command</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="system" data-title="VS Code Extension">
+            <div class="showcase-img">
+              <img src="vscode-extension/vscode.png" alt="VS Code extension sidebar" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <span class="showcase-tag ext">Extension</span>
+                <h4>VS Code Extension</h4>
+                <p>Full dashboard sidebar inside VS Code with session monitoring</p>
+              </div>
+            </div>
+          </div>
+          <div class="showcase-card" data-cat="system" data-title="Import History">
+            <div class="showcase-img">
+              <img src="images/import.png" alt="Import history settings panel" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Import History</h4>
+                <p>Rescan default folder, scan custom paths, upload archives with progress</p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
+
+      <!-- Lightbox -->
+      <div class="showcase-lightbox" id="showcase-lightbox">
+        <button class="showcase-lightbox-close" aria-label="Close">✕</button>
+        <button class="showcase-lightbox-nav prev" aria-label="Previous">‹</button>
+        <button class="showcase-lightbox-nav next" aria-label="Next">›</button>
+        <span class="showcase-counter" id="showcase-counter"></span>
+        <img src="" alt="" id="showcase-lightbox-img" />
+        <div class="showcase-lightbox-caption" id="showcase-lightbox-caption"></div>
+      </div>
 
       <!-- ─── HOW IT WORKS ───────────────────────────────── -->
       <section id="how" class="container">
@@ -2774,6 +3220,32 @@
               <span class="archetype-tag">DAGs</span>
             </div>
           </div>
+          <div class="archetype" style="--archetype-accent: var(--amber)">
+            <div class="archetype-name">07 - Team lead</div>
+            <h4>Keep the squad aligned</h4>
+            <p>
+              See who's running what, which sessions are active across the team, and how many
+              tokens each project consumes. Kanban board and activity feed keep standups honest.
+            </p>
+            <div class="archetype-tags">
+              <span class="archetype-tag">Board</span>
+              <span class="archetype-tag">Feed</span>
+              <span class="archetype-tag">Multi-project</span>
+            </div>
+          </div>
+          <div class="archetype" style="--archetype-accent: var(--blue)">
+            <div class="archetype-name">08 - VS Code native</div>
+            <h4>Monitor without leaving the editor</h4>
+            <p>
+              Use the VS Code extension sidebar to watch sessions and tool calls while you code.
+              No browser tab needed — everything docks into VS Code as a side panel.
+            </p>
+            <div class="archetype-tags">
+              <span class="archetype-tag">VS Code</span>
+              <span class="archetype-tag">Extension</span>
+              <span class="archetype-tag">Sidebar</span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -2790,7 +3262,7 @@
         </div>
         <div class="install reveal">
           <div class="install-text">
-            <h3>Three commands.</h3>
+            <h3>Four commands.</h3>
             <p>
               No accounts, no cloud, no telemetry. Everything stays on your machine. Existing
               sessions in <code>~/.claude/projects</code> import on first start.
@@ -2834,6 +3306,9 @@
 <span class="prompt">$</span><span class="str">cd</span> Claude-Code-Agent-Monitor
 <span class="prompt">$</span>npm run setup
 
+<span class="comment"># Install the hooks</span>
+<span class="prompt">$</span>npm run install-hooks
+
 <span class="comment"># Start the dashboard (server + Vite)</span>
 <span class="prompt">$</span>npm run dev
 
@@ -2856,75 +3331,85 @@
           </p>
         </div>
         <div class="pages-grid reveal-stagger">
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--accent); color: var(--accent)"></span>
-            <span class="page-chip-name">Dashboard</span>
-            <span class="page-chip-desc">Live overview of every active session, agent, and tool call across all projects.</span>
-            <code>/</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-dashboard" class="page-card" style="--page-accent: var(--accent)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Dashboard</span></div>
+              <code class="page-card-route">/</code>
+            </div>
+            <p class="page-card-desc">Live overview of every active session, agent, and tool call across all projects.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--emerald); color: var(--emerald)"></span>
-            <span class="page-chip-name">Kanban</span>
-            <span class="page-chip-desc">Drag-free swim lanes by agent status — waiting, working, completed, error, abandoned.</span>
-            <code>/kanban</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-kanban" class="page-card" style="--page-accent: var(--emerald)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Kanban</span></div>
+              <code class="page-card-route">/kanban</code>
+            </div>
+            <p class="page-card-desc">Drag-free swim lanes by agent status — waiting, working, completed, error, abandoned.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--cyan); color: var(--cyan)"></span>
-            <span class="page-chip-name">Sessions</span>
-            <span class="page-chip-desc">Searchable, filterable list of every session with token, cost, and status facets.</span>
-            <code>/sessions</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-sessions" class="page-card" style="--page-accent: var(--cyan)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Sessions</span></div>
+              <code class="page-card-route">/sessions</code>
+            </div>
+            <p class="page-card-desc">Searchable, filterable list of every session with token, cost, and status facets.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--pink); color: var(--pink)"></span>
-            <span class="page-chip-name">Session detail</span>
-            <span class="page-chip-desc">Full conversation transcript, agent tree, tool calls, errors, and per-turn token cost.</span>
-            <code>/sessions/:id</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-session-detail" class="page-card" style="--page-accent: var(--pink)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Session detail</span></div>
+              <code class="page-card-route">/sessions/:id</code>
+            </div>
+            <p class="page-card-desc">Full conversation transcript, agent tree, tool calls, errors, and per-turn token cost.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--violet); color: var(--violet)"></span>
-            <span class="page-chip-name">Activity feed</span>
-            <span class="page-chip-desc">Real-time event log with grouping, multi-dimension filters, and pause / resume.</span>
-            <code>/activity</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-activity" class="page-card" style="--page-accent: var(--violet)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Activity feed</span></div>
+              <code class="page-card-route">/activity</code>
+            </div>
+            <p class="page-card-desc">Real-time event log with grouping, multi-dimension filters, and pause / resume.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--amber); color: var(--amber)"></span>
-            <span class="page-chip-name">Analytics</span>
-            <span class="page-chip-desc">Cost trends, model mix, tool usage, error rates, productivity heatmaps — 11 datasets.</span>
-            <code>/analytics</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-analytics" class="page-card" style="--page-accent: var(--amber)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Analytics</span></div>
+              <code class="page-card-route">/analytics</code>
+            </div>
+            <p class="page-card-desc">Cost trends, model mix, tool usage, error rates, productivity heatmaps — 11 datasets.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--rose); color: var(--rose)"></span>
-            <span class="page-chip-name">Workflows</span>
-            <span class="page-chip-desc">D3-rendered subagent DAGs, propagation maps, and complexity bubbles per session.</span>
-            <code>/workflows</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-workflows" class="page-card" style="--page-accent: var(--rose)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Workflows</span></div>
+              <code class="page-card-route">/workflows</code>
+            </div>
+            <p class="page-card-desc">D3-rendered subagent DAGs, propagation maps, and complexity bubbles per session.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--amber); color: var(--amber)"></span>
-            <span class="page-chip-name">Config Explorer</span>
-            <span class="page-chip-desc">12-tab inspector for skills, subagents, plugins, MCP, hooks, settings, memory, and more.</span>
-            <code>/cc-config</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-config" class="page-card" style="--page-accent: var(--amber)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Config Explorer</span></div>
+              <code class="page-card-route">/cc-config</code>
+            </div>
+            <p class="page-card-desc">12-tab inspector for skills, subagents, plugins, MCP, hooks, settings, memory, and more.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--emerald); color: var(--emerald)"></span>
-            <span class="page-chip-name">Run Claude</span>
-            <span class="page-chip-desc">Spawn, resume, attach, and stream Claude subprocesses straight from the browser.</span>
-            <code>/run</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-run" class="page-card" style="--page-accent: var(--emerald)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Run Claude</span></div>
+              <code class="page-card-route">/run</code>
+            </div>
+            <p class="page-card-desc">Spawn, resume, attach, and stream Claude subprocesses straight from the browser with full config control.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
-          <a href="wiki/#settings-page" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--text-dim); color: var(--text-dim)"></span>
-            <span class="page-chip-name">Settings</span>
-            <span class="page-chip-desc">Pricing rules, hook installer, notification setup, theme, language, and data tools.</span>
-            <code>/settings</code>
-            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
+          <a href="wiki/#ss-settings" class="page-card" style="--page-accent: var(--text-dim)" target="_blank" rel="noopener noreferrer">
+            <div class="page-card-header">
+              <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Settings</span></div>
+              <code class="page-card-route">/settings</code>
+            </div>
+            <p class="page-card-desc">Pricing rules, hook installer, notification setup, theme, language, and data tools.</p>
+            <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
         </div>
       </section>
@@ -2939,7 +3424,7 @@
             authentication providers. Just your machine + the tools that actually matter.
           </p>
         </div>
-        <div class="stack-grid reveal-stagger">
+        <div class="stack-grid reveal" id="stack-grid">
           <div class="stack-item"><div class="stack-item-icon">⚛️</div><div class="stack-item-name">React 18</div><div class="stack-item-desc">+ TypeScript 5</div></div>
           <div class="stack-item"><div class="stack-item-icon">⚡</div><div class="stack-item-name">Vite 6</div><div class="stack-item-desc">HMR + bundle</div></div>
           <div class="stack-item"><div class="stack-item-icon">🚂</div><div class="stack-item-name">Express 4</div><div class="stack-item-desc">Node.js 18+</div></div>
@@ -2989,79 +3474,93 @@
         <div class="faq reveal-stagger">
           <details class="faq-item">
             <summary>Does this send any data to the cloud?</summary>
-            <p>
-              No. The dashboard is a 100% local-first Node.js + React app that reads your existing
-              <code>~/.claude/</code> directory and writes to a local SQLite file. There is zero
-              telemetry, zero analytics, no third-party calls. The MCP server is bound to
-              localhost. Web Push notifications use VAPID and only push to subscribers who
-              explicitly opted in via your own browser.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                No. The dashboard is a 100% local-first Node.js + React app that reads your existing
+                <code>~/.claude/</code> directory and writes to a local SQLite file. There is zero
+                telemetry, zero analytics, no third-party calls. The MCP server is bound to
+                localhost. Web Push notifications use VAPID and only push to subscribers who
+                explicitly opted in via your own browser.
+              </p>
+            </div></div>
           </details>
           <details class="faq-item">
             <summary>How does it integrate with Claude Code?</summary>
-            <p>
-              Claude Code's native hook system. <code>npm run setup</code> installs hook entries
-              into <code>~/.claude/settings.json</code> that POST every SessionStart, PreToolUse,
-              PostToolUse, Stop, SubagentStop, and Notification event to the local server. Hooks
-              always exit zero so they never block your CLI; if the dashboard is down, your
-              workflow is unaffected and events resume capture as soon as it's back.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                Claude Code's native hook system. <code>npm run setup</code> installs hook entries
+                into <code>~/.claude/settings.json</code> that POST every SessionStart, PreToolUse,
+                PostToolUse, Stop, SubagentStop, and Notification event to the local server. Hooks
+                always exit zero so they never block your CLI; if the dashboard is down, your
+                workflow is unaffected and events resume capture as soon as it's back.
+              </p>
+            </div></div>
           </details>
           <details class="faq-item">
             <summary>Will running Claude from the dashboard cost extra tokens?</summary>
-            <p>
-              The Run page spawns real <code>claude</code> processes - they consume your normal
-              Claude Code quota / API tokens, the same as if you ran them in your terminal. The
-              dashboard adds no overhead. The cost-tracking analytics show you exactly what each
-              run consumes, by model, with compaction-aware accounting.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                The Run page spawns real <code>claude</code> processes - they consume your normal
+                Claude Code quota / API tokens, the same as if you ran them in your terminal. The
+                dashboard adds no overhead. The cost-tracking analytics show you exactly what each
+                run consumes, by model, with compaction-aware accounting.
+              </p>
+            </div></div>
           </details>
           <details class="faq-item">
             <summary>Can I resume any session, even ones I didn't start in the dashboard?</summary>
-            <p>
-              Yes. The Run page's "Resume existing session" picker lets you select any session
-              from your full history (everything that's ever lived in
-              <code>~/.claude/projects/</code>), spawn <code>claude --resume &lt;id&gt;</code> with
-              the original cwd, and continue the conversation from where it left off - directly
-              in your browser.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                Yes. The Run page's "Resume existing session" picker lets you select any session
+                from your full history (everything that's ever lived in
+                <code>~/.claude/projects/</code>), spawn <code>claude --resume &lt;id&gt;</code> with
+                the original cwd, and continue the conversation from where it left off - directly
+                in your browser.
+              </p>
+            </div></div>
           </details>
           <details class="faq-item">
             <summary>Does the Run page have feature parity with the terminal TUI?</summary>
-            <p>
-              Most of what matters, with the limits the stream-json interface forces on us. We
-              support slash-command autocomplete (user / project / plugin commands expanded
-              client-side, plus built-in CLI commands flagged "CLI only - won't run from here"),
-              <code>@</code>-file references with debounced cwd-scoped fuzzy search, a live
-              context-window / token meter showing input + output + cache-read with cost, a
-              thinking-effort field wired to <code>--effort</code>, multi-turn conversation,
-              session resume, real character-by-character streaming, and full hook capture. What
-              <em>doesn't</em> carry over is the TUI itself - in-place tool approval prompts,
-              interactive <code>/login</code> / <code>/init</code>, the keybinding overlay - those
-              are CLI-only. There's a collapsible limitations banner on the Run page that spells
-              out exactly which is which, and any session can be popped open in your terminal
-              with <code>claude --resume &lt;id&gt;</code>.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                Most of what matters, with the limits the stream-json interface forces on us. We
+                support slash-command autocomplete (user / project / plugin commands expanded
+                client-side, plus built-in CLI commands flagged "CLI only - won't run from here"),
+                <code>@</code>-file references with debounced cwd-scoped fuzzy search, a live
+                context-window / token meter showing input + output + cache-read with cost, a
+                thinking-effort field wired to <code>--effort</code>, multi-turn conversation,
+                session resume, real character-by-character streaming, and full hook capture. What
+                <em>doesn't</em> carry over is the TUI itself - in-place tool approval prompts,
+                interactive <code>/login</code> / <code>/init</code>, the keybinding overlay - those
+                are CLI-only. There's a collapsible limitations banner on the Run page that spells
+                out exactly which is which, and any session can be popped open in your terminal
+                with <code>claude --resume &lt;id&gt;</code>.
+              </p>
+            </div></div>
           </details>
           <details class="faq-item">
             <summary>Is it safe to edit my skills / agents from the Config Explorer?</summary>
-            <p>
-              Yes. Every mutation creates a timestamped backup in
-              <code>&lt;CLAUDE_HOME&gt;/cc-config-backups/&lt;type&gt;/</code> before writing. Backups land
-              outside the directories Claude Code scans, so a deleted skill cannot resurface as a
-              backup-named one. Writes are atomic via temp file + rename. Plugins, MCP servers,
-              hooks-in-settings, and live <code>settings.json</code> files are intentionally
-              read-only because they have concurrent-write races with the running CLI.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                Yes. Every mutation creates a timestamped backup in
+                <code>&lt;CLAUDE_HOME&gt;/cc-config-backups/&lt;type&gt;/</code> before writing. Backups land
+                outside the directories Claude Code scans, so a deleted skill cannot resurface as a
+                backup-named one. Writes are atomic via temp file + rename. Plugins, MCP servers,
+                hooks-in-settings, and live <code>settings.json</code> files are intentionally
+                read-only because they have concurrent-write races with the running CLI.
+              </p>
+            </div></div>
           </details>
           <details class="faq-item">
             <summary>What about scaling / multi-user?</summary>
-            <p>
-              The default deployment mode is single-user, localhost-bound. For team setups we ship
-              Docker / Podman compose files, Kubernetes manifests with Kustomize, Terraform
-              modules for AWS/GCP/Azure/OCI, Helm charts, and Prometheus/Grafana observability -
-              see the <a href="wiki/#deployment" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">deployment guide</a>.
-            </p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                The default deployment mode is single-user, localhost-bound. For team setups we ship
+                Docker / Podman compose files, Kubernetes manifests with Kustomize, Terraform
+                modules for AWS/GCP/Azure/OCI, Helm charts, and Prometheus/Grafana observability -
+                see the <a href="wiki/#deployment" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">deployment guide</a>.
+              </p>
+            </div></div>
           </details>
         </div>
       </section>
@@ -3275,6 +3774,27 @@
       );
       document.querySelectorAll(".reveal, .reveal-stagger").forEach((el) => io.observe(el));
 
+      // ── Stack grid stagger (JS-driven for 30+ items) ───
+      const stackGrid = document.getElementById("stack-grid");
+      if (stackGrid) {
+        const stackIo = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                const items = stackGrid.querySelectorAll(".stack-item");
+                items.forEach((item, i) => {
+                  item.style.transitionDelay = (i * 30) + "ms";
+                });
+                stackGrid.classList.add("visible");
+                stackIo.unobserve(stackGrid);
+              }
+            });
+          },
+          { threshold: 0.05 }
+        );
+        stackIo.observe(stackGrid);
+      }
+
       // ── Count-up animation for stats ─────────────────────
       // When a [data-count] number scrolls into view, animate from 0 to its
       // target with eased deceleration. Uses rAF; respects reduced motion.
@@ -3322,6 +3842,101 @@
         });
       });
 
+      // ── Cursor-follow glow on showcase cards ────────────
+      document.querySelectorAll(".showcase-card").forEach((card) => {
+        card.addEventListener("mousemove", (e) => {
+          const r = card.getBoundingClientRect();
+          card.style.setProperty("--sc-mx", ((e.clientX - r.left) / r.width) * 100 + "%");
+          card.style.setProperty("--sc-my", ((e.clientY - r.top) / r.height) * 100 + "%");
+        });
+      });
+
+      // ── Showcase filter & lightbox ──────────────────────
+      (function () {
+        const pills = document.querySelectorAll(".showcase-pill");
+        const cards = document.querySelectorAll(".showcase-card");
+        const lightbox = document.getElementById("showcase-lightbox");
+        const lbImg = document.getElementById("showcase-lightbox-img");
+        const lbCaption = document.getElementById("showcase-lightbox-caption");
+        const lbCounter = document.getElementById("showcase-counter");
+        let visibleCards = [];
+        let lbIndex = 0;
+
+        // Filter
+        pills.forEach((pill) => {
+          pill.addEventListener("click", () => {
+            pills.forEach((p) => p.classList.remove("active"));
+            pill.classList.add("active");
+            const filter = pill.dataset.filter;
+            let delay = 0;
+            cards.forEach((card) => {
+              const show = filter === "all" || card.dataset.cat === filter;
+              card.classList.toggle("hidden", !show);
+              if (show) {
+                card.classList.remove("entering");
+                void card.offsetWidth;
+                card.style.animationDelay = delay + "ms";
+                card.classList.add("entering");
+                delay += 40;
+              }
+            });
+            updateVisibleCards();
+          });
+        });
+
+        function updateVisibleCards() {
+          visibleCards = Array.from(cards).filter((c) => !c.classList.contains("hidden"));
+        }
+        updateVisibleCards();
+
+        // Lightbox open
+        cards.forEach((card) => {
+          card.addEventListener("click", () => {
+            updateVisibleCards();
+            lbIndex = visibleCards.indexOf(card);
+            openLightbox();
+          });
+        });
+
+        function openLightbox() {
+          const card = visibleCards[lbIndex];
+          if (!card) return;
+          const img = card.querySelector("img");
+          lbImg.src = img.src;
+          lbImg.alt = img.alt;
+          lbCaption.textContent = card.dataset.title || "";
+          lbCounter.textContent = (lbIndex + 1) + " / " + visibleCards.length;
+          lightbox.classList.add("open");
+          document.body.style.overflow = "hidden";
+        }
+
+        function closeLightbox() {
+          lightbox.classList.remove("open");
+          document.body.style.overflow = "";
+        }
+
+        lightbox.querySelector(".showcase-lightbox-close").addEventListener("click", closeLightbox);
+        lightbox.addEventListener("click", (e) => {
+          if (e.target === lightbox) closeLightbox();
+        });
+        lightbox.querySelector(".prev").addEventListener("click", (e) => {
+          e.stopPropagation();
+          lbIndex = (lbIndex - 1 + visibleCards.length) % visibleCards.length;
+          openLightbox();
+        });
+        lightbox.querySelector(".next").addEventListener("click", (e) => {
+          e.stopPropagation();
+          lbIndex = (lbIndex + 1) % visibleCards.length;
+          openLightbox();
+        });
+        document.addEventListener("keydown", (e) => {
+          if (!lightbox.classList.contains("open")) return;
+          if (e.key === "Escape") closeLightbox();
+          if (e.key === "ArrowLeft") { lbIndex = (lbIndex - 1 + visibleCards.length) % visibleCards.length; openLightbox(); }
+          if (e.key === "ArrowRight") { lbIndex = (lbIndex + 1) % visibleCards.length; openLightbox(); }
+        });
+      })();
+
       // ── Cursor-follow glow on the hero mockup ────────────
       // Big screenshot under the hero — radial glow tracks the cursor while
       // the user hovers, paired with the lift + scale defined in CSS.
@@ -3331,6 +3946,20 @@
           const r = heroMockup.getBoundingClientRect();
           heroMockup.style.setProperty("--mock-mx", ((e.clientX - r.left) / r.width) * 100 + "%");
           heroMockup.style.setProperty("--mock-my", ((e.clientY - r.top) / r.height) * 100 + "%");
+        });
+        heroMockup.addEventListener("click", () => {
+          const lb = document.getElementById("showcase-lightbox");
+          const lbImg = document.getElementById("showcase-lightbox-img");
+          const lbCaption = document.getElementById("showcase-lightbox-caption");
+          const lbCounter = document.getElementById("showcase-counter");
+          const img = heroMockup.querySelector("img");
+          if (!lb || !lbImg || !img) return;
+          lbImg.src = img.src;
+          lbImg.alt = img.alt;
+          if (lbCaption) lbCaption.textContent = "Analytics";
+          if (lbCounter) lbCounter.textContent = "";
+          lb.classList.add("open");
+          document.body.style.overflow = "hidden";
         });
       }
 
@@ -3413,25 +4042,76 @@ npm run setup
 npm run dev
 # then open http://localhost:4820`;
         const label = btn.querySelector(".copy-label");
-        const setText = (s) => {
-          if (label) label.textContent = s;
-          else btn.textContent = s;
-        };
+        const svgEl = btn.querySelector("svg");
+        const copySvg = '<rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />';
+        const checkSvg = '<polyline points="20 6 9 17 4 12" />';
         navigator.clipboard
           .writeText(text)
           .then(() => {
-            setText("Copied");
+            if (label) label.textContent = "Copied";
+            if (svgEl) svgEl.innerHTML = checkSvg;
             btn.classList.add("copied");
             setTimeout(() => {
-              setText("Copy");
+              if (label) label.textContent = "Copy";
+              if (svgEl) svgEl.innerHTML = copySvg;
               btn.classList.remove("copied");
             }, 1800);
           })
           .catch(() => {
-            setText("Press ⌘C");
-            setTimeout(() => setText("Copy"), 1800);
+            if (label) label.textContent = "Press ⌘C";
+            setTimeout(() => { if (label) label.textContent = "Copy"; }, 1800);
           });
       }
+    </script>
+    <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
+
+    <!-- FAQ smooth accordion -->
+    <script>
+    (function () {
+      document.querySelectorAll(".faq-item").forEach(function (details) {
+        var summary = details.querySelector("summary");
+        var answer = details.querySelector(".faq-answer");
+        if (!summary || !answer) return;
+
+        var animId = 0; // monotonic ID to cancel stale callbacks
+
+        summary.addEventListener("click", function (e) {
+          e.preventDefault();
+          var myId = ++animId;
+
+          if (details.open) {
+            /* ── Close ── */
+            details.classList.remove("faq-open");
+            // Force current height so transition has a start value
+            var h = answer.querySelector(".faq-answer-inner").scrollHeight;
+            answer.style.gridTemplateRows = h + "fr";
+            void answer.offsetHeight; // force reflow
+            answer.style.gridTemplateRows = "0fr";
+
+            answer.addEventListener("transitionend", function handler(ev) {
+              if (ev.propertyName !== "grid-template-rows") return;
+              answer.removeEventListener("transitionend", handler);
+              if (animId !== myId) return; // superseded
+              details.open = false;
+              answer.style.gridTemplateRows = "";
+            });
+          } else {
+            /* ── Open ── */
+            details.open = true;
+            details.classList.add("faq-open");
+            answer.style.gridTemplateRows = "0fr";
+            void answer.offsetHeight; // force reflow
+            answer.style.gridTemplateRows = "1fr";
+
+            answer.addEventListener("transitionend", function handler(ev) {
+              if (ev.propertyName !== "grid-template-rows") return;
+              answer.removeEventListener("transitionend", handler);
+              if (animId !== myId) return; // superseded
+            });
+          }
+        });
+      });
+    })();
     </script>
   </body>
 </html>

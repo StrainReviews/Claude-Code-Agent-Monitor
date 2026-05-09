@@ -5,6 +5,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="apple-touch-icon" href="../favicon.svg" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Claude Code Agent Monitor - Project Wiki</title>
     <meta
       name="description"
@@ -78,7 +82,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     />
-    <link rel="stylesheet" href="style.css?v=1" />
+    <link rel="stylesheet" href="style.css?v=6" />
 
     <!-- Global page styles -->
     <style>
@@ -349,11 +353,7 @@
         #feature-carousel .feature-card p {
           font-size: 12.5px;
           line-height: 1.55;
-          max-height: 13.95em;
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-line-clamp: 9;
-          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 7;
         }
         #feature-carousel .carousel-controls {
           display: flex;
@@ -423,8 +423,7 @@
         #feature-carousel .feature-card p {
           font-size: 12px;
           line-height: 1.5;
-          max-height: 12em;
-          -webkit-line-clamp: 8;
+          -webkit-line-clamp: 7;
         }
       }
       @media (max-width: 1400px) {
@@ -814,219 +813,252 @@
               <div class="carousel-track">
                 <div class="feature-card">
                   <div class="feature-icon ic-indigo">📡</div>
-                  <h3>Live Dashboard</h3>
+                  <h3 id="feat-dashboard">Live Dashboard</h3>
                   <p>
-                    Two tabs: <strong>Monitor</strong> — overview stats, active agent cards with
-                    collapsible subagent hierarchy, and recent activity feed with dynamic item counts
-                    that fill available viewport height. <strong>Health</strong> — composite system
+                    Two tabs: <strong>Monitor</strong> shows overview stats, active agent cards with
+                    collapsible subagent hierarchy, and a recent activity feed whose item count fills
+                    available viewport height. <strong>Health</strong> renders a composite system
                     health score ring, storage engine donut chart, cache/error/success gauges, tool
-                    invocation bars, subagent effectiveness, model token distribution, and compaction
-                    stats — all auto-refreshing every 5 seconds via WebSocket.
+                    invocation bars, subagent effectiveness ratios, model token distribution, and
+                    compaction stats. Both tabs auto-refresh every 5 seconds via WebSocket push so
+                    the view is always current without manual reload.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-emerald">📋</div>
-                  <h3>Kanban Board</h3>
+                  <h3 id="feat-kanban">Kanban Board</h3>
                   <p>
                     Toggle between <strong>Agents</strong> (Working / Waiting / Completed /
                     Error) and <strong>Sessions</strong> (Active / Waiting / Completed / Error /
-                    Abandoned). Yellow <strong>Waiting</strong> column flags rows sitting on the
-                    user — fresh prompt, between turns, or permission gate. Hover headers for
-                    lifecycle tooltips. Cards show model, cost, and current tool.
+                    Abandoned) swim lanes. A yellow <strong>Waiting</strong> column flags items
+                    sitting on the user — fresh prompt, between turns, or permission gate. Hover
+                    any column header for lifecycle tooltips explaining each state transition.
+                    Cards surface model name, cumulative cost, and the current tool being called.
+                    Counts update in real time via WebSocket so the board is always in sync with
+                    the live event store.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-amber">📂</div>
-                  <h3>Sessions Table</h3>
+                  <h3 id="feat-sessions">Sessions Table</h3>
                   <p>
                     <strong>Server-paginated</strong> table of every recorded session — each page
-                    fetches only its rows so cost computation is bounded regardless of how many
-                    sessions exist. Search (case-insensitive across <code>id</code>,
-                    <code>name</code>, <code>cwd</code>) runs server-side via <code>?q=</code> with
-                    a 300 ms debounce; status filter and search compose. Status badges, agent
-                    counts, duration, and model info on each row; click to drill into detail.
+                    fetches only its slice so cost computation stays bounded no matter how many
+                    sessions exist. Case-insensitive search across <code>id</code>,
+                    <code>name</code>, and <code>cwd</code> runs server-side with a 300 ms
+                    debounce; the status filter composes with search for precise narrowing.
+                    Each row shows status badge, agent count, duration, model, and estimated cost.
+                    Click any row to drill into the full session detail view with conversation
+                    transcript and agent hierarchy.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-violet">🔬</div>
-                  <h3>Session Detail</h3>
+                  <h3 id="feat-session-detail">Session Detail</h3>
                   <p>
-                    Per-session agent hierarchy tree (parent/child with expand/collapse) and full
-                    chronological event timeline with tool names and summaries.
+                    Per-session deep dive with a collapsible agent hierarchy tree and a full
+                    chronological event timeline showing every tool call name and summary. An
+                    overview panel at the top surfaces tile counters for events, tool calls,
+                    subagents, compactions, errors, and duration. Top-tool usage bars and a
+                    subagent type breakdown give quick distribution reads. The conversation
+                    viewer renders markdown with syntax highlighting and per-tool styled blocks.
+                    Export the entire session as JSON or share the permalink for async review.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-pink">📰</div>
-                  <h3>Activity Feed</h3>
+                  <h3 id="feat-activity">Activity Feed</h3>
                   <p>
                     Real-time streaming event log showing tool calls, agent state changes, errors,
-                    and compaction events as they happen. Pause/resume with buffering, paginated
-                    history, and automatic scrolling. Click any event row to expand its full hook
-                    payload inline; a dedicated <strong>Session →</strong> button at the right of
-                    each row navigates directly to session details without affecting the expanded
-                    state. Each entry is color-coded by event type.
+                    and compaction events as they arrive. Pause/resume with automatic buffering,
+                    paginated history for scrollback, and auto-scrolling to the latest entry.
+                    Click any row to expand its full hook payload inline. A dedicated
+                    <strong>Session →</strong> button navigates directly to session detail without
+                    collapsing the expanded state. Every entry is color-coded by event type and
+                    grouped by session for quick scanning of concurrent work.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-cyan">📊</div>
-                  <h3>Analytics</h3>
+                  <h3 id="feat-analytics">Analytics</h3>
                   <p>
-                    Token usage breakdown by model, tool frequency bar charts, agent type distribution,
-                    52-week activity heatmap (day-of-week aligned with tooltips), 30-day sparkline
-                    trends, session outcome donut charts, and cost summary. Live/offline indicator
-                    with auto-refresh.
+                    Token usage breakdown by model with stacked bar charts, tool frequency
+                    rankings, agent type distribution donuts, and session outcome pie charts.
+                    A 52-week activity heatmap aligned by day-of-week shows density with hover
+                    tooltips. 30-day sparkline trends track cost and session volume at a glance.
+                    The cost summary panel totals input, output, and cache spend across all
+                    models. A live/offline indicator and auto-refresh via WebSocket keep
+                    everything current. All charts are responsive and adapt to mobile viewports.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-blue">⚡</div>
                   <h3>WebSocket Push</h3>
                   <p>
-                    All UI updates are pushed over WebSocket with sub-5ms latency — no polling.
-                    Automatic 2-second reconnection on disconnect, heartbeat ping/pong for
-                    dead-connection detection, and a visual connection indicator in the sidebar
-                    so you always know when you're live.
+                    Every UI update is pushed over a persistent WebSocket with sub-5 ms dispatch
+                    latency — zero polling anywhere. If the connection drops, automatic 2-second
+                    reconnect kicks in while a ping/pong heartbeat detects stale connections
+                    early. A sidebar indicator turns green/red so you always know whether you're
+                    live. The WebSocket carries typed JSON envelopes for new events, session
+                    updates, agent transitions, compaction results, and import progress — all
+                    parsed into the same eventBus the REST layer uses.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-rose">🖥️</div>
                   <h3>Statusline</h3>
                   <p>
-                    Standalone CLI statusline for Claude Code showing model name, user, working
-                    directory, git branch, a color-coded context window usage bar (green/yellow/red),
-                    per-direction token counts (green ↑ in, cyan ↓ out, dim cache), and session cost
-                    in USD (green/yellow/red by threshold). ANSI-colored output that updates on every
-                    turn. Python-based with a shell wrapper for easy integration.
+                    Standalone CLI statusline for Claude Code that prints model name, user,
+                    working directory, git branch, and a color-coded context-window bar
+                    (green → yellow → red). Token counts show input (green ↑), output (cyan ↓),
+                    and cache (dim) separately. Session cost in USD shifts color by configurable
+                    thresholds. ANSI-colored output updates on every turn. Python-based with a
+                    thin shell wrapper — drop it into your prompt or tmux status line. Works
+                    with any terminal emulator that supports 256-color ANSI.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-emerald">🔄</div>
                   <h3>History Import</h3>
                   <p>
-                    Bring existing Claude Code sessions in from three sources — rescan the default
+                    Import existing Claude Code sessions from three sources — rescan the default
                     <code>~/.claude/projects</code> folder, scan any absolute path on disk, or
-                    drag-drop <code>.jsonl</code> / <code>.meta.json</code> files and
-                    <code>.zip</code> / <code>.tar(.gz)</code> / <code>.gz</code> archives
-                    through <b>Settings → Import History</b>. All three paths funnel into the
-                    same <code>parseSessionFile</code> + <code>importSession</code> pipeline the
-                    server uses for live hook ingestion, so imported tokens and per-model cost
-                    match real-time capture bit-for-bit. Re-imports are idempotent (session-ID
-                    dedup + compaction <code>baseline_*</code> preservation). Archive extraction
-                    is guarded against path traversal and zip-bomb expansion.
+                    drag-drop <code>.jsonl</code>, <code>.zip</code>, <code>.tar.gz</code>, and
+                    <code>.gz</code> archives through <b>Settings → Import History</b>. All paths
+                    funnel into the same ingestion pipeline the server uses for live hooks, so
+                    imported tokens and per-model cost match real-time capture exactly. Re-imports
+                    are idempotent via session-ID dedup, and archive extraction is guarded against
+                    path traversal and zip-bomb expansion.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-cyan">💾</div>
                   <h3>Transcript Cache</h3>
                   <p>
-                    Stat-based incremental JSONL reader shared across hook handler and compaction
-                    scanner. Avoids duplicate I/O with byte-offset reads, bounds memory via LRU
-                    eviction, and detects API errors, turn durations, thinking blocks, and usage
-                    extras from live transcripts in real-time as sessions progress.
+                    Incremental JSONL reader shared across the hook handler and compaction scanner.
+                    Uses byte-offset tracking to skip already-parsed content and bounds memory
+                    with LRU eviction of cold session buffers. Detects API errors, turn durations,
+                    thinking blocks, and usage-extras from live transcripts in real time. Cache
+                    hits short-circuit disk I/O so even sessions with tens of thousands of turns
+                    stay fast. The same cache feeds the conversation viewer, cost recalculation,
+                    and the import pipeline's idempotent merge logic.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-violet">🌳</div>
                   <h3>Subagent Hierarchy</h3>
                   <p>
-                    Collapsible parent-child agent tree on Dashboard and Session Detail. Agents with
-                    subagents show expand/collapse chevrons; leaf agents show a dot indicator.
-                    Auto-expands when subagents are active. Correctly tracks backgrounded subagents
-                    without premature completion.
+                    Collapsible parent–child agent tree rendered on both Dashboard and Session
+                    Detail. Agents with subagents display expand/collapse chevrons; leaf agents
+                    show a dot indicator. The tree auto-expands when any child transitions to
+                    active and correctly tracks backgrounded subagents without premature
+                    completion. Depth is unlimited — deeply nested chains render as indented
+                    rows with connecting lines. Each node shows model, current tool, status
+                    badge, and cumulative token cost for tracing spend down the spawn chain.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-amber">💰</div>
                   <h3>Cost Tracking</h3>
                   <p>
-                    Per-model cost estimation with configurable pricing rules. View total and per-session
-                    cost breakdowns based on input, output, and cache token rates. Compaction-aware token
-                    accounting preserves totals across context compressions so no usage is ever lost.
+                    Per-model cost estimation with configurable pricing rules — set input, output,
+                    and cache-read rates per model variant through the Settings UI. View total and
+                    per-session breakdowns on Sessions, Session Detail, and Analytics. Compaction-
+                    aware token accounting preserves baselines across context compressions so no
+                    usage is silently dropped. Cost chips appear on Kanban cards, session rows,
+                    and the sidebar summary. Pricing changes retroactively recalculate all stored
+                    sessions, and imports apply the same rate table.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-indigo">⚙️</div>
                   <h3>Settings &amp; Management</h3>
                   <p>
-                    Model pricing editor with per-token rate configuration, hook installation status
-                    and one-click reinstall, full JSON data export, session cleanup controls (abandon
-                    stale sessions, purge old data by age), browser notification preferences with
-                    per-event toggles, and a system information dashboard showing DB stats and
-                    server health.
+                    Model pricing editor with per-token rate configuration for every Claude
+                    variant. Hook installation status with one-click reinstall and per-hook health
+                    checks. Full JSON data export covering sessions, agents, events, tokens, and
+                    pricing rules. Session cleanup controls to abandon stale sessions or purge old
+                    data by age. Browser notification preferences with per-event toggles. A system
+                    information panel shows database row counts, file sizes, server uptime, and
+                    WebSocket connection status at a glance.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-blue">🔌</div>
                   <h3>Local MCP Server</h3>
                   <p>
-                    Local MCP sidecar with three transport modes (stdio, HTTP+SSE, interactive REPL),
-                    25 typed tools across 6 domains, retry-aware API access, and tiered policy gates
-                    for mutation and destructive operations.
+                    Local MCP sidecar with three transport modes — stdio for Claude Code
+                    native integration, HTTP+SSE for remote clients, and an interactive REPL
+                    for ad-hoc terminal queries. Exposes 25 typed tools across 6 domains:
+                    sessions, agents, events, analytics, settings, and system health. Every
+                    mutation is gated behind a tiered policy so nothing dangerous fires without
+                    opt-in. Retry-aware API access handles transient failures. Runs as a
+                    standalone Node process with no Docker or cloud dependency.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-rose">🧩</div>
                   <h3>Claude + Codex Extensions</h3>
                   <p>
-                    Comprehensive instruction, skills, rules, and custom-agent layers for both Claude
-                    Code and Codex. Includes path-scoped rules for backend, frontend, MCP, and docs,
-                    reusable skills for onboarding, feature shipping, debugging, and MCP operations,
-                    plus specialized subagents for backend, frontend, and MCP code review.
+                    Instruction, skills, rules, and custom-agent layers for both Claude Code and
+                    Codex. Path-scoped rules target backend, frontend, MCP, and docs directories
+                    with context-appropriate guidelines. Reusable skills cover onboarding, feature
+                    shipping, live-issue debugging, release-readiness, and MCP operations.
+                    Specialized subagents for backend, frontend, and MCP code review run in
+                    parallel with focused tooling. Everything lives in <code>.claude/</code>
+                    and is version-controlled alongside the codebase.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-teal">🔀</div>
-                  <h3>Workflow Graphs</h3>
+                  <h3 id="feat-workflows">Workflow Graphs</h3>
                   <p>
-                    D3.js-powered agent orchestration DAG showing spawn patterns across sessions,
-                    tool execution Sankey diagram mapping tool-to-tool transitions, and a directed
-                    agent pipeline graph revealing which agent types run after which with frequency
-                    labels. Every chart's title carries an <code>i</code> icon that opens a
-                    structured "What this shows / How to read it / Why it matters" popover, and
-                    hovering nodes, edges, and bars surfaces multi-section tooltips with deterministic,
-                    value-dependent interpretations — share-of-source / share-of-target percentages,
-                    success-rate health buckets, model-family descriptions, and timing patterns. All
-                    translated to en/vi/zh.
+                    D3.js-powered visualizations: an agent orchestration DAG showing spawn
+                    patterns across sessions, a tool-execution Sankey diagram mapping tool-to-
+                    tool transitions, and a directed pipeline graph with frequency labels. Every
+                    chart title carries an info icon that opens a popover explaining what it
+                    shows and how to read it. Hovering nodes, edges, and bars surfaces tooltips
+                    with share-of-source percentages, success-rate buckets, and timing patterns.
+                    All labels are translated to English, Vietnamese, and Chinese.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-indigo">📊</div>
                   <h3>Workflow Analytics</h3>
                   <p>
-                    Subagent effectiveness scorecards with success rings and day-of-week sparklines;
-                    sparkline tooltips render through a <code>createPortal</code> to escape the card's
-                    <code>overflow:hidden</code> and stay clamped inside the viewport, so they never
-                    get clipped on Sun/Sat/Mon/Fri. Auto-detected workflow patterns expand in place
-                    on click into a detail panel with the full step chain, stats grid, deterministic
-                    narrative (loop detection, frequency bucket), and a practical suggestion. Plus
-                    model delegation flow, error propagation with horizontal bars and API error cards,
-                    concurrency swim-lanes, and complexity bubble charts. Each of the six headline
-                    stat cards has a bottom-right info popover explaining how the metric is calculated
-                    and what its current value means in plain language. Status filter (Active /
-                    Completed / All) filters all sections.
+                    Subagent effectiveness scorecards with success-rate rings and day-of-week
+                    sparklines. Auto-detected workflow patterns expand on click into a detail
+                    panel with the full step chain, stats grid, and a narrative with loop
+                    detection. Model delegation flow, error propagation bars with API error
+                    cards, concurrency swim-lanes, and complexity bubble charts round out the
+                    view. Six headline stat cards each include an info popover explaining
+                    the metric and its current value. Status filter applies globally.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-cyan">🔍</div>
                   <h3>Session Drill-In</h3>
                   <p>
-                    Searchable session selector with pagination to explore any session's agent tree,
-                    tool call timeline, and event sequence. The Session Detail page opens with a
-                    live-updating overview panel — active-agent banner, tile counters (events,
-                    tool calls, subagents, compactions, errors, duration), top-tool usage bars,
-                    subagent type breakdown, and a stacked token-flow strip — followed by the
-                    conversation viewer with markdown, syntax highlighting, and per-tool styled
-                    tool calls. Cross-filtering from DAG nodes, compaction impact analysis,
-                    JSON export, and real-time WebSocket auto-refresh.
+                    Searchable session selector with pagination to explore any session's agent
+                    tree, tool-call timeline, and event sequence. The detail page opens with a
+                    live-updating overview — tile counters for events, tool calls, subagents,
+                    compactions, errors, and duration. Top-tool usage bars and subagent breakdown
+                    give quick reads. The conversation viewer renders markdown with syntax
+                    highlighting. Cross-filter from DAG nodes, run compaction analysis, or
+                    export as JSON — all with real-time WebSocket auto-refresh.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-pink">🔔</div>
                   <h3>Browser Notifications</h3>
                   <p>
-                    Persistent browser notifications via Web Push (VAPID) for real-time alerts even
-                    when the dashboard tab is not focused or the browser is backgrounded. Includes
-                    explicit macOS audio support, per-event toggles, and server-side subscription
-                    management.
+                    Persistent browser notifications via Web Push (VAPID) for real-time alerts
+                    even when the tab is not focused or the browser is backgrounded. Includes
+                    macOS audio support so notifications are audible alongside system sounds.
+                    Per-event toggles let you choose which events fire — session starts,
+                    completions, errors, compactions, or agent spawns. Server-side subscription
+                    management ensures one push per event per browser. Works on Chrome, Edge,
+                    Firefox, and Safari 17+ with graceful degradation elsewhere.
                   </p>
                 </div>
                 <div class="feature-card">
@@ -1034,85 +1066,117 @@
                   <h3>Docker Deployment</h3>
                   <p>
                     Ready-to-use Dockerfile and docker-compose.yml for one-command deployment.
-                    Supports both Docker and Podman with persistent volume mounts, automatic
-                    rebuilds, and configurable port mapping. Run
-                    <code>docker compose up -d --build</code> and you're live.
+                    Supports both Docker and Podman with persistent volume mounts for the SQLite
+                    database and hook data. Configurable port mapping via environment variables
+                    and a health-check endpoint the container runtime can poll. Multi-stage build
+                    keeps the image lean — only production deps and the compiled bundle ship.
+                    Run <code>docker compose up -d --build</code> and the dashboard is live
+                    with zero additional setup or configuration required.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-violet">🏪</div>
                   <h3>Plugin Marketplace</h3>
                   <p>
-                    Official Claude Code plugin marketplace with 5 plugins (18 skills, 4 agents, 3 CLI
-                    tools). Deep analytics with compaction baselines, productivity automation, developer
-                    diagnostics, AI-powered insights via workflow intelligence, and dashboard MCP
-                    integration. Install with <code>claude plugin install</code>.
+                    Official Claude Code plugin marketplace shipping 5 plugins with 18 skills,
+                    4 agents, and 3 CLI tools. Deep analytics with compaction-aware baselines,
+                    productivity automation, developer diagnostics, AI-powered workflow
+                    intelligence, and dashboard MCP integration. Install with
+                    <code>claude plugin install</code> — no restart needed. Each listing shows
+                    author, license, homepage, and per-skill contribution breakdown. The Config
+                    Explorer's Plugins tab surfaces installed plugins with live status.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-emerald">▶️</div>
-                  <h3>Run Claude</h3>
+                  <h3 id="feat-run-claude">Run Claude</h3>
                   <p>
-                    Spawn <code>claude</code> subprocesses straight from the dashboard with a chat-style
-                    streaming UI — multi-turn <b>Conversation</b> or single-shot <b>Headless</b> mode.
-                    One-click <b>Resume</b> on any past conversation row spawns <code>claude --resume</code>
-                    and seeds the chat with the prior transcript; <b>View</b> opens past one-shots inline
-                    as read-only. Re-attach reconciles the spawner's in-memory log with the on-disk JSONL,
-                    so navigating away from a resumed run never loses prior history. <b>TUI parity</b>:
-                    slash-command autocomplete, <code>@</code>-file references, live token / context-window
-                    meter that hydrates from saved <code>usage</code> blocks, thinking-effort dial, and a
-                    limitations banner spelling out what stream-json can vs. can't do compared to the TUI.
-                    Same-origin guard blocks drive-by spawns; spawned sessions fire the same hooks as the CLI.
+                    Spawn <code>claude</code> subprocesses straight from the dashboard with
+                    a chat-style streaming UI — multi-turn <b>Conversation</b> or single-shot
+                    <b>Headless</b> mode. One-click <b>Resume</b> on any past conversation
+                    spawns <code>claude --resume</code> seeded with the prior transcript. Re-
+                    attach reconciles in-memory logs with the on-disk JSONL so navigating away
+                    never loses history. Slash-command autocomplete, file references, live
+                    token/context-window meter, and a thinking-effort dial bring TUI parity
+                    to the browser. Same-origin guard blocks drive-by spawns.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-amber">🧰</div>
-                  <h3>Claude Config Explorer</h3>
+                  <h3 id="feat-config-explorer">Claude Config Explorer</h3>
                   <p>
-                    A 12-tab inspector at <code>/cc-config</code> for everything Claude Code knows about:
-                    skills, subagents, slash commands, output styles, plugins (with per-plugin
-                    contributions + author/license/homepage), marketplaces (with plugin counts),
-                    MCP servers, hooks, settings (with secret-key redaction), memory
-                    (<code>CLAUDE.md</code>), keybindings, and statusline scripts. Create / edit / delete
-                    for the low-risk text-file surfaces with mandatory timestamped backups; plugins, MCP,
-                    hooks-in-settings, and live <code>settings.json</code> stay read-only with explainer
-                    banners and copy-able CLI commands.
+                    A 12-tab inspector at <code>/cc-config</code> for everything Claude Code
+                    knows about: skills, subagents, slash commands, output styles, plugins,
+                    marketplaces, MCP servers, hooks, settings, memory, keybindings, and
+                    statusline scripts. Create, edit, and delete the low-risk text-file surfaces
+                    with mandatory timestamped backups before every write. Plugins, MCP, hooks,
+                    and live settings stay read-only with explainer banners and copy-able CLI
+                    commands. Per-plugin contribution breakdowns show author and license.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-emerald">📱</div>
                   <h3>Responsive Design</h3>
                   <p>
-                    Mobile-first layouts with stacking grids, scrollable tables, and a collapsible
-                    sidebar that auto-hides below 1400px. All seven pages adapt seamlessly from phone
-                    to ultrawide with consistent navigation, readable typography, and full touch support.
+                    Mobile-first layouts with stacking grids, horizontally scrollable tables,
+                    and a collapsible sidebar that auto-hides below 1400 px. All pages adapt
+                    from phone to ultrawide with consistent navigation and readable typography.
+                    Kanban columns stack vertically on narrow screens, analytics charts reflow
+                    to single-column, and the activity feed stays fully swipeable. Touch targets
+                    meet 44 px minimum. Dark theme renders consistently across iOS Safari,
+                    Chrome, and Firefox with no flash of unstyled content.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-sky">🌊</div>
                   <h3>Concurrency Timeline</h3>
                   <p>
-                    Visualize parallel agent execution with a Gantt-style timeline showing overlapping
-                    subagent lifetimes, tool call concurrency, and wait gaps. Identify bottlenecks in
-                    multi-agent orchestration and optimize task parallelism across complex sessions.
+                    Visualize parallel agent execution with a Gantt-style timeline showing
+                    overlapping subagent lifetimes, tool-call concurrency windows, and wait gaps.
+                    Color-coded bars distinguish working, waiting, and errored states so
+                    bottlenecks are immediately visible. Hover any bar for exact timestamps and
+                    duration. Zoom and pan across long-running sessions with hundreds of agents.
+                    The timeline shares the Workflows status filter so you can isolate active,
+                    completed, or errored sessions without leaving the view.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-blue">🔌</div>
                   <h3>VS Code Extension</h3>
                   <p>
-                    Professional integrated extension with a real-time Activity Bar sidebar, status bar 
-                    pulse monitor, deep navigation links, and an embedded dashboard webview for monitoring 
-                    directly from your IDE.
+                    Professional VS Code extension with a real-time Activity Bar sidebar
+                    showing active sessions, agent counts, and recent events without leaving
+                    your editor. A status bar pulse monitor surfaces connection health and the
+                    latest event type at a glance. Deep navigation links open any session or
+                    analytics view directly in your browser. An embedded webview renders the
+                    full dashboard inside a VS Code tab with WebSocket push, theme sync, and
+                    responsive layout. Install from the marketplace or build from source.
                   </p>
                 </div>
                 <div class="feature-card">
                   <div class="feature-icon ic-rose">🛡️</div>
                   <h3>Error Propagation Map</h3>
                   <p>
-                    Trace how errors cascade across agents and tool calls with a directed graph showing
-                    failure origins, retry paths, and recovery points. Pinpoint root causes in deep
-                    subagent chains and understand which tool failures trigger upstream session aborts.
+                    Trace how errors cascade across agents and tool calls with a directed
+                    graph showing failure origins, retry paths, and recovery points. Each node
+                    displays the agent or tool that errored, the error message, and whether a
+                    retry succeeded or propagated upstream. Pinpoint root causes in deeply nested
+                    subagent chains. Horizontal bar charts rank the most error-prone tools and
+                    models. API error cards group failures by HTTP status and endpoint. Filter
+                    by session, time range, or error severity to narrow the view.
+                  </p>
+                </div>
+                <div class="feature-card">
+                  <div class="feature-icon ic-indigo">📲</div>
+                  <h3>Progressive Web App</h3>
+                  <p>
+                    Three independent PWAs — dashboard, landing page, and wiki — each with
+                    its own Web App Manifest and Service Worker. Install to your home screen or
+                    dock for a standalone, chrome-less experience. The dashboard SW caches the
+                    app shell cache-first, serves navigation network-first, and preserves the
+                    VAPID push pipeline. Landing and wiki SWs precache their shells and lazy-
+                    cache images for offline access after one visit. SVG icons with
+                    <code>sizes="any"</code> and iOS standalone meta tags included.
                   </p>
                 </div>
               </div>
@@ -1130,65 +1194,65 @@
 
           <h3>Screenshots</h3>
           <div class="screenshot-gallery">
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-dashboard">
               <img src="../images/dashboard.png" alt="Dashboard Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard · Monitor</strong> — overview stats, active agent cards, and recent activity feed</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📡</span> <span><strong>Dashboard · Monitor</strong> — live overview of active sessions and agents. Stats tiles, collapsible subagent hierarchy cards, and a recent activity feed. Auto-refreshes every 5 s via WebSocket</span></div>
             </div>
             <div class="screenshot-card">
               <img src="../images/dashboard-health.png" alt="Dashboard — System Health tab" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🩺</span> <span><strong>Dashboard · Health</strong> — composite health score, storage engine donut, cache/error/success gauges, tool invocation bars, subagent effectiveness, model token distribution</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">🩺</span> <span><strong>Dashboard · Health</strong> — composite health score ring, storage engine donut, cache/error/success gauges, tool invocation bars, subagent effectiveness, and model token distribution</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-kanban">
               <img src="../images/board.png" alt="Kanban Board — Agents view" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📋</span> <span><strong>Kanban Board (agents)</strong> — agents grouped by status across 4 columns</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📋</span> <span><strong>Kanban Board (agents)</strong> — agents swim-laned by status: Working, Waiting, Completed, Error. Cards show model, cost, and current tool call. Yellow column flags agents waiting on user input</span></div>
             </div>
             <div class="screenshot-card">
               <img src="../images/board-sessions.png" alt="Kanban Board — Sessions view" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🗂️</span> <span><strong>Kanban Board (sessions)</strong> — sessions grouped by status across 5 columns</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">🗂️</span> <span><strong>Kanban Board (sessions)</strong> — sessions swim-laned across 5 columns: Active, Waiting, Completed, Error, Abandoned. Each card shows agent count, duration, model, and cumulative cost</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-sessions">
               <img src="../images/sessions.png" alt="Sessions Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📂</span> <span><strong>Sessions</strong> — searchable, filterable, server-paginated table of recorded sessions</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📂</span> <span><strong>Sessions</strong> — searchable, filterable, server-paginated table. Each row shows status badge, agent count, duration, model, and cost. Click any row to drill into session detail</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-session-detail">
               <img src="../images/session-agents.png" alt="Session Detail — Agents tab" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🤖</span> <span><strong>Session Detail · Agents</strong> — overview tiles, subagent breakdown, and hierarchy tree</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">🤖</span> <span><strong>Session Detail · Agents</strong> — overview tiles (events, tool calls, subagents, errors, duration), top-tool usage bars, subagent type breakdown, and a collapsible parent–child agent hierarchy tree</span></div>
             </div>
             <div class="screenshot-card">
               <img src="../images/session-conversation.png" alt="Session Detail — Conversation tab" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">💬</span> <span><strong>Session Detail · Conversation</strong> — live transcript viewer with markdown rendering</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">💬</span> <span><strong>Session Detail · Conversation</strong> — full transcript viewer with markdown rendering, syntax-highlighted code blocks, per-tool sections, and collapsible thinking blocks</span></div>
             </div>
             <div class="screenshot-card">
               <img src="../images/session-timeline.png" alt="Session Detail — Timeline tab" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🔬</span> <span><strong>Session Detail · Timeline</strong> — chronological event timeline with multi-dimension filters</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">🔬</span> <span><strong>Session Detail · Timeline</strong> — chronological event timeline with multi-dimension filters, color-coded entries by type, expandable hook payloads, and direct links to the owning session and agent</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-activity">
               <img src="../images/feed.png" alt="Activity Feed Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📰</span> <span><strong>Activity Feed</strong> — real-time event log with pause / resume and multi-dimension filters</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📰</span> <span><strong>Activity Feed</strong> — real-time streaming event log with pause/resume buffering, multi-dimension filters, expandable hook payloads, color-coded entries, and per-row session navigation buttons</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-analytics">
               <img src="../images/analytics.png" alt="Analytics Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📊</span> <span><strong>Analytics</strong> — token usage, tool frequency, activity heatmap, and session trends</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">📊</span> <span><strong>Analytics</strong> — token usage by model, tool frequency bars, 52-week activity heatmap, 30-day sparkline trends, session outcome donuts, and cost summary with WebSocket auto-refresh</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-workflows">
               <img src="../images/workflows.png" alt="Workflows Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🔀</span> <span><strong>Workflows</strong> — agent DAGs, tool Sankey diagrams, and workflow intelligence</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">🔀</span> <span><strong>Workflows</strong> — D3.js agent orchestration DAG, tool-execution Sankey diagram, directed pipeline graph, effectiveness scorecards, concurrency swim-lanes, and complexity bubble charts</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-config">
               <img src="../images/config.png" alt="Claude Config Explorer" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🧰</span> <span><strong>Claude Config Explorer</strong> — 12-tab inspector covering plugins, skills, subagents, slash commands, output styles, marketplaces, MCP servers, hooks, keybindings, statusline, settings (with secret redaction) and memory. Edits land with timestamped backups</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">🧰</span> <span><strong>Claude Config Explorer</strong> — 12-tab inspector for skills, subagents, slash commands, plugins, MCP servers, hooks, settings, memory, keybindings, and statusline. Safe edits with backups</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-run">
               <img src="../images/run.png" alt="Run Claude — pre-run configuration" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">▶️</span> <span><strong>Run Claude</strong> — spawn <code>claude</code> subprocesses from the dashboard. Pick mode (Conversation / One-shot), source (new vs resume), cwd (autocomplete), model, permission mode, and thinking effort. Same-origin guard blocks browser drive-by spawning</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">▶️</span> <span><strong>Run Claude</strong> — spawn or resume Claude subprocesses from the browser. Pick Conversation or Headless mode, set cwd, model, permission level, and thinking effort. Same-origin guard included</span></div>
             </div>
             <div class="screenshot-card">
               <img src="../images/run-results.png" alt="Run Claude — live streaming output" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">💬</span> <span><strong>Run Claude · live stream</strong> — real character-by-character streaming via <code>--include-partial-messages</code>. Tool uses, tool results, thinking blocks all collapsible. Active runs switcher lets you juggle multiple in-flight runs</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">💬</span> <span><strong>Run Claude · live stream</strong> — character-by-character streaming output. Tool uses, tool results, and thinking blocks are collapsible. Active runs switcher juggles multiple sessions</span></div>
             </div>
-            <div class="screenshot-card">
+            <div class="screenshot-card" id="ss-settings">
               <img src="../images/settings.png" alt="Settings Overview" width="100%" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">⚙️</span> <span><strong>Settings</strong> — model pricing rules, data management, and system info</span></div>
+              <div class="screenshot-caption"><span class="caption-icon">⚙️</span> <span><strong>Settings</strong> — model pricing editor with per-token rates, hook installation status, JSON data export, session cleanup controls, browser notification toggles, and system info panel with DB stats</span></div>
             </div>
           </div>
 
@@ -2278,6 +2342,66 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
               </tbody>
             </table>
           </div>
+
+          <h3>PWA &amp; Service Worker</h3>
+          <p>
+            The dashboard is a Progressive Web App with its own
+            <code>manifest.json</code> and Service Worker
+            (<code>client/public/sw.js</code>). The landing page and wiki are
+            also independent PWAs with separate manifests and service workers.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Surface</th>
+                  <th>Manifest</th>
+                  <th>Service Worker</th>
+                  <th>Strategy</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Dashboard</td>
+                  <td><code>client/public/manifest.json</code></td>
+                  <td><code>client/public/sw.js</code></td>
+                  <td>
+                    Precaches app shell. Cache-first for static assets (JS/CSS
+                    bundles). Network-first for navigation with offline fallback.
+                    Skips <code>/api/*</code>, <code>/ws</code>, and Vite HMR.
+                    Preserves push notification handlers.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Landing page</td>
+                  <td><code>manifest.json</code> (root)</td>
+                  <td><code>sw.js</code> (root)</td>
+                  <td>
+                    Precaches HTML shell, favicon, OG image. Lazy-caches
+                    screenshot PNGs on first view. Network-first HTML,
+                    cache-first assets.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Wiki</td>
+                  <td><code>wiki/manifest.json</code></td>
+                  <td><code>wiki/sw.js</code></td>
+                  <td>
+                    Precaches <code>index.html</code>, <code>style.css</code>,
+                    <code>script.js</code>. Fully offline after one visit.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            All three SWs call <code>skipWaiting()</code> on install and delete
+            stale caches on activate (keyed by version strings like
+            <code>dashboard-v1</code>). Manifests use SVG icons
+            (<code>favicon.svg</code>) with <code>sizes="any"</code>. iOS
+            standalone mode is enabled via
+            <code>apple-mobile-web-app-capable</code> meta tags.
+          </p>
         </section>
 
         <!-- ─── State Management ──────────────────────────────────────────── -->
@@ -2523,7 +2647,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/swagger.png" alt="Interactive Swagger UI rendering the dashboard's OpenAPI 3.0 spec, with collapsible endpoint groups, request/response schemas, and try-it-out controls" width="3024" height="1666" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📘</span> Swagger UI at <code>/api/docs</code> — interactive playground for every endpoint</div>
+              <div class="screenshot-caption"><span class="caption-icon">📘</span> Swagger UI at <code>/api/docs</code> — auto-generated interactive playground for every REST endpoint. Try-it-out forms, request/response schema, auth headers, and curl snippets</div>
             </div>
           </div>
 
@@ -2895,7 +3019,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/import.png" alt="Settings page Import History section showing rescan default folder, scan custom path, and upload controls with progress output" width="3024" height="1746" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📥</span> Settings → Import History — rescan, custom path, and upload controls feeding the shared pipeline</div>
+              <div class="screenshot-caption"><span class="caption-icon">📥</span> Settings → Import History — rescan default paths, set a custom directory, or drag-and-drop <code>.gz</code> archives. Progress bar and result card show counts for every run</div>
             </div>
           </div>
 
@@ -3169,7 +3293,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/mcp.png" alt="MCP Server interactive REPL showing the MCP Tools banner, server info, and tool listing with colored output" width="2852" height="1680" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🔧</span> MCP Server REPL — interactive tool invocation with colored output</div>
+              <div class="screenshot-caption"><span class="caption-icon">🔧</span> MCP Server REPL — interactive tool invocation terminal with colored JSON output, argument prompts, error formatting, and session-aware context for rapid testing</div>
             </div>
           </div>
 
@@ -3537,7 +3661,7 @@ ccam-export all --output backup.json</code></pre>
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/statusline.png" alt="CLI statusline showing model, user, git branch, context window bar, and token counts" width="2498" height="70" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">🖥️</span> Statusline — context window, tokens, git branch at a glance</div>
+              <div class="screenshot-caption"><span class="caption-icon">🖥️</span> Statusline — always-visible bar showing context window usage, token counts, active model, git branch, and session ID. Configurable segments with theme support</div>
             </div>
           </div>
 
@@ -3740,7 +3864,7 @@ ccam-export all --output backup.json</code></pre>
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/settings.png" alt="Settings page with model pricing editor, hook status, data management, and system info" width="1918" height="1047" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">⚙️</span> Settings — pricing, hooks, data management, and system info</div>
+              <div class="screenshot-caption"><span class="caption-icon">⚙️</span> Settings — model pricing editor, hook installation toggle, JSON data export, session cleanup, browser notification preferences, and system info panel with DB stats</div>
             </div>
           </div>
 
@@ -3835,7 +3959,7 @@ ccam-export all --output backup.json</code></pre>
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/update.png" alt="Update modal showing commits-behind count and copy-to-clipboard command" width="3024" height="1752" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">⬆</span> Update Notifier — copy-the-command modal, no self-restart</div>
+              <div class="screenshot-caption"><span class="caption-icon">⬆</span> Update Notifier — version comparison modal with one-click copy of the update command. No automatic self-restart; you stay in control of when upgrades happen</div>
             </div>
           </div>
 
@@ -4600,7 +4724,7 @@ npm run install-hooks</code></pre>
     </div>
     <!-- /.wiki-layout -->
 
-    <script src="script.js?v=14" defer></script>
+    <script src="script.js?v=17" defer></script>
     <script>
       /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {
@@ -4714,6 +4838,62 @@ npm run install-hooks</code></pre>
         });
         layout();
         startAuto();
+
+        /* Hash navigation — scroll carousel to #feat-* card */
+        function scrollToFeatureHash() {
+          var hash = window.location.hash;
+          if (!hash || hash.indexOf("#feat-") !== 0) return;
+          var targetEl = document.getElementById(hash.slice(1));
+          if (!targetEl) return;
+          var targetCard = targetEl.closest(".feature-card");
+          if (!targetCard) return;
+          var cardIndex = cards.indexOf(targetCard);
+          if (cardIndex < 0) return;
+          var perPage = getPerPage();
+          var page = Math.floor(cardIndex / perPage);
+          stopAuto();
+          goTo(page);
+          /* highlight the target card briefly */
+          cards.forEach(function (c) { c.classList.remove("hash-highlight"); });
+          targetCard.classList.add("hash-highlight");
+          setTimeout(function () {
+            targetCard.classList.remove("hash-highlight");
+            startAuto();
+          }, 3500);
+          /* scroll the features section into view */
+          setTimeout(function () {
+            carousel.scrollIntoView({ behavior: "smooth", block: "center" });
+          }, 80);
+        }
+        scrollToFeatureHash();
+        window.addEventListener("hashchange", scrollToFeatureHash);
+      })();
+
+      /* ─── Screenshot hash highlight (#ss-*) ──────────────────────────────── */
+      (function () {
+        function openScreenshot() {
+          var hash = window.location.hash;
+          if (!hash || hash.indexOf("#ss-") !== 0) return;
+          var target = document.getElementById(hash.slice(1));
+          if (!target) return;
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+          /* Find this card's img in the lightbox slides and open it */
+          setTimeout(function () {
+            var img = target.querySelector("img");
+            if (!img || !window.__lightboxSlides) { if (img) img.click(); return; }
+            var idx = window.__lightboxSlides.findIndex(function (s) { return s.src === img.src; });
+            if (idx >= 0 && window.__lightboxOpenAt) window.__lightboxOpenAt(idx);
+            else if (img) img.click();
+          }, 800);
+        }
+        if (window.location.hash && window.location.hash.indexOf("#ss-") === 0) {
+          var t = document.getElementById(window.location.hash.slice(1));
+          if (t) t.scrollIntoView({ block: "center" });
+        }
+        window.addEventListener("load", function () {
+          setTimeout(openScreenshot, 200);
+        });
+        window.addEventListener("hashchange", openScreenshot);
       })();
 
       /* ─── Sidebar Toggle ────────────────────────────────────────────────── */
@@ -4762,5 +4942,6 @@ npm run install-hooks</code></pre>
         });
       })();
     </script>
+    <script>if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});</script>
   </body>
 </html>
