@@ -11,6 +11,7 @@
  * always create a timestamped backup before mutating. Plugins, MCP servers,
  * and the live settings.json files stay read-only because they are written
  * concurrently by the running Claude Code CLI.
+ *
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 

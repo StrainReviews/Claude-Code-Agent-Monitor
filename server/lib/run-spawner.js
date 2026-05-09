@@ -28,6 +28,7 @@
  * after 5 min — but the underlying transcripts persist via the normal hook
  * ingestion pipeline (every spawned `claude` fires hooks like any other
  * session, so the run shows up in /sessions automatically).
+ *
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 

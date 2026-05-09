@@ -1462,6 +1462,10 @@ cd Claude-Code-Agent-Monitor
 # 2. Install all dependencies (server + client)
 npm run setup
 
+# Optional: manually install hooks for container deployments
+# or if auto-install on server startup fails
+npm run install-hooks
+
 # 3. Start in development mode
 npm run dev
 # → Express server on http://localhost:4820
@@ -4726,7 +4730,6 @@ npm run install-hooks</code></pre>
 
     <script src="script.js?v=17" defer></script>
     <script>
-      /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {
         var carousel = document.getElementById("feature-carousel");
         if (!carousel) return;
@@ -4838,8 +4841,6 @@ npm run install-hooks</code></pre>
         });
         layout();
         startAuto();
-
-        /* Hash navigation — scroll carousel to #feat-* card */
         function scrollToFeatureHash() {
           var hash = window.location.hash;
           if (!hash || hash.indexOf("#feat-") !== 0) return;
@@ -4853,14 +4854,12 @@ npm run install-hooks</code></pre>
           var page = Math.floor(cardIndex / perPage);
           stopAuto();
           goTo(page);
-          /* highlight the target card briefly */
           cards.forEach(function (c) { c.classList.remove("hash-highlight"); });
           targetCard.classList.add("hash-highlight");
           setTimeout(function () {
             targetCard.classList.remove("hash-highlight");
             startAuto();
           }, 3500);
-          /* scroll the features section into view */
           setTimeout(function () {
             carousel.scrollIntoView({ behavior: "smooth", block: "center" });
           }, 80);
@@ -4868,8 +4867,6 @@ npm run install-hooks</code></pre>
         scrollToFeatureHash();
         window.addEventListener("hashchange", scrollToFeatureHash);
       })();
-
-      /* ─── Screenshot hash highlight (#ss-*) ──────────────────────────────── */
       (function () {
         function openScreenshot() {
           var hash = window.location.hash;
@@ -4877,7 +4874,6 @@ npm run install-hooks</code></pre>
           var target = document.getElementById(hash.slice(1));
           if (!target) return;
           target.scrollIntoView({ behavior: "smooth", block: "center" });
-          /* Find this card's img in the lightbox slides and open it */
           setTimeout(function () {
             var img = target.querySelector("img");
             if (!img || !window.__lightboxSlides) { if (img) img.click(); return; }
@@ -4895,8 +4891,6 @@ npm run install-hooks</code></pre>
         });
         window.addEventListener("hashchange", openScreenshot);
       })();
-
-      /* ─── Sidebar Toggle ────────────────────────────────────────────────── */
       (function () {
         const btn = document.getElementById("sidebar-toggle");
         const scrim = document.getElementById("sidebar-scrim");
@@ -4915,7 +4909,6 @@ npm run install-hooks</code></pre>
             scrim.setAttribute("aria-hidden", String(collapsed || !isMobile));
           }
         }
-        // On load: auto-collapse if narrow, otherwise respect saved preference
         if (shouldAutoCollapse()) {
           applyCollapsed(true);
         } else {

@@ -96,17 +96,14 @@
         --radius: 14px;
         --radius-sm: 10px;
       }
-
       *,
       *::before,
       *::after {
         box-sizing: border-box;
       }
-
       html {
         scroll-behavior: smooth;
       }
-
       body {
         margin: 0;
         font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -117,8 +114,6 @@
         -moz-osx-font-smoothing: grayscale;
         overflow-x: hidden;
       }
-
-      /* Animated background - gradient blobs + grid + drifting orbs */
       body::before {
         content: "";
         position: fixed;
@@ -147,8 +142,6 @@
         from { background-position: 0 0; }
         to { background-position: 56px 56px; }
       }
-
-      /* Drifting glow orbs */
       .orb {
         position: fixed;
         border-radius: 50%;
@@ -193,19 +186,14 @@
         from { transform: translate(0, 0); }
         to { transform: translate(60px, -40px); }
       }
-
       a { color: inherit; }
-
       code {
         font-family: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
       }
-
       ::selection {
         background: rgba(129, 140, 248, 0.35);
         color: #fff;
       }
-
-      /* ── NAVBAR ─────────────────────────────────────────── */
       .nav {
         position: sticky;
         top: 0;
@@ -248,7 +236,6 @@
           0 1px 0 rgba(255, 255, 255, 0.18) inset,
           0 8px 22px rgba(99, 102, 241, 0.45);
       }
-
       .nav-links {
         margin-left: auto;
         display: flex;
@@ -271,8 +258,6 @@
         background: rgba(255, 255, 255, 0.04);
         transform: translateY(-1px);
       }
-      /* Active section - clean pill highlight, no underline pip. The pill
-         uses a soft gradient + 1px ring for depth without screaming. */
       .nav-link.active {
         color: var(--text);
         background: linear-gradient(
@@ -284,8 +269,6 @@
           0 0 0 1px rgba(129, 140, 248, 0.35) inset,
           0 6px 18px -6px rgba(99, 102, 241, 0.45);
       }
-
-      /* Wiki button - stands out from regular nav links with cyan accent */
       .nav-wiki {
         display: inline-flex;
         align-items: center;
@@ -313,7 +296,6 @@
         width: 14px;
         height: 14px;
       }
-
       .nav-cta {
         display: inline-flex;
         align-items: center;
@@ -343,10 +325,6 @@
         width: 14px;
         height: 14px;
       }
-
-      /* ── SCROLL PROGRESS BAR ────────────────────────────── */
-      /* Lives INSIDE the navbar as its last child so it always sits exactly
-         at the navbar's bottom edge regardless of how tall the nav grows. */
       .scroll-progress {
         position: relative;
         height: 2.5px;
@@ -366,20 +344,14 @@
         from { background-position: 0% 0; }
         to { background-position: 200% 0; }
       }
-
-      /* ── CONTAINER ─────────────────────────────────────── */
       .container {
         max-width: var(--max-width);
         margin: 0 auto;
-        /* longhand so we don't clobber section's vertical padding when an
-           element has both classes */
         padding-left: 24px;
         padding-right: 24px;
         position: relative;
         z-index: 1;
       }
-
-      /* ── HERO ─────────────────────────────────────────── */
       .hero {
         padding: 96px 24px 56px;
         text-align: center;
@@ -487,8 +459,6 @@
         width: 16px;
         height: 16px;
       }
-
-      /* ── MARQUEES ──────────────────────────────────────── */
       .marquee-stack {
         position: relative;
         margin: 56px 0 0;
@@ -565,15 +535,9 @@
       .marquee-item .dot.pink { background: var(--pink); box-shadow: 0 0 8px var(--pink); }
       .marquee-item .dot.violet { background: var(--violet); box-shadow: 0 0 8px var(--violet); }
       .marquee-item .dot.rose { background: var(--rose); box-shadow: 0 0 8px var(--rose); }
-
-      /* Third marquee speed (in addition to forward/reverse). Slightly
-         slower than the other two so the three lanes move independently
-         and don't visually sync up. */
       .marquee.slow .marquee-track {
         animation-duration: 72s;
       }
-
-      /* Window mockup under hero */
       .hero-mockup {
         position: relative;
         margin: 56px auto 0;
@@ -653,8 +617,6 @@
         .hero-mockup:hover { transform: none; }
         .hero-mockup:hover img { transform: none; }
       }
-
-      /* ── STATS STRIP ──────────────────────────────────── */
       .stats {
         padding: 56px 0 24px;
       }
@@ -691,10 +653,6 @@
         letter-spacing: 0.08em;
         font-weight: 600;
       }
-
-      /* ── SECTION ──────────────────────────────────────── */
-      /* longhand vertical so the rule survives even when an element also
-         has class="container" (which sets horizontal padding via longhand). */
       section {
         padding-top: 96px;
         padding-bottom: 96px;
@@ -722,8 +680,6 @@
         font-size: 17px;
         margin: 0 0 48px;
       }
-
-      /* ── FEATURES ─────────────────────────────────────── */
       .features-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -790,10 +746,6 @@
         line-height: 1.6;
         flex: 1;
       }
-
-      /* ── SHOWCASE ─────────────────────────────────────── */
-
-      /* Filter pills */
       .showcase-filters {
         display: flex;
         flex-wrap: wrap;
@@ -826,15 +778,11 @@
         color: #fff;
         box-shadow: 0 4px 20px -4px rgba(99, 102, 241, 0.5);
       }
-
-      /* Grid */
       .showcase-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 18px;
       }
-
-      /* Card */
       .showcase-card {
         --sc-mx: 50%;
         --sc-my: 50%;
@@ -881,8 +829,6 @@
         box-shadow: 0 28px 56px -16px rgba(99, 102, 241, 0.4),
           0 0 0 1px rgba(99, 102, 241, 0.1);
       }
-
-      /* Image area */
       .showcase-img {
         position: relative;
         aspect-ratio: 16 / 9;
@@ -908,8 +854,6 @@
         pointer-events: none;
         transition: opacity 0.3s;
       }
-
-      /* Overlay — always visible for title, description fades in on hover */
       .showcase-overlay {
         position: absolute;
         inset: 0;
@@ -967,8 +911,6 @@
         opacity: 1;
         transform: scale(1);
       }
-
-      /* Tags */
       .showcase-tag {
         display: inline-block;
         font-size: 10px;
@@ -978,11 +920,6 @@
         padding: 2px 7px;
         border-radius: 4px;
         margin-bottom: 6px;
-      }
-      .showcase-tag.new {
-        background: rgba(52, 211, 153, 0.18);
-        color: var(--emerald);
-        border: 1px solid rgba(52, 211, 153, 0.35);
       }
       .showcase-tag.live {
         background: rgba(244, 114, 182, 0.18);
@@ -994,8 +931,6 @@
         color: var(--blue);
         border: 1px solid rgba(59, 130, 246, 0.35);
       }
-
-      /* Lightbox */
       .showcase-lightbox {
         position: fixed;
         inset: 0;
@@ -1098,8 +1033,6 @@
         font-weight: 500;
         letter-spacing: 0.05em;
       }
-
-      /* ── INSTALL ──────────────────────────────────────── */
       .install {
         background: linear-gradient(180deg, var(--surface-1), var(--bg-2));
         border: 1px solid var(--border);
@@ -1121,7 +1054,6 @@
         font-size: 15px;
       }
       .install-text .btn { margin-right: 10px; margin-bottom: 8px; white-space: nowrap; }
-      /* macOS-styled terminal window */
       .code-window {
         position: relative;
         border: 1px solid var(--border-strong);
@@ -1157,8 +1089,6 @@
         font-size: 11.5px;
         color: var(--text-dim);
         letter-spacing: 0.04em;
-        /* No right-margin: copy button on the right side balances traffic
-           lights on the left so the title sits visually centered. */
       }
       .code-window-copy {
         display: inline-flex;
@@ -1222,8 +1152,6 @@
         color: var(--emerald);
         border-color: rgba(52, 211, 153, 0.4);
       }
-
-      /* ── VALUE PROPS ──────────────────────────────────── */
       .values-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1285,8 +1213,6 @@
         color: var(--text-muted);
         line-height: 1.65;
       }
-
-      /* ── BUILT FOR (archetypes) ───────────────────────── */
       .archetype-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -1349,8 +1275,6 @@
         color: var(--text-muted);
         border: 1px solid var(--border);
       }
-
-      /* ── HOW IT WORKS ─────────────────────────────────── */
       .how-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1388,8 +1312,6 @@
         font-size: 13.5px;
         line-height: 1.6;
       }
-
-      /* ── PAGES (route cards) ─────────────────────────── */
       .pages-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -1488,8 +1410,6 @@
         transform: translateX(0);
         color: var(--page-accent, var(--accent));
       }
-
-      /* ── STACK ──────────────────────────────────────── */
       .stack-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -1531,10 +1451,6 @@
         font-size: 11px;
         color: var(--text-dim);
       }
-
-      /* ── FAQ ────────────────────────────────────────── */
-      /* Full-width to match the other sections — the previous 820px cap
-         left it visibly narrower than features / showcase / stack. */
       .faq {
         margin: 0 auto;
       }
@@ -1590,23 +1506,17 @@
         font-size: 14px;
         line-height: 1.7;
       }
-
-      /* ── BIG CTA ─────────────────────────────────────── */
       .big-cta {
         text-align: center;
         padding: 96px 24px;
         position: relative;
       }
-      /* Full-width card to match the rest of the page. The visual is
-         layered: a rotating conic-gradient ring on the outer wrapper
-         provides an animated halo; the inner card holds the actual
-         content on a solid surface so text contrast stays clean. */
       .big-cta-card {
         max-width: var(--max-width);
         margin: 0 auto;
         position: relative;
         border-radius: 28px;
-        padding: 1.5px; /* exposes the rotating gradient as the border */
+        padding: 1.5px;
         background: conic-gradient(
           from var(--cta-angle, 0deg),
           rgba(99, 102, 241, 0.85),
@@ -1629,12 +1539,9 @@
       @keyframes ctaSpin {
         to { --cta-angle: 360deg; }
       }
-      /* Fallback for browsers without @property: animate background-position
-         on a fixed conic-gradient — less smooth but still alive. */
       @supports not (background: conic-gradient(from 0deg, red, blue)) {
         .big-cta-card { animation: none; }
       }
-
       .big-cta-inner {
         position: relative;
         border-radius: 27px;
@@ -1659,8 +1566,6 @@
         overflow: hidden;
         isolation: isolate;
       }
-      /* Subtle dotted texture so the card has surface depth instead of
-         reading as a flat panel. */
       .big-cta-inner::before {
         content: "";
         position: absolute;
@@ -1673,7 +1578,6 @@
         pointer-events: none;
         z-index: 0;
       }
-      /* Soft glow that pulses behind the headline. */
       .big-cta-inner::after {
         content: "";
         position: absolute;
@@ -1692,7 +1596,6 @@
         0%, 100% { opacity: 0.7; transform: translateX(-50%) scale(1); }
         50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
       }
-
       .big-cta-eyebrow {
         position: relative;
         z-index: 1;
@@ -1756,10 +1659,6 @@
         padding: 14px 28px;
         font-size: 14.5px;
       }
-
-      /* Trust strip below the CTA buttons — small chips that reinforce
-         the local-first / open-source / production-ready story without
-         repeating it in another paragraph. */
       .big-cta-trust {
         position: relative;
         z-index: 1;
@@ -1788,13 +1687,10 @@
         color: var(--emerald);
         flex-shrink: 0;
       }
-
       @media (prefers-reduced-motion: reduce) {
         .big-cta-card { animation: none; }
         .big-cta-inner::after { animation: none; }
       }
-
-      /* ── FOOTER ──────────────────────────────────────── */
       footer {
         border-top: 1px solid var(--border);
         padding: 56px 24px 36px;
@@ -1853,8 +1749,6 @@
         text-decoration: none;
       }
       .footer-bottom a:hover { color: var(--text); }
-
-      /* ── REVEAL ON SCROLL ─────────────────────────────── */
       .reveal {
         opacity: 0;
         transform: translateY(28px);
@@ -1917,11 +1811,6 @@
           animation: none !important;
         }
       }
-
-      /* ── HAMBURGER + MOBILE NAV PANEL ─────────────────── */
-      /* Hidden on desktop; shown on mobile via the responsive block below.
-         Uses a real <button> inside the nav so it inherits the same blur
-         backdrop and border as the rest of the bar. */
       .nav-toggle {
         display: none;
         align-items: center;
@@ -1943,7 +1832,6 @@
       .nav-toggle .icon-close { display: none; }
       .nav.menu-open .nav-toggle .icon-open { display: none; }
       .nav.menu-open .nav-toggle .icon-close { display: block; }
-
       .mobile-panel {
         position: fixed;
         top: 0;
@@ -1986,9 +1874,6 @@
         background: rgba(129, 140, 248, 0.08);
         border-color: var(--border);
       }
-      /* Active section indicator — clean pill: accent text on a soft
-         accent tint, with a small leading dot. No inset shadow tricks
-         (those clash with the link's rounded corners). */
       .mobile-panel a.active {
         color: var(--accent);
         background: rgba(99, 102, 241, 0.12);
@@ -2004,8 +1889,6 @@
         box-shadow: 0 0 10px var(--accent);
         flex-shrink: 0;
       }
-      /* CTA buttons (Wiki / GitHub) keep their own styling even if a
-         scroll-spy ever marked them active. */
       .mobile-panel a.mp-cta.active,
       .mobile-panel a.mp-wiki.active {
         background: linear-gradient(135deg, var(--accent-strong), var(--violet));
@@ -2013,9 +1896,6 @@
       }
       .mobile-panel a.mp-cta.active::before,
       .mobile-panel a.mp-wiki.active::before { display: none; }
-
-      /* In-panel close button — saves the user from reaching back up to
-         the hamburger in the navbar, especially on tall phones. */
       .mobile-panel-close {
         position: absolute;
         top: calc(env(safe-area-inset-top, 0) + 14px);
@@ -2063,7 +1943,6 @@
         font-weight: 600;
       }
       .mobile-panel .mp-wiki:hover { color: #67e8f9; background: rgba(34, 211, 238, 0.16); }
-
       .mobile-overlay {
         position: fixed;
         inset: 0;
@@ -2077,14 +1956,6 @@
       }
       .mobile-overlay.open { opacity: 1; pointer-events: auto; }
       body.menu-open { overflow: hidden; }
-
-      /* ── RESPONSIVE ──────────────────────────────────── */
-
-      /* Tablet landscape and below — tighten the layout container,
-         start trimming oversized desktop spacing, AND swap the nav for
-         the hamburger menu. The desktop nav with all 9 items only fits
-         comfortably above ~1100px; below that the links wrap or crowd
-         the brand, so we collapse to the slide-in panel earlier. */
       @media (max-width: 1100px) {
         .container { padding-left: 22px; padding-right: 22px; }
         .nav-inner { padding: 12px 22px; gap: 12px; }
@@ -2096,54 +1967,40 @@
         .install { padding: 36px; gap: 32px; }
         footer { padding: 48px 22px 32px; }
       }
-
-      /* Tablet portrait — simplify multi-col grids, soften headline
-         scaling. Hide the heaviest decorative orbs on this size to keep
-         paint fast on lower-power tablets. (Nav already collapsed at
-         1100px above.) */
       @media (max-width: 880px) {
         .nav-inner { padding: 10px 18px; }
         .brand { font-size: 13.5px; }
         .brand-mark { width: 28px; height: 28px; font-size: 12px; }
-
         .container { padding-left: 18px; padding-right: 18px; }
         section { padding-top: 64px; padding-bottom: 64px; }
-
         .hero { padding: 64px 18px 36px; }
         .hero h1 { letter-spacing: -0.038em; }
         .hero p { font-size: 16.5px; max-width: 560px; }
         .hero-ctas { gap: 10px; }
         .btn { padding: 12px 20px; font-size: 14px; }
-
         .marquee-stack { margin-top: 40px; padding: 14px 0; }
         .marquee-item { padding: 8px 14px; font-size: 12.5px; }
         .marquee-track { animation-duration: 38s; }
         .marquee.reverse .marquee-track { animation-duration: 46s; }
         .marquee.slow .marquee-track { animation-duration: 56s; }
-
         .hero-mockup { margin-top: 36px; border-radius: 14px; }
         .hero-mockup-bar { padding: 10px 14px; }
         .traffic { width: 10px; height: 10px; }
         .hero-mockup-url { font-size: 11px; }
-
         .stats { padding: 40px 0 12px; }
         .stat { padding: 22px 16px; }
         .stat-num { font-size: 28px; }
         .stat-label { font-size: 11px; letter-spacing: 0.06em; }
-
         .section-eyebrow { font-size: 11px; letter-spacing: 0.14em; margin-bottom: 10px; }
         .section-title { letter-spacing: -0.02em; }
         .section-lead { font-size: 15.5px; margin-bottom: 36px; }
-
         .features-grid { gap: 14px; }
         .feature-card { padding: 24px 20px 20px; }
         .feature-card h3 { font-size: 16.5px; }
         .feature-card p { font-size: 13.5px; }
-
         .showcase-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
         .showcase-overlay p { max-height: 60px; opacity: 1; }
         .showcase-expand-icon { opacity: 1; transform: scale(1); }
-
         .install {
           grid-template-columns: 1fr;
           padding: 28px;
@@ -2151,35 +2008,24 @@
         }
         .install-text h3 { font-size: 24px; }
         .install-text .btn { margin-right: 8px; margin-bottom: 8px; white-space: nowrap; }
-
         .values-grid, .archetype-grid, .how-grid, .pages-grid, .stack-grid { gap: 14px; }
         .archetype { padding: 22px 20px; }
         .how-step { padding: 22px 20px; }
-
         .faq-item summary { padding: 18px 20px; font-size: 14.5px; }
         .faq-answer-inner p { padding: 0 20px 18px; }
-
         .big-cta { padding: 64px 18px; }
         .big-cta-card { border-radius: 22px; }
         .big-cta-inner { padding: 56px 28px 48px; border-radius: 21px; }
         .big-cta-card p { font-size: 15.5px; }
-
         .footer-inner { grid-template-columns: 1fr 1fr; gap: 28px; }
         footer { padding: 40px 18px 28px; }
-
         .orb.o3 { display: none; }
       }
-
-      /* Mobile — single-column everything, full-width CTAs, even tighter
-         padding, font shrink for headlines. Hero mockup goes near edge-
-         to-edge so the screenshot is still legible. */
       @media (max-width: 640px) {
         :root { --radius: 12px; --radius-sm: 9px; }
-
         .nav-inner { padding: 10px 14px; }
         .container { padding-left: 16px; padding-right: 16px; }
         section { padding-top: 56px; padding-bottom: 56px; }
-
         .hero { padding: 52px 16px 28px; }
         .hero h1 {
           font-size: clamp(34px, 9.5vw, 48px);
@@ -2204,7 +2050,6 @@
           font-size: 14.5px;
         }
         .badge { font-size: 11.5px; padding: 5px 11px; margin-bottom: 18px; }
-
         .hero-mockup {
           margin: 32px -4px 0;
           border-radius: 12px;
@@ -2212,29 +2057,21 @@
             0 40px 60px -30px rgba(99, 102, 241, 0.4),
             0 16px 30px rgba(0, 0, 0, 0.6);
         }
-
         .stats { padding: 32px 0 8px; }
         .stats-grid {
-          /* 2 columns at this size — single-column looks empty and the
-             auto-fit min of 180px would otherwise force one. */
           grid-template-columns: repeat(2, 1fr);
         }
         .stat { padding: 20px 12px; }
         .stat-num { font-size: 26px; }
-
         .section-title { font-size: clamp(26px, 7vw, 34px); }
         .section-lead { font-size: 15px; margin-bottom: 28px; }
-
         .features-grid {
-          /* override auto-fit minmax so it doesn't keep 2 cols at 540px */
           grid-template-columns: 1fr;
         }
         .feature-card { padding: 22px 18px 18px; }
-
         .showcase-grid { grid-template-columns: 1fr; gap: 14px; }
         .showcase-filters { gap: 6px; }
         .showcase-pill { font-size: 12px; padding: 6px 14px; }
-
         .install { padding: 22px 18px; border-radius: 14px; }
         .install-text h3 { font-size: 22px; }
         .install-text .btn {
@@ -2247,7 +2084,6 @@
         .code-window-title { font-size: 10.5px; }
         .code-window-copy { padding: 3px 8px; font-size: 10.5px; }
         .code-block { padding: 16px 14px; font-size: 12px; line-height: 1.7; }
-
         .values-grid, .archetype-grid, .how-grid {
           grid-template-columns: 1fr;
         }
@@ -2260,17 +2096,14 @@
         .page-card-name { font-size: 14px; }
         .page-card-desc { font-size: 13px; }
         .stack-grid { grid-template-columns: repeat(2, 1fr); }
-
         .archetype { padding: 20px 18px; }
         .archetype h4 { font-size: 16.5px; }
         .how-step { padding: 20px 18px; }
         .how-step h4 { font-size: 15.5px; }
-
         .faq { padding: 0; }
         .faq-item summary { padding: 16px 18px; font-size: 14px; gap: 12px; }
         .faq-item summary::after { font-size: 20px; }
         .faq-answer-inner p { padding: 0 18px 16px; font-size: 13.5px; }
-
         .big-cta { padding: 48px 16px; }
         .big-cta-card { border-radius: 20px; }
         .big-cta-inner { padding: 44px 22px 36px; border-radius: 19px; }
@@ -2283,7 +2116,6 @@
           gap: 10px;
         }
         .big-cta-buttons .btn { width: 100%; justify-content: center; }
-
         .footer-inner { grid-template-columns: 1fr; gap: 24px; }
         .footer-bottom {
           flex-direction: column;
@@ -2292,40 +2124,25 @@
           font-size: 12px;
         }
         footer { padding: 36px 16px calc(24px + env(safe-area-inset-bottom, 0)); }
-
-        /* Decorative orbs are expensive on mobile GPUs and the gradient
-           bg already gives plenty of color. Keep one for ambience. */
         .orb.o2 { display: none; }
         .orb.o1 { width: 320px; height: 320px; opacity: 0.4; }
-
-        /* Reveal-on-scroll: drop the blur filter on mobile (it stutters
-           on Safari iOS during scroll-triggered transitions). */
         .reveal, .reveal-stagger > * { filter: none !important; }
       }
-
-      /* Small phones (iPhone SE, narrow Androids) — drop one more notch. */
       @media (max-width: 380px) {
         .nav-inner { padding: 9px 12px; gap: 8px; }
         .brand-mark { width: 26px; height: 26px; }
         .brand span:not(.brand-mark) { display: none; }
         .nav-toggle { width: 38px; height: 38px; }
-
         .hero { padding: 44px 14px 24px; }
         .hero h1 { font-size: clamp(30px, 10vw, 40px); }
         .hero p { font-size: 14.5px; }
-
         .container { padding-left: 14px; padding-right: 14px; }
         section { padding-top: 48px; padding-bottom: 48px; }
-
         .stats-grid { grid-template-columns: 1fr; }
         .stack-grid { grid-template-columns: 1fr; }
-
         .install { padding: 18px 14px; }
         .code-block { padding: 14px 12px; font-size: 11.5px; }
       }
-
-      /* Touch-device safety: disable hover-driven transforms so cards
-         don't get stuck "lifted" after a tap on iOS Safari. */
       @media (hover: none) {
         .feature-card:hover,
         .showcase-card:hover,
@@ -2569,9 +2386,6 @@
               <span class="marquee-item"><span class="dot emerald"></span>Local-first, zero telemetry</span>
             </div>
           </div>
-          <!-- Third lane: same outline-pill style as the other two,
-               action-oriented copy, slightly slower speed so the three
-               lanes don't visually sync up. -->
           <div class="marquee slow">
             <div class="marquee-track">
               <span class="marquee-item"><span class="dot emerald"></span>Spawn Claude in one click</span>
@@ -2586,7 +2400,6 @@
               <span class="marquee-item"><span class="dot amber"></span>Single binary, single port</span>
               <span class="marquee-item"><span class="dot pink"></span>Inspect every plugin</span>
               <span class="marquee-item"><span class="dot emerald"></span>Works fully offline</span>
-              <!-- duplicate for seamless loop -->
               <span class="marquee-item"><span class="dot emerald"></span>Spawn Claude in one click</span>
               <span class="marquee-item"><span class="dot cyan"></span>Resume any session instantly</span>
               <span class="marquee-item"><span class="dot violet"></span>Watch tool calls live</span>
@@ -2963,7 +2776,6 @@
               <img src="images/run.png" alt="Run Claude pre-run configuration" loading="lazy" />
               <span class="showcase-expand-icon">⤢</span>
               <div class="showcase-overlay">
-                <span class="showcase-tag new">New</span>
                 <h4>Run Claude · Config</h4>
                 <p>Pick mode, source, cwd, model, permissions, and thinking effort</p>
               </div>
@@ -2974,7 +2786,6 @@
               <img src="images/run-results.png" alt="Run Claude live streaming output" loading="lazy" />
               <span class="showcase-expand-icon">⤢</span>
               <div class="showcase-overlay">
-                <span class="showcase-tag live">Live</span>
                 <h4>Run Claude · Live Stream</h4>
                 <p>Character-by-character streaming with collapsible tool calls and thinking blocks</p>
               </div>
@@ -2985,7 +2796,6 @@
               <img src="images/config.png" alt="Claude Config Explorer 12-tab inspector" loading="lazy" />
               <span class="showcase-expand-icon">⤢</span>
               <div class="showcase-overlay">
-                <span class="showcase-tag new">New</span>
                 <h4>Claude Config Explorer</h4>
                 <p>12 tabs: plugins, skills, subagents, slash commands, MCP servers, hooks, and more</p>
               </div>
@@ -3708,17 +3518,12 @@
     </footer>
 
     <script>
-      // ── Mobile menu toggle ───────────────────────────────
-      // The hamburger button slides in a side panel from the right and
-      // dims the page behind it. ESC, overlay click, link click, and
-      // window-resize-past-breakpoint all close it.
       (function () {
         const nav = document.getElementById("nav");
         const toggle = document.getElementById("nav-toggle");
         const panel = document.getElementById("mobile-panel");
         const overlay = document.getElementById("mobile-overlay");
         if (!toggle || !panel || !overlay) return;
-
         function open() {
           nav.classList.add("menu-open");
           panel.classList.add("open");
@@ -3739,7 +3544,6 @@
           if (panel.classList.contains("open")) close();
           else open();
         }
-
         toggle.addEventListener("click", toggleMenu);
         overlay.addEventListener("click", close);
         const panelClose = document.getElementById("mobile-panel-close");
@@ -3750,8 +3554,6 @@
         document.addEventListener("keydown", (e) => {
           if (e.key === "Escape" && panel.classList.contains("open")) close();
         });
-        // Close if the viewport grows past the hamburger breakpoint while open.
-        // Mirrors the CSS breakpoint at @media (max-width: 1100px) above.
         const mql = window.matchMedia("(min-width: 1101px)");
         const onChange = (ev) => {
           if (ev.matches) close();
@@ -3759,8 +3561,6 @@
         if (mql.addEventListener) mql.addEventListener("change", onChange);
         else mql.addListener(onChange);
       })();
-
-      // ── Reveal-on-scroll ─────────────────────────────────
       const io = new IntersectionObserver(
         (entries) => {
           entries.forEach((e) => {
@@ -3773,8 +3573,6 @@
         { threshold: 0.08, rootMargin: "0px 0px -8% 0px" }
       );
       document.querySelectorAll(".reveal, .reveal-stagger").forEach((el) => io.observe(el));
-
-      // ── Stack grid stagger (JS-driven for 30+ items) ───
       const stackGrid = document.getElementById("stack-grid");
       if (stackGrid) {
         const stackIo = new IntersectionObserver(
@@ -3794,10 +3592,6 @@
         );
         stackIo.observe(stackGrid);
       }
-
-      // ── Count-up animation for stats ─────────────────────
-      // When a [data-count] number scrolls into view, animate from 0 to its
-      // target with eased deceleration. Uses rAF; respects reduced motion.
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const easeOut = (t) => 1 - Math.pow(1 - t, 3);
       function animateCount(el, target, duration = 1400) {
@@ -3821,8 +3615,6 @@
           entries.forEach((e) => {
             if (e.isIntersecting) {
               const target = parseInt(e.target.dataset.count || "0", 10);
-              // Reset to 0 first so the animation has somewhere to start.
-              // (HTML default value is the real number for noscript users.)
               e.target.textContent = "0";
               animateCount(e.target, target);
               countIo.unobserve(e.target);
@@ -3832,8 +3624,6 @@
         { threshold: 0.5 }
       );
       document.querySelectorAll("[data-count]").forEach((el) => countIo.observe(el));
-
-      // ── Cursor-follow glow on feature cards ──────────────
       document.querySelectorAll(".feature-card").forEach((card) => {
         card.addEventListener("mousemove", (e) => {
           const r = card.getBoundingClientRect();
@@ -3841,8 +3631,6 @@
           card.style.setProperty("--my", ((e.clientY - r.top) / r.height) * 100 + "%");
         });
       });
-
-      // ── Cursor-follow glow on showcase cards ────────────
       document.querySelectorAll(".showcase-card").forEach((card) => {
         card.addEventListener("mousemove", (e) => {
           const r = card.getBoundingClientRect();
@@ -3850,8 +3638,6 @@
           card.style.setProperty("--sc-my", ((e.clientY - r.top) / r.height) * 100 + "%");
         });
       });
-
-      // ── Showcase filter & lightbox ──────────────────────
       (function () {
         const pills = document.querySelectorAll(".showcase-pill");
         const cards = document.querySelectorAll(".showcase-card");
@@ -3861,8 +3647,6 @@
         const lbCounter = document.getElementById("showcase-counter");
         let visibleCards = [];
         let lbIndex = 0;
-
-        // Filter
         pills.forEach((pill) => {
           pill.addEventListener("click", () => {
             pills.forEach((p) => p.classList.remove("active"));
@@ -3883,13 +3667,10 @@
             updateVisibleCards();
           });
         });
-
         function updateVisibleCards() {
           visibleCards = Array.from(cards).filter((c) => !c.classList.contains("hidden"));
         }
         updateVisibleCards();
-
-        // Lightbox open
         cards.forEach((card) => {
           card.addEventListener("click", () => {
             updateVisibleCards();
@@ -3897,7 +3678,6 @@
             openLightbox();
           });
         });
-
         function openLightbox() {
           const card = visibleCards[lbIndex];
           if (!card) return;
@@ -3909,12 +3689,10 @@
           lightbox.classList.add("open");
           document.body.style.overflow = "hidden";
         }
-
         function closeLightbox() {
           lightbox.classList.remove("open");
           document.body.style.overflow = "";
         }
-
         lightbox.querySelector(".showcase-lightbox-close").addEventListener("click", closeLightbox);
         lightbox.addEventListener("click", (e) => {
           if (e.target === lightbox) closeLightbox();
@@ -3936,10 +3714,6 @@
           if (e.key === "ArrowRight") { lbIndex = (lbIndex + 1) % visibleCards.length; openLightbox(); }
         });
       })();
-
-      // ── Cursor-follow glow on the hero mockup ────────────
-      // Big screenshot under the hero — radial glow tracks the cursor while
-      // the user hovers, paired with the lift + scale defined in CSS.
       const heroMockup = document.querySelector(".hero-mockup");
       if (heroMockup) {
         heroMockup.addEventListener("mousemove", (e) => {
@@ -3962,8 +3736,6 @@
           document.body.style.overflow = "hidden";
         });
       }
-
-      // ── Scroll progress bar (rAF-throttled) ──────────────
       const progressFill = document.getElementById("scroll-progress-fill");
       let progressFrame = 0;
       function updateProgress() {
@@ -3987,15 +3759,6 @@
       );
       window.addEventListener("resize", updateProgress, { passive: true });
       updateProgress();
-
-      // ── Active section indicator (single source of truth) ─
-      // Simple scroll-position model: the "current" section is the latest
-      // one whose top has scrolled past a threshold near the navbar bottom.
-      // Avoids the intersection-observer race where multiple sections can
-      // briefly both look active.
-      // Match desktop nav links AND mobile panel links so the active
-       // indicator stays in sync in both views (and remains correct if
-      // the user resizes between them mid-scroll).
       const sectionLinks = Array.from(
         document.querySelectorAll(".nav-link[data-section], .mobile-panel a[data-section]")
       );
@@ -4007,15 +3770,11 @@
         .filter(Boolean);
       let activeRaf = 0;
       function updateActive() {
-        // 120px below the viewport top: section becomes "current" once its
-        // top crosses this line (i.e. ~ at the navbar's bottom edge).
         const threshold = window.scrollY + 120;
         let current = null;
         for (const { el } of sectionPairs) {
           if (el.offsetTop <= threshold) current = el;
         }
-        // If no section has crossed yet (above the very first), nothing is
-        // active. If we're past the last section's bottom, keep the last.
         for (const { el, link } of sectionPairs) {
           link.classList.toggle("active", current === el);
         }
@@ -4033,12 +3792,11 @@
       );
       window.addEventListener("resize", updateActive, { passive: true });
       updateActive();
-
-      // Copy install snippet (button lives in the window header now)
       function copyInstall(btn) {
         const text = `git clone https://github.com/hoangsonww/Claude-Code-Agent-Monitor
 cd Claude-Code-Agent-Monitor
 npm run setup
+npm run install-hooks
 npm run dev
 # then open http://localhost:4820`;
         const label = btn.querySelector(".copy-label");
@@ -4072,22 +3830,16 @@ npm run dev
         var summary = details.querySelector("summary");
         var answer = details.querySelector(".faq-answer");
         if (!summary || !answer) return;
-
-        var animId = 0; // monotonic ID to cancel stale callbacks
-
+        var animId = 0;
         summary.addEventListener("click", function (e) {
           e.preventDefault();
           var myId = ++animId;
-
           if (details.open) {
-            /* ── Close ── */
             details.classList.remove("faq-open");
-            // Force current height so transition has a start value
             var h = answer.querySelector(".faq-answer-inner").scrollHeight;
             answer.style.gridTemplateRows = h + "fr";
             void answer.offsetHeight; // force reflow
             answer.style.gridTemplateRows = "0fr";
-
             answer.addEventListener("transitionend", function handler(ev) {
               if (ev.propertyName !== "grid-template-rows") return;
               answer.removeEventListener("transitionend", handler);
@@ -4096,13 +3848,11 @@ npm run dev
               answer.style.gridTemplateRows = "";
             });
           } else {
-            /* ── Open ── */
             details.open = true;
             details.classList.add("faq-open");
             answer.style.gridTemplateRows = "0fr";
             void answer.offsetHeight; // force reflow
             answer.style.gridTemplateRows = "1fr";
-
             answer.addEventListener("transitionend", function handler(ev) {
               if (ev.propertyName !== "grid-template-rows") return;
               answer.removeEventListener("transitionend", handler);
