@@ -7,6 +7,8 @@
   "activityFeed": "Activity Feed",
   "analytics": "Analytics",
   "workflows": "Workflows",
+  "ccConfig": "Claude Config",
+  "run": "Run Claude",
   "settings": "Settings",
   "language": "Language",
   "github": "GitHub",

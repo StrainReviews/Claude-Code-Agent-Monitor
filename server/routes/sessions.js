@@ -594,6 +594,8 @@ router.get("/:id/transcript", async (req, res) => {
           message.usage = {
             input_tokens: msg.usage.input_tokens || 0,
             output_tokens: msg.usage.output_tokens || 0,
+            cache_read_input_tokens: msg.usage.cache_read_input_tokens || 0,
+            cache_creation_input_tokens: msg.usage.cache_creation_input_tokens || 0,
           };
         }
       }

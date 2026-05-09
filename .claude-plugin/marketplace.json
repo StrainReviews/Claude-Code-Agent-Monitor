@@ -1,6 +1,10 @@
 {
-  "name": "Claude Code Agent Monitor Plugins",
+  "name": "claude-code-agent-monitor-plugins",
   "description": "Official plugin marketplace for Claude Code Agent Monitor — analytics, productivity, developer tools, insights, and dashboard connectivity plugins for monitoring and optimizing your Claude Code sessions.",
+  "owner": {
+    "name": "hoangsonww",
+    "url": "https://github.com/hoangsonww"
+  },
   "homepage": "https://github.com/hoangsonww/Claude-Code-Agent-Monitor",
   "repository": "https://github.com/hoangsonww/Claude-Code-Agent-Monitor",
   "plugins": [

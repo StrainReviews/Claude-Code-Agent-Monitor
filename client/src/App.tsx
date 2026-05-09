@@ -15,6 +15,8 @@ import { ActivityFeed } from "./pages/ActivityFeed";
 import { Analytics } from "./pages/Analytics";
 import { Workflows } from "./pages/Workflows";
 import { Settings } from "./pages/Settings";
+import { CcConfig } from "./pages/CcConfig";
+import { Run } from "./pages/Run";
 import { NotFound } from "./pages/NotFound";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { useNotifications } from "./hooks/useNotifications";
@@ -40,6 +42,8 @@ export default function App() {
           <Route path="activity" element={<ActivityFeed />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="workflows" element={<Workflows />} />
+          <Route path="cc-config" element={<CcConfig />} />
+          <Route path="run" element={<Run />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Route>

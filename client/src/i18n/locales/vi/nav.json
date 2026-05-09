@@ -7,6 +7,8 @@
   "activityFeed": "Luồng hoạt động",
   "analytics": "Phân tích",
   "workflows": "Quy trình",
+  "ccConfig": "Cấu hình Claude",
+  "run": "Chạy Claude",
   "settings": "Cài đặt",
   "language": "Ngôn ngữ",
   "github": "GitHub",
