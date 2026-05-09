@@ -445,10 +445,12 @@ graph TB
     Feed["/activity"]
     Analytics["/analytics"]
     Workflows["/workflows"]
+    CcConfig["/cc-config"]
+    Run["/run"]
     Settings["/settings"]
     NF["/* (NotFound)"]
 
-    Root --> Dashboard & Kanban & Sessions & Detail & Feed & Analytics & Workflows & Settings & NF
+    Root --> Dashboard & Kanban & Sessions & Detail & Feed & Analytics & Workflows & CcConfig & Run & Settings & NF
 
     style Dashboard fill:#3B82F6
     style Detail fill:#3B82F6
@@ -473,6 +475,8 @@ function App() {
           <Route path="activity" element={<ActivityFeed />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="workflows" element={<Workflows />} />
+          <Route path="cc-config" element={<CcConfig />} />
+          <Route path="run" element={<Run />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<NotFound />} />
         </Route>

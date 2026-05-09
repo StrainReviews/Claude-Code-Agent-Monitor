@@ -22,7 +22,19 @@ export function useWebSocket(onMessage: MessageHandler) {
 
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // Don't open a second socket if one is already alive or in flight.
+    // Without this, React 18 StrictMode (mount → cleanup → remount in dev)
+    // and the close→reconnect race could leave two sockets connected at the
+    // same time. Both would receive every server broadcast, producing
+    // duplicate stream_event deltas (doubled text, duplicate assistant
+    // bubbles, doubled rate_limit_event rows).
+    const existing = wsRef.current;
+    if (
+      existing &&
+      (existing.readyState === WebSocket.OPEN || existing.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host;
@@ -69,7 +81,17 @@ export function useWebSocket(onMessage: MessageHandler) {
     return () => {
       mountedRef.current = false;
       clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
+      const ws = wsRef.current;
+      if (ws) {
+        // Detach handlers so a still-closing socket can't deliver a final
+        // onmessage / onclose into the bus after the component is gone.
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+        wsRef.current = null;
+      }
     };
   }, [connect]);
 

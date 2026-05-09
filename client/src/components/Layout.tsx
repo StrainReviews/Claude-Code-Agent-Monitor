@@ -37,7 +37,7 @@ export function Layout({ wsConnected }: LayoutProps) {
           width: collapsed ? "calc(100% - 4.25rem)" : "calc(100% - 15rem)",
         }}
       >
-        <div className="p-8 max-w-full overflow-x-hidden">
+        <div className="p-5 lg:p-6 max-w-full overflow-x-hidden">
           <Outlet />
         </div>
       </main>

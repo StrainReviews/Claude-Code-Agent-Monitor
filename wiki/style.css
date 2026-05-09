@@ -61,22 +61,16 @@ body {
 }
 
 /* ─── Scroll Reveal ─────────────────────────────────────────────────────── */
-.reveal-on-scroll {
-  --reveal-delay: 0ms;
-  opacity: 0;
-  transform: translate3d(0, 24px, 0) scale(0.985);
-  filter: blur(10px);
-  transition:
-    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    filter 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
-  will-change: opacity, transform, filter;
-}
-
+/* Reveal animations are intentionally disabled on the wiki — content should
+   appear immediately so users can read / scan / Cmd+F without waiting for
+   transitions. The reveal-on-scroll class is still applied by script.js but
+   is treated as a no-op via the rules below. */
+.reveal-on-scroll,
 .reveal-on-scroll.is-visible {
   opacity: 1;
-  transform: translate3d(0, 0, 0) scale(1);
-  filter: blur(0);
+  transform: none;
+  filter: none;
+  transition: none;
 }
 
 /* ─── Layout ────────────────────────────────────────────────────────────── */

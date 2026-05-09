@@ -45,7 +45,7 @@ graph TB
 |----------|-------------|----------|
 | [client/README.md](../client/README.md) | React frontend architecture, components, state management | Frontend developers |
 | [server/README.md](../server/README.md) | Express backend, database, WebSocket, API | Backend developers |
-| [API.md](./API.md) | REST API endpoints, WebSocket protocol | Integration developers |
+| [API.md](./API.md) | REST API endpoints (sessions, agents, events, stats, analytics, hooks, pricing, workflows, settings, import history, **cc-config**, **run**), WebSocket protocol (including `run_stream` / `run_status` / `run_input_ack` for the Run page) | Integration developers |
 | [DATABASE.md](./DATABASE.md) | SQLite schema, queries, performance | Database administrators |
 | [HOOKS.md](./HOOKS.md) | Claude Code hook system integration | Hook developers |
 | [MCP.md](./MCP.md) | MCP server setup and tool reference | MCP integrators |

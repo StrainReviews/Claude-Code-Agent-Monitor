@@ -1229,7 +1229,14 @@ export function Dashboard() {
                                 )}
                               </button>
                             )}
-                            {isSubagent && !hasChildren && <span className="w-6 flex-shrink-0" />}
+                            {/* Reserve the chevron column even when this row
+                                has no chevron — without this, peer top-level
+                                mains would line up at different x positions
+                                depending on whether they have subagents,
+                                making chevron-having mains look indented
+                                like a subagent of the chevron-less main
+                                above them. */}
+                            {!hasChildren && <span className="w-6 flex-shrink-0" />}
                             {isSubagent && (
                               <GitBranch className="w-3 h-3 text-violet-400 flex-shrink-0" />
                             )}

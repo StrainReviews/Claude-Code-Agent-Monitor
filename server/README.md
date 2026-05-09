@@ -472,6 +472,48 @@ Request body shape:
 | `GET`  | `/api/settings/export`         | Export all data as JSON attachment               |
 | `POST` | `/api/settings/cleanup`        | Abandon stale sessions and purge old data        |
 
+### Claude Config Explorer (`/api/cc-config`)
+
+Reads — and carefully gated mutations for low-risk text-file artifacts — for every Claude Code configuration surface. Mutations always create timestamped backups under `<root>/cc-config-backups/<type>/` before writing.
+
+| Method   | Path                                  | Description |
+| -------- | ------------------------------------- | ----------- |
+| `GET`    | `/api/cc-config/overview`             | Roots + counts for every surface (used by the Overview tab) |
+| `GET`    | `/api/cc-config/skills`               | Skills with parsed frontmatter, `?scope=user\|project\|all` |
+| `GET`    | `/api/cc-config/agents`               | Subagents under `<scope>/.claude/agents/*.md` |
+| `GET`    | `/api/cc-config/commands`             | Slash commands under `<scope>/.claude/commands/*.md` |
+| `GET`    | `/api/cc-config/output-styles`        | Output styles under `<scope>/.claude/output-styles/*.md` |
+| `GET`    | `/api/cc-config/plugins`              | Installed plugins joined with `enabledPlugins` + per-plugin `contributes` count + `plugin.json` metadata |
+| `GET`    | `/api/cc-config/marketplaces`         | `known_marketplaces.json` enriched with each marketplace's own `marketplace.json` |
+| `GET`    | `/api/cc-config/mcp`                  | MCP servers from `~/.claude.json` and `settings.json` |
+| `GET`    | `/api/cc-config/hooks`                | Hooks aggregated across user / project / project-local `settings.json` |
+| `GET`    | `/api/cc-config/hook-scripts`         | Files in `~/.claude/hooks/` (helper scripts referenced by hook commands) |
+| `GET`    | `/api/cc-config/keybindings`          | `~/.claude/keybindings.json` parsed into context-grouped key/action pairs |
+| `GET`    | `/api/cc-config/statusline`           | `settings.json.statusLine` config + script content if present |
+| `GET`    | `/api/cc-config/settings`             | User / project / project-local settings JSON, secret keys redacted |
+| `GET`    | `/api/cc-config/memory`               | `CLAUDE.md` files at user + project scope |
+| `GET`    | `/api/cc-config/file?path=…`          | Body of a single file (path-contained to allowed roots) |
+| `GET`    | `/api/cc-config/backups[?scope=&type=]` | Listing of all timestamped backups |
+| `PUT`    | `/api/cc-config/file`                 | Create or overwrite a text-file artifact (skills/agents/commands/output-styles/memory). Body: `{ scope, type, name?, content }`. Auto-backs-up if file exists. Atomic temp + rename. 256 KB cap |
+| `DELETE` | `/api/cc-config/file`                 | Backup-then-delete a text-file artifact. Skill dirs are backed up whole before recursive removal |
+
+### Run Claude (`/api/run`)
+
+HTTP surface for spawning and supervising `claude` subprocesses from the dashboard. Every route enforces a same-origin / loopback-Origin guard against browser CSRF.
+
+| Method   | Path                          | Description |
+| -------- | ----------------------------- | ----------- |
+| `GET`    | `/api/run`                    | List handles + `maxConcurrent` + `activeCount` |
+| `GET`    | `/api/run/binary`             | Probe whether `claude` is on `PATH` |
+| `GET`    | `/api/run/cwds`               | Suggested cwds (dashboard, home, recent from sessions) |
+| `GET`    | `/api/run/files?cwd=…&q=…`    | Fuzzy file search inside `cwd` for the Run page's `@`-file autocomplete. Skips `node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`, `coverage`, `vendor`, etc. Cwd is required and must exist; results are capped and ranked by basename match |
+| `POST`   | `/api/run`                    | Spawn. Body: `{ prompt, mode, cwd?, model?, permissionMode?, resumeSessionId?, effort? }`. `effort` (`low`/`medium`/`high`) maps to `--effort`. When `resumeSessionId` is set in conversation mode, `prompt` may be empty — the spawner skips the initial stdin write and `claude --resume` idles until the client POSTs a follow-up to `/api/run/:id/message`. Spawner always passes `--output-format stream-json --verbose --include-partial-messages` for character-by-character streaming. Concurrency is effectively uncapped by default (ceiling 10000, override with `RUN_MAX_CONCURRENT`) — the terminal TUI has no cap and neither does the dashboard; the ceiling is sanity-only to prevent fork-bomb footguns |
+| `POST`   | `/api/run/:id/message`        | Send follow-up turn (conversation mode only). Body: `{ text }` |
+| `GET`    | `/api/run/:id`                | Handle state. `?envelopes=1` includes the in-memory envelope log for re-attach |
+| `DELETE` | `/api/run/:id`                | Stop (SIGTERM → SIGKILL after 5 s) |
+
+WebSocket message types added: `run_stream` (parsed stream-json envelope, including `stream_event` deltas from `--include-partial-messages`), `run_status` (status transitions), `run_input_ack` (stdin write confirmed), and `cc_config_changed` (broadcast by `lib/cc-watcher.js` on `fs.watch` events under `~/.claude/` and by `routes/cc-config.js` after every successful PUT/DELETE — debounced at 500 ms, payload `{ source: "dashboard"|"fs", action?, scope?, type?, name?, paths? }`).
+
 ### Import History
 
 Bring existing Claude Code sessions into the dashboard. All four entry

@@ -683,6 +683,55 @@ curl http://localhost:4820/api/sessions/sess_abc123/notifications
 }
 ```
 
+### Claude Config Explorer
+
+The `/api/cc-config/*` namespace powers the Claude Config Explorer page. All read endpoints are pure file reads under `CLAUDE_HOME` and the project's `.claude/` dir; mutations are limited to low-risk text-file artifacts (skills, subagents, slash commands, output styles, memory) and always create a timestamped backup before writing. Plugins, MCP servers, hooks-in-settings, and live `settings.json` files stay read-only because they are written concurrently by the running Claude Code CLI.
+
+```http
+GET /api/cc-config/overview
+GET /api/cc-config/skills?scope=user|project|all
+GET /api/cc-config/agents
+GET /api/cc-config/commands
+GET /api/cc-config/output-styles
+GET /api/cc-config/plugins
+GET /api/cc-config/marketplaces
+GET /api/cc-config/mcp
+GET /api/cc-config/hooks
+GET /api/cc-config/hook-scripts
+GET /api/cc-config/keybindings
+GET /api/cc-config/statusline
+GET /api/cc-config/settings
+GET /api/cc-config/memory
+GET /api/cc-config/file?path=<absolute-path>
+GET /api/cc-config/backups[?scope=&type=]
+PUT /api/cc-config/file        Body: { scope, type, name?, content }
+DELETE /api/cc-config/file     Body: { scope, type, name? }
+```
+
+`scope` is `"user"` or `"project"`. `type` is one of `skills`, `agents`, `commands`, `output-styles`, `memory`. `name` is required for everything except `memory` (which is `CLAUDE.md` itself). On `PUT`, `name` is validated against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`. Settings are returned with secret-like keys (matching `/token|secret|password|api[_-]?key|auth/i`) replaced by `"<redacted>"`.
+
+Backup paths look like `<root>/cc-config-backups/<type>/<base>.<ISO>.bak[.dir]` — outside the directories Claude Code scans, so a deleted skill cannot resurface as a backup-named one. The Backups modal in the UI auto-builds `mv` restore commands.
+
+### Run Claude
+
+The `/api/run/*` namespace spawns and supervises `claude` subprocesses from the dashboard. Every route enforces a same-origin / loopback-Origin guard; browser requests must come from `localhost`, `127.0.0.1`, `::1`, or `0.0.0.0`. CLI / curl requests with no `Origin` header pass through.
+
+```http
+GET    /api/run                       List all handles + concurrency state
+GET    /api/run/binary                { found, path } for the `claude` binary
+GET    /api/run/cwds                  Suggested cwds (dashboard, home, recent)
+GET    /api/run/files?cwd=&q=         Fuzzy file search inside cwd for the @-file autocomplete
+                                       (skips node_modules, .git, dist, build, .next, .cache, coverage, vendor)
+POST   /api/run                       Spawn — Body: { prompt, mode, cwd?, model?, permissionMode?, resumeSessionId?, effort? }
+POST   /api/run/:id/message           Send follow-up turn — Body: { text }
+GET    /api/run/:id[?envelopes=1]     Handle state; ?envelopes=1 includes the in-memory envelope log
+DELETE /api/run/:id                   Stop (SIGTERM → SIGKILL after 5 s)
+```
+
+`mode` is `"headless"` (single-shot, stdin closed after spawn, prompt in argv via `-p`) or `"conversation"` (multi-turn, stdin stays open, prompt and follow-ups piped as stream-json envelopes). `resumeSessionId` requires conversation mode and adds `--resume <id>` so the run continues an existing Claude Code session — the cwd is locked to the original session's cwd. **When `resumeSessionId` is set, `prompt` may be empty** — the spawner skips the initial stdin write and `claude --resume` idles on the resumed conversation until the user posts a follow-up via `POST /api/run/:id/message`. Headless mode and fresh conversations still require a non-empty prompt (`EBADPROMPT` otherwise). `effort` (`"low"` / `"medium"` / `"high"`) maps to `--effort` and tunes the model's thinking budget. The spawner always passes `--output-format stream-json --verbose --include-partial-messages` so output streams over the existing dashboard WebSocket as `run_stream` (parsed envelopes, including `stream_event` deltas for character-by-character rendering), `run_status` (status transitions), and `run_input_ack` (stdin write confirmed). Concurrency is effectively uncapped (default ceiling 10000, override with `RUN_MAX_CONCURRENT`) — the terminal TUI has no cap and neither does the dashboard; the ceiling exists only to prevent fork-bomb footguns from a buggy client.
+
+Spawned `claude` processes fire the dashboard's hooks like any other CLI session, so they show up in `/api/sessions`, the analytics, the Kanban board, and the Workflows page automatically — the Run page itself just owns the live streaming UX.
+
 ---
 
 ## WebSocket API
@@ -853,6 +902,25 @@ Sent when a notification is created.
     "created_at": "2024-03-18T12:05:00Z"
   }
 }
+```
+
+#### run_stream / run_status / run_input_ack
+
+Broadcast by `routes/run.js` and `lib/run-spawner.js` for `/run` page subprocesses. `run_stream.data.envelope` is a parsed stream-json envelope; the spawner runs claude with `--include-partial-messages` so this includes `stream_event` deltas (`message_start`, `content_block_delta` text/thinking deltas, `message_stop`, etc.) for character-level streaming.
+
+```json
+{ "type": "run_stream", "data": { "id": "<run-id>", "envelope": { "type": "stream_event", "event": { "type": "content_block_delta", "index": 0, "delta": { "type": "text_delta", "text": "Hello" } } } } }
+{ "type": "run_status", "data": { "id": "<run-id>", "status": "running", "at": 1700000000000 } }
+{ "type": "run_input_ack", "data": { "id": "<run-id>", "messageId": "<uuid>", "at": 1700000000000 } }
+```
+
+#### cc_config_changed
+
+Broadcast whenever Claude Code configuration changes — either by dashboard mutations on `PUT/DELETE /api/cc-config/file` (`source: "dashboard"`) or by `lib/cc-watcher.js` picking up external `fs.watch` events on `~/.claude/` and `~/.claude.json` (`source: "fs"`, debounced at 500 ms). The Config Explorer page subscribes and refetches automatically.
+
+```json
+{ "type": "cc_config_changed", "data": { "source": "dashboard", "action": "write", "scope": "user", "type": "skill", "name": "my-skill" } }
+{ "type": "cc_config_changed", "data": { "source": "fs", "paths": ["/Users/foo/.claude/settings.json"] } }
 ```
 
 ### Event Flow

@@ -34,7 +34,9 @@
       "Bash(node --check server/routes/hooks.js)",
       "Bash(node --check server/lib/transcript-cache.js)",
       "Bash(node -e ':*)",
-      "Bash(node -e \"require\\('./server/lib/transcript-cache'\\); require\\('./scripts/import-history'\\); console.log\\('All modules load OK'\\)\")"
+      "Bash(node -e \"require\\('./server/lib/transcript-cache'\\); require\\('./scripts/import-history'\\); console.log\\('All modules load OK'\\)\")",
+      "Bash(claude --version)",
+      "Bash(gh pr *)"
     ]
   }
 }

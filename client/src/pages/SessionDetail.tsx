@@ -4,7 +4,7 @@
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
@@ -20,6 +20,8 @@ import {
   MessageSquare,
   List,
   AlertCircle,
+  Play,
+  ExternalLink,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
@@ -77,6 +79,9 @@ export function SessionDetail() {
   const [grouped, setGrouped] = useState(true);
   const [cost, setCost] = useState<CostResult | null>(null);
   const [loading, setLoading] = useState(true);
+  // True when this session is currently being driven by an in-flight Run
+  // handle on /run. Drives the "Open in Run page" banner up top.
+  const [isDashboardRun, setIsDashboardRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(() => {
     return new Set<string>();
@@ -127,6 +132,38 @@ export function SessionDetail() {
       };
     }
   }, [transcriptNotFound]);
+
+  // Probe /api/run to see whether THIS session is currently being driven by
+  // an in-flight Run handle. If so, surface a banner so the user can hop
+  // back to /run instead of viewing this as a passive transcript.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    const probe = () => {
+      // Defensive: tests mock the api module without a `run` namespace.
+      if (!api.run || typeof api.run.list !== "function") return;
+      api.run
+        .list()
+        .then((r) => {
+          if (cancelled) return;
+          const live = r.items.some(
+            (h) => h.sessionId === id && (h.status === "running" || h.status === "spawning")
+          );
+          setIsDashboardRun(live);
+        })
+        .catch(() => undefined);
+    };
+    probe();
+    const t = setInterval(probe, 10000);
+    const unsub = eventBus.subscribe((msg) => {
+      if (msg.type === "run_status") probe();
+    });
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+      unsub();
+    };
+  }, [id]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -485,6 +522,29 @@ export function SessionDetail() {
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
+
+      {isDashboardRun && (
+        <Link
+          to={`/run?session=${encodeURIComponent(id || "")}`}
+          className="flex items-center gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.12] hover:border-emerald-500/50 px-4 py-2.5 transition-colors group"
+        >
+          <span className="w-7 h-7 rounded-md bg-emerald-500/15 border border-emerald-500/30 inline-flex items-center justify-center flex-shrink-0">
+            <Play className="w-3.5 h-3.5 text-emerald-300" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-emerald-200">
+              {t("detail.dashboardRun.title", "This session is being driven from the Run page")}
+            </div>
+            <div className="text-[11px] text-emerald-400/70">
+              {t(
+                "detail.dashboardRun.body",
+                "Send follow-ups, watch streaming output, or stop the run from there."
+              )}
+            </div>
+          </div>
+          <ExternalLink className="w-4 h-4 text-emerald-300/70 group-hover:text-emerald-200 flex-shrink-0" />
+        </Link>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex items-center gap-1 border-b border-border">
