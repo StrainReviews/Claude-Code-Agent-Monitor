@@ -1053,28 +1053,16 @@
                   <div class="feature-icon ic-emerald">▶️</div>
                   <h3>Run Claude</h3>
                   <p>
-                    Spawn <code>claude</code> subprocesses directly from the dashboard with a chat-style
-                    streaming UI. Multi-turn <b>Conversation</b> mode (stdin stays open for follow-ups)
-                    or <b>One-shot</b> headless mode. Resume any existing session via
-                    <code>claude --resume &lt;id&gt;</code> from a searchable session picker. The unified
-                    active-runs / history modal also offers two zero-config jump buttons: <b>Resume</b>
-                    on a past conversation row spawns <code>claude --resume &lt;id&gt;</code> immediately
-                    and seeds the chat with the prior transcript (no need to retype a prompt — the
-                    spawn idles on stdin until you send a follow-up); <b>View</b> on a past one-shot
-                    row loads the captured transcript inline into the run viewer as read-only.
-                    Active runs switcher lets you leave a run in the background and start another;
-                    re-attach reconciles the spawner's in-memory log with the on-disk JSONL transcript so
-                    the full prior history survives navigating away from a resumed run. Real character-by-character
-                    streaming via <code>--include-partial-messages</code>. <b>TUI parity (Tier 1)</b>:
-                    a collapsible limitations banner explaining stream-json vs. terminal TUI, slash-command
-                    autocomplete (user / project / plugin commands expanded client-side, plus built-in CLI
-                    commands flagged "CLI only"), <code>@</code>-file references with debounced cwd-scoped
-                    fuzzy search, a live context-window / token meter (input + output + cache-read with
-                    indigo → amber → red thresholds, hydrates from finalized assistant <code>usage</code>
-                    blocks on resume / view / re-attach so it never sits at 0/200k), and a thinking-effort
-                    field wired to <code>--effort</code>.
-                    Spawned sessions fire the same hooks any CLI session does, so they show up automatically in
-                    Sessions / Analytics / Kanban / Workflows. Same-origin guard prevents browser drive-by spawning.
+                    Spawn <code>claude</code> subprocesses straight from the dashboard with a chat-style
+                    streaming UI — multi-turn <b>Conversation</b> or single-shot <b>Headless</b> mode.
+                    One-click <b>Resume</b> on any past conversation row spawns <code>claude --resume</code>
+                    and seeds the chat with the prior transcript; <b>View</b> opens past one-shots inline
+                    as read-only. Re-attach reconciles the spawner's in-memory log with the on-disk JSONL,
+                    so navigating away from a resumed run never loses prior history. <b>TUI parity</b>:
+                    slash-command autocomplete, <code>@</code>-file references, live token / context-window
+                    meter that hydrates from saved <code>usage</code> blocks, thinking-effort dial, and a
+                    limitations banner spelling out what stream-json can vs. can't do compared to the TUI.
+                    Same-origin guard blocks drive-by spawns; spawned sessions fire the same hooks as the CLI.
                   </p>
                 </div>
                 <div class="feature-card">
@@ -4612,7 +4600,7 @@ npm run install-hooks</code></pre>
     </div>
     <!-- /.wiki-layout -->
 
-    <script src="script.js?v=7" defer></script>
+    <script src="script.js?v=14" defer></script>
     <script>
       /* ─── Feature Carousel ──────────────────────────────────────────────── */
       (function () {

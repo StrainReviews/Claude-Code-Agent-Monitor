@@ -1466,6 +1466,102 @@ tr:hover td {
   scroll-margin-top: 32px;
 }
 
+/* ─── Nav-target highlight ──────────────────────────────────────────────── */
+/* Smooth, single-curve effect on the section heading. Two layers, one
+   eased curve, no abrupt mid-keyframe transitions:
+     1. The heading text itself "breathes" — color eases into a soft
+        indigo tint with a matching text-shadow glow, then eases back
+        to normal. One continuous in-and-out.
+     2. A thin gradient underline draws under the heading and softly
+        fades. Cubic-bezier eased so the draw and the fade share the
+        same gentle motion.
+   Total duration: 2.2s. Both animations use the same easing curve so
+   they feel unified rather than layered. */
+
+@keyframes navTextBreathe {
+  0%,
+  100% {
+    color: var(--text);
+    text-shadow: 0 0 0 transparent;
+  }
+  45% {
+    color: #c7d2fe;
+    text-shadow:
+      0 0 28px rgba(129, 140, 248, 0.45),
+      0 0 6px rgba(167, 139, 250, 0.2);
+  }
+}
+
+@keyframes navUnderlineDraw {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  45% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+/* Heading text breathes in/out (color + glow). Single eased curve from
+   start to end, no jumpy intermediate stops. Only the section's TOP
+   heading (h1 or h2 — never h3, those are subheads inside the body). */
+.nav-target-highlight > h1:first-of-type,
+.nav-target-highlight > h2:first-of-type,
+.nav-target-highlight > header > h1:first-of-type,
+.nav-target-highlight > header > h2:first-of-type {
+  position: relative;
+  animation: navTextBreathe 2.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+  transition: color 0.4s ease;
+}
+
+/* Soft underline that draws then fades. */
+.nav-target-highlight > h1:first-of-type::after,
+.nav-target-highlight > h2:first-of-type::after,
+.nav-target-highlight > header > h1:first-of-type::after,
+.nav-target-highlight > header > h2:first-of-type::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 30%;
+  bottom: -6px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(129, 140, 248, 0.85) 0%,
+    rgba(167, 139, 250, 0.55) 60%,
+    transparent 100%
+  );
+  box-shadow: 0 0 14px rgba(129, 140, 248, 0.4);
+  transform-origin: left center;
+  animation: navUnderlineDraw 2.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-target-highlight > h1:first-of-type,
+  .nav-target-highlight > h2:first-of-type,
+  .nav-target-highlight > header > h1:first-of-type,
+  .nav-target-highlight > header > h2:first-of-type {
+    animation: none;
+    color: #c7d2fe;
+    transition: color 0.5s ease;
+  }
+  .nav-target-highlight > h1:first-of-type::after,
+  .nav-target-highlight > h2:first-of-type::after,
+  .nav-target-highlight > header > h1:first-of-type::after,
+  .nav-target-highlight > header > h2:first-of-type::after {
+    animation: none;
+    transform: scaleX(1);
+    opacity: 0.6;
+  }
+}
+
 /* ─── Divider ───────────────────────────────────────────────────────────── */
 hr {
   border: none;
