@@ -3848,20 +3848,16 @@ npm run dev
         var summary = details.querySelector("summary");
         var answer = details.querySelector(".faq-answer");
         if (!summary || !answer) return;
-
         var animId = 0;
-
         summary.addEventListener("click", function (e) {
           e.preventDefault();
           var myId = ++animId;
-
           if (details.open) {
             details.classList.remove("faq-open");
             var h = answer.querySelector(".faq-answer-inner").scrollHeight;
             answer.style.gridTemplateRows = h + "fr";
             void answer.offsetHeight; // force reflow
             answer.style.gridTemplateRows = "0fr";
-
             answer.addEventListener("transitionend", function handler(ev) {
               if (ev.propertyName !== "grid-template-rows") return;
               answer.removeEventListener("transitionend", handler);
@@ -3875,7 +3871,6 @@ npm run dev
             answer.style.gridTemplateRows = "0fr";
             void answer.offsetHeight; // force reflow
             answer.style.gridTemplateRows = "1fr";
-
             answer.addEventListener("transitionend", function handler(ev) {
               if (ev.propertyName !== "grid-template-rows") return;
               answer.removeEventListener("transitionend", handler);
