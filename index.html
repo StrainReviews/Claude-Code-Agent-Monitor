@@ -3524,7 +3524,6 @@
         const panel = document.getElementById("mobile-panel");
         const overlay = document.getElementById("mobile-overlay");
         if (!toggle || !panel || !overlay) return;
-
         function open() {
           nav.classList.add("menu-open");
           panel.classList.add("open");
@@ -3545,7 +3544,6 @@
           if (panel.classList.contains("open")) close();
           else open();
         }
-
         toggle.addEventListener("click", toggleMenu);
         overlay.addEventListener("click", close);
         const panelClose = document.getElementById("mobile-panel-close");
@@ -3563,7 +3561,6 @@
         if (mql.addEventListener) mql.addEventListener("change", onChange);
         else mql.addListener(onChange);
       })();
-
       const io = new IntersectionObserver(
         (entries) => {
           entries.forEach((e) => {
@@ -3576,7 +3573,6 @@
         { threshold: 0.08, rootMargin: "0px 0px -8% 0px" }
       );
       document.querySelectorAll(".reveal, .reveal-stagger").forEach((el) => io.observe(el));
-
       const stackGrid = document.getElementById("stack-grid");
       if (stackGrid) {
         const stackIo = new IntersectionObserver(
@@ -3596,7 +3592,6 @@
         );
         stackIo.observe(stackGrid);
       }
-
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const easeOut = (t) => 1 - Math.pow(1 - t, 3);
       function animateCount(el, target, duration = 1400) {
@@ -3629,7 +3624,6 @@
         { threshold: 0.5 }
       );
       document.querySelectorAll("[data-count]").forEach((el) => countIo.observe(el));
-
       document.querySelectorAll(".feature-card").forEach((card) => {
         card.addEventListener("mousemove", (e) => {
           const r = card.getBoundingClientRect();
@@ -3637,7 +3631,6 @@
           card.style.setProperty("--my", ((e.clientY - r.top) / r.height) * 100 + "%");
         });
       });
-
       document.querySelectorAll(".showcase-card").forEach((card) => {
         card.addEventListener("mousemove", (e) => {
           const r = card.getBoundingClientRect();
@@ -3645,7 +3638,6 @@
           card.style.setProperty("--sc-my", ((e.clientY - r.top) / r.height) * 100 + "%");
         });
       });
-
       (function () {
         const pills = document.querySelectorAll(".showcase-pill");
         const cards = document.querySelectorAll(".showcase-card");
@@ -3655,7 +3647,6 @@
         const lbCounter = document.getElementById("showcase-counter");
         let visibleCards = [];
         let lbIndex = 0;
-
         pills.forEach((pill) => {
           pill.addEventListener("click", () => {
             pills.forEach((p) => p.classList.remove("active"));
@@ -3676,12 +3667,10 @@
             updateVisibleCards();
           });
         });
-
         function updateVisibleCards() {
           visibleCards = Array.from(cards).filter((c) => !c.classList.contains("hidden"));
         }
         updateVisibleCards();
-
         cards.forEach((card) => {
           card.addEventListener("click", () => {
             updateVisibleCards();
@@ -3689,7 +3678,6 @@
             openLightbox();
           });
         });
-
         function openLightbox() {
           const card = visibleCards[lbIndex];
           if (!card) return;
@@ -3701,12 +3689,10 @@
           lightbox.classList.add("open");
           document.body.style.overflow = "hidden";
         }
-
         function closeLightbox() {
           lightbox.classList.remove("open");
           document.body.style.overflow = "";
         }
-
         lightbox.querySelector(".showcase-lightbox-close").addEventListener("click", closeLightbox);
         lightbox.addEventListener("click", (e) => {
           if (e.target === lightbox) closeLightbox();
@@ -3728,7 +3714,6 @@
           if (e.key === "ArrowRight") { lbIndex = (lbIndex + 1) % visibleCards.length; openLightbox(); }
         });
       })();
-
       const heroMockup = document.querySelector(".hero-mockup");
       if (heroMockup) {
         heroMockup.addEventListener("mousemove", (e) => {
@@ -3751,7 +3736,6 @@
           document.body.style.overflow = "hidden";
         });
       }
-
       const progressFill = document.getElementById("scroll-progress-fill");
       let progressFrame = 0;
       function updateProgress() {
@@ -3775,7 +3759,6 @@
       );
       window.addEventListener("resize", updateProgress, { passive: true });
       updateProgress();
-
       const sectionLinks = Array.from(
         document.querySelectorAll(".nav-link[data-section], .mobile-panel a[data-section]")
       );
@@ -3809,7 +3792,6 @@
       );
       window.addEventListener("resize", updateActive, { passive: true });
       updateActive();
-
       function copyInstall(btn) {
         const text = `git clone https://github.com/hoangsonww/Claude-Code-Agent-Monitor
 cd Claude-Code-Agent-Monitor
