@@ -1459,8 +1459,9 @@
 git clone https://github.com/hoangsonww/Claude-Code-Agent-Monitor.git
 cd Claude-Code-Agent-Monitor
 
-# 2. Install all dependencies (server + client)
+# 2. Install all dependencies (server + client) + install hooks
 npm run setup
+npm run install-hooks
 
 # 3. Start in development mode
 npm run dev
@@ -4839,7 +4840,6 @@ npm run install-hooks</code></pre>
         layout();
         startAuto();
 
-        /* Hash navigation — scroll carousel to #feat-* card */
         function scrollToFeatureHash() {
           var hash = window.location.hash;
           if (!hash || hash.indexOf("#feat-") !== 0) return;
@@ -4853,14 +4853,12 @@ npm run install-hooks</code></pre>
           var page = Math.floor(cardIndex / perPage);
           stopAuto();
           goTo(page);
-          /* highlight the target card briefly */
           cards.forEach(function (c) { c.classList.remove("hash-highlight"); });
           targetCard.classList.add("hash-highlight");
           setTimeout(function () {
             targetCard.classList.remove("hash-highlight");
             startAuto();
           }, 3500);
-          /* scroll the features section into view */
           setTimeout(function () {
             carousel.scrollIntoView({ behavior: "smooth", block: "center" });
           }, 80);
@@ -4877,7 +4875,6 @@ npm run install-hooks</code></pre>
           var target = document.getElementById(hash.slice(1));
           if (!target) return;
           target.scrollIntoView({ behavior: "smooth", block: "center" });
-          /* Find this card's img in the lightbox slides and open it */
           setTimeout(function () {
             var img = target.querySelector("img");
             if (!img || !window.__lightboxSlides) { if (img) img.click(); return; }
