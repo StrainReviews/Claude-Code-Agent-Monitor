@@ -489,8 +489,6 @@
         position: relative;
         margin: 56px 0 0;
         padding: 18px 0;
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
         background: transparent;
         overflow: hidden;
       }
@@ -563,6 +561,13 @@
       .marquee-item .dot.pink { background: var(--pink); box-shadow: 0 0 8px var(--pink); }
       .marquee-item .dot.violet { background: var(--violet); box-shadow: 0 0 8px var(--violet); }
       .marquee-item .dot.rose { background: var(--rose); box-shadow: 0 0 8px var(--rose); }
+
+      /* Third marquee speed (in addition to forward/reverse). Slightly
+         slower than the other two so the three lanes move independently
+         and don't visually sync up. */
+      .marquee.slow .marquee-track {
+        animation-duration: 72s;
+      }
 
       /* Window mockup under hero */
       .hero-mockup {
@@ -1157,41 +1162,91 @@
         line-height: 1.6;
       }
 
-      /* ── PAGES ───────────────────────────────────────── */
+      /* ── PAGES (one row per route) ───────────────────── */
       .pages-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
       .page-chip {
-        display: flex;
+        position: relative;
+        display: grid;
+        grid-template-columns: auto 1fr auto auto;
         align-items: center;
-        gap: 10px;
-        padding: 14px 16px;
+        gap: 16px;
+        padding: 16px 22px;
         background: var(--surface-1);
         border: 1px solid var(--border);
         border-radius: var(--radius-sm);
-        font-size: 14px;
         text-decoration: none;
         color: var(--text);
-        transition: transform 0.18s, border-color 0.18s, background 0.18s;
+        transition:
+          transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+          border-color 0.18s,
+          background 0.18s,
+          box-shadow 0.18s;
+        overflow: hidden;
+      }
+      .page-chip::before {
+        /* Soft left-edge accent that lights up on hover, taking the dot's
+           color via currentColor on the dot's parent. */
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 12%;
+        bottom: 12%;
+        width: 2px;
+        border-radius: 0 2px 2px 0;
+        background: transparent;
+        transition: background 0.2s;
       }
       .page-chip:hover {
-        transform: translateY(-2px);
+        transform: translateX(2px);
         border-color: var(--border-strong);
         background: var(--surface-2);
+        box-shadow: 0 10px 24px -14px rgba(99, 102, 241, 0.45);
       }
       .page-chip-dot {
-        width: 8px;
-        height: 8px;
+        width: 9px;
+        height: 9px;
         border-radius: 50%;
         flex-shrink: 0;
-        box-shadow: 0 0 6px currentColor;
+        box-shadow: 0 0 8px currentColor;
+      }
+      /* Drive the left-edge accent off the dot's color via the dot's
+         color: property — set inline in the markup. */
+      .page-chip:hover::before { background: currentColor; }
+      .page-chip-name {
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.005em;
+        color: var(--text);
+      }
+      .page-chip-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.5;
       }
       .page-chip code {
-        font-size: 12px;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 12.5px;
         color: var(--text-dim);
-        margin-left: auto;
+        background: var(--bg-2);
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      .page-chip-arrow {
+        width: 18px;
+        height: 18px;
+        color: var(--text-dim);
+        flex-shrink: 0;
+        transition: transform 0.2s, color 0.2s;
+      }
+      .page-chip:hover .page-chip-arrow {
+        color: var(--accent);
+        transform: translateX(3px);
       }
 
       /* ── STACK ──────────────────────────────────────── */
@@ -1229,8 +1284,9 @@
       }
 
       /* ── FAQ ────────────────────────────────────────── */
+      /* Full-width to match the other sections — the previous 820px cap
+         left it visibly narrower than features / showcase / stack. */
       .faq {
-        max-width: 820px;
         margin: 0 auto;
       }
       .faq-item {
@@ -1279,52 +1335,201 @@
         padding: 96px 24px;
         position: relative;
       }
+      /* Full-width card to match the rest of the page. The visual is
+         layered: a rotating conic-gradient ring on the outer wrapper
+         provides an animated halo; the inner card holds the actual
+         content on a solid surface so text contrast stays clean. */
       .big-cta-card {
-        max-width: 760px;
+        max-width: var(--max-width);
         margin: 0 auto;
-        padding: 64px 36px;
-        background: linear-gradient(
-          135deg,
-          rgba(99, 102, 241, 0.2),
-          rgba(167, 139, 250, 0.12),
-          rgba(34, 211, 238, 0.1)
-        );
-        border: 1px solid var(--border-strong);
-        border-radius: 24px;
         position: relative;
-        overflow: hidden;
-        box-shadow: 0 50px 120px -50px rgba(99, 102, 241, 0.5);
+        border-radius: 28px;
+        padding: 1.5px; /* exposes the rotating gradient as the border */
+        background: conic-gradient(
+          from var(--cta-angle, 0deg),
+          rgba(99, 102, 241, 0.85),
+          rgba(167, 139, 250, 0.85),
+          rgba(34, 211, 238, 0.85),
+          rgba(244, 114, 182, 0.7),
+          rgba(99, 102, 241, 0.85)
+        );
+        animation: ctaSpin 14s linear infinite;
+        box-shadow:
+          0 60px 140px -50px rgba(99, 102, 241, 0.55),
+          0 30px 80px -40px rgba(167, 139, 250, 0.4);
+        overflow: visible;
       }
-      .big-cta-card::before {
+      @property --cta-angle {
+        syntax: "<angle>";
+        inherits: false;
+        initial-value: 0deg;
+      }
+      @keyframes ctaSpin {
+        to { --cta-angle: 360deg; }
+      }
+      /* Fallback for browsers without @property: animate background-position
+         on a fixed conic-gradient — less smooth but still alive. */
+      @supports not (background: conic-gradient(from 0deg, red, blue)) {
+        .big-cta-card { animation: none; }
+      }
+
+      .big-cta-inner {
+        position: relative;
+        border-radius: 27px;
+        padding: 76px 56px 64px;
+        background:
+          radial-gradient(
+            900px 400px at 50% -10%,
+            rgba(167, 139, 250, 0.28),
+            transparent 65%
+          ),
+          radial-gradient(
+            700px 350px at 0% 100%,
+            rgba(34, 211, 238, 0.18),
+            transparent 60%
+          ),
+          radial-gradient(
+            700px 350px at 100% 100%,
+            rgba(244, 114, 182, 0.14),
+            transparent 60%
+          ),
+          linear-gradient(180deg, #11111b 0%, #0a0a13 100%);
+        overflow: hidden;
+        isolation: isolate;
+      }
+      /* Subtle dotted texture so the card has surface depth instead of
+         reading as a flat panel. */
+      .big-cta-inner::before {
         content: "";
         position: absolute;
         inset: 0;
-        background: radial-gradient(
-          400px 200px at 50% -10%,
-          rgba(167, 139, 250, 0.4),
-          transparent 70%
-        );
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 22px 22px;
+        mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+        -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+        opacity: 0.7;
         pointer-events: none;
+        z-index: 0;
+      }
+      /* Soft glow that pulses behind the headline. */
+      .big-cta-inner::after {
+        content: "";
+        position: absolute;
+        top: -120px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 520px;
+        height: 320px;
+        background: radial-gradient(closest-side, rgba(129, 140, 248, 0.55), transparent 70%);
+        filter: blur(40px);
+        pointer-events: none;
+        z-index: 0;
+        animation: ctaPulse 6s ease-in-out infinite;
+      }
+      @keyframes ctaPulse {
+        0%, 100% { opacity: 0.7; transform: translateX(-50%) scale(1); }
+        50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+      }
+
+      .big-cta-eyebrow {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        margin: 0 auto 22px;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(129, 140, 248, 0.4);
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+        backdrop-filter: blur(6px);
+      }
+      .big-cta-eyebrow::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 12px var(--accent);
+        animation: pulse 2s ease-in-out infinite;
       }
       .big-cta-card h2 {
-        font-size: clamp(30px, 4.5vw, 44px);
-        margin: 0 0 14px;
-        letter-spacing: -0.025em;
         position: relative;
+        z-index: 1;
+        font-size: clamp(36px, 5.6vw, 64px);
+        line-height: 1.05;
+        margin: 0 auto 18px;
+        max-width: 18ch;
+        letter-spacing: -0.035em;
+        font-weight: 800;
+        background: linear-gradient(135deg, #fff 30%, var(--accent) 70%, var(--violet) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
       }
       .big-cta-card p {
-        margin: 0 0 28px;
-        color: var(--text-muted);
-        font-size: 16px;
         position: relative;
+        z-index: 1;
+        max-width: 560px;
+        margin: 0 auto 36px;
+        color: var(--text-muted);
+        font-size: 17px;
+        line-height: 1.65;
       }
-      .big-cta-card .btn { position: relative; }
+      .big-cta-card .btn { position: relative; z-index: 1; }
       .big-cta-buttons {
         position: relative;
+        z-index: 1;
         display: inline-flex;
         flex-wrap: wrap;
         gap: 12px;
         justify-content: center;
+      }
+      .big-cta-buttons .btn {
+        padding: 14px 28px;
+        font-size: 14.5px;
+      }
+
+      /* Trust strip below the CTA buttons — small chips that reinforce
+         the local-first / open-source / production-ready story without
+         repeating it in another paragraph. */
+      .big-cta-trust {
+        position: relative;
+        z-index: 1;
+        margin: 32px auto 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 8px 18px;
+        padding-top: 28px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        max-width: 760px;
+      }
+      .big-cta-trust span {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--text-muted);
+        letter-spacing: 0.005em;
+      }
+      .big-cta-trust span svg {
+        width: 14px;
+        height: 14px;
+        color: var(--emerald);
+        flex-shrink: 0;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .big-cta-card { animation: none; }
+        .big-cta-inner::after { animation: none; }
       }
 
       /* ── FOOTER ──────────────────────────────────────── */
@@ -1442,24 +1647,436 @@
         }
       }
 
+      /* ── HAMBURGER + MOBILE NAV PANEL ─────────────────── */
+      /* Hidden on desktop; shown on mobile via the responsive block below.
+         Uses a real <button> inside the nav so it inherits the same blur
+         backdrop and border as the rest of the bar. */
+      .nav-toggle {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin-left: auto;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text);
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.15s, border-color 0.15s, transform 0.15s;
+      }
+      .nav-toggle:hover { background: var(--surface-3); border-color: var(--border-strong); }
+      .nav-toggle:active { transform: scale(0.96); }
+      .nav-toggle svg { width: 20px; height: 20px; }
+      .nav-toggle .icon-close { display: none; }
+      .nav.menu-open .nav-toggle .icon-open { display: none; }
+      .nav.menu-open .nav-toggle .icon-close { display: block; }
+
+      .mobile-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(360px, 92vw);
+        height: 100dvh;
+        background: linear-gradient(180deg, rgba(15, 15, 25, 0.97), rgba(7, 7, 11, 0.97));
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+        border-left: 1px solid var(--border-strong);
+        box-shadow: -30px 0 60px rgba(0, 0, 0, 0.5);
+        padding: calc(env(safe-area-inset-top, 0) + 76px) 22px calc(env(safe-area-inset-bottom, 0) + 28px);
+        z-index: 60;
+        overflow-y: auto;
+        transform: translateX(100%);
+        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .nav.menu-open ~ .mobile-panel,
+      .mobile-panel.open { transform: translateX(0); }
+      .mobile-panel a {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        font-size: 15.5px;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-decoration: none;
+        border-radius: 12px;
+        border: 1px solid transparent;
+        transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+        min-height: 48px;
+      }
+      .mobile-panel a:hover,
+      .mobile-panel a:active {
+        color: var(--text);
+        background: rgba(129, 140, 248, 0.08);
+        border-color: var(--border);
+      }
+      /* Active section indicator — clean pill: accent text on a soft
+         accent tint, with a small leading dot. No inset shadow tricks
+         (those clash with the link's rounded corners). */
+      .mobile-panel a.active {
+        color: var(--accent);
+        background: rgba(99, 102, 241, 0.12);
+        border-color: rgba(129, 140, 248, 0.32);
+        font-weight: 600;
+      }
+      .mobile-panel a.active::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 10px var(--accent);
+        flex-shrink: 0;
+      }
+      /* CTA buttons (Wiki / GitHub) keep their own styling even if a
+         scroll-spy ever marked them active. */
+      .mobile-panel a.mp-cta.active,
+      .mobile-panel a.mp-wiki.active {
+        background: linear-gradient(135deg, var(--accent-strong), var(--violet));
+        color: #fff;
+      }
+      .mobile-panel a.mp-cta.active::before,
+      .mobile-panel a.mp-wiki.active::before { display: none; }
+
+      /* In-panel close button — saves the user from reaching back up to
+         the hamburger in the navbar, especially on tall phones. */
+      .mobile-panel-close {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0) + 14px);
+        right: 14px;
+        width: 38px;
+        height: 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+        z-index: 1;
+      }
+      .mobile-panel-close:hover {
+        background: var(--surface-3);
+        color: var(--text);
+        border-color: var(--border-strong);
+      }
+      .mobile-panel-close:active { transform: scale(0.94); }
+      .mobile-panel-close svg { width: 18px; height: 18px; }
+      .mobile-panel-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 8px 4px 4px;
+      }
+      .mobile-panel .mp-cta {
+        background: linear-gradient(135deg, var(--accent-strong), var(--violet));
+        color: #fff;
+        font-weight: 600;
+        justify-content: center;
+        margin-top: 6px;
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.2) inset, 0 8px 22px rgba(99, 102, 241, 0.4);
+      }
+      .mobile-panel .mp-cta:hover { color: #fff; filter: brightness(1.08); }
+      .mobile-panel .mp-wiki {
+        color: var(--cyan);
+        background: rgba(34, 211, 238, 0.08);
+        border-color: rgba(34, 211, 238, 0.28);
+        justify-content: center;
+        font-weight: 600;
+      }
+      .mobile-panel .mp-wiki:hover { color: #67e8f9; background: rgba(34, 211, 238, 0.16); }
+
+      .mobile-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        z-index: 55;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s;
+      }
+      .mobile-overlay.open { opacity: 1; pointer-events: auto; }
+      body.menu-open { overflow: hidden; }
+
       /* ── RESPONSIVE ──────────────────────────────────── */
+
+      /* Tablet landscape and below — tighten the layout container,
+         start trimming oversized desktop spacing, AND swap the nav for
+         the hamburger menu. The desktop nav with all 9 items only fits
+         comfortably above ~1100px; below that the links wrap or crowd
+         the brand, so we collapse to the slide-in panel earlier. */
+      @media (max-width: 1100px) {
+        .container { padding-left: 22px; padding-right: 22px; }
+        .nav-inner { padding: 12px 22px; gap: 12px; }
+        .nav-links { display: none; }
+        .nav-toggle { display: inline-flex; }
+        .hero { padding: 88px 22px 48px; }
+        .hero-mockup { margin-top: 44px; max-width: 100%; }
+        section { padding-top: 80px; padding-bottom: 80px; }
+        .install { padding: 36px; gap: 32px; }
+        footer { padding: 48px 22px 32px; }
+      }
+
+      /* Tablet portrait — simplify multi-col grids, soften headline
+         scaling. Hide the heaviest decorative orbs on this size to keep
+         paint fast on lower-power tablets. (Nav already collapsed at
+         1100px above.) */
       @media (max-width: 880px) {
+        .nav-inner { padding: 10px 18px; }
+        .brand { font-size: 13.5px; }
+        .brand-mark { width: 28px; height: 28px; font-size: 12px; }
+
+        .container { padding-left: 18px; padding-right: 18px; }
+        section { padding-top: 64px; padding-bottom: 64px; }
+
+        .hero { padding: 64px 18px 36px; }
+        .hero h1 { letter-spacing: -0.038em; }
+        .hero p { font-size: 16.5px; max-width: 560px; }
+        .hero-ctas { gap: 10px; }
+        .btn { padding: 12px 20px; font-size: 14px; }
+
+        .marquee-stack { margin-top: 40px; padding: 14px 0; }
+        .marquee-item { padding: 8px 14px; font-size: 12.5px; }
+        .marquee-track { animation-duration: 38s; }
+        .marquee.reverse .marquee-track { animation-duration: 46s; }
+        .marquee.slow .marquee-track { animation-duration: 56s; }
+
+        .hero-mockup { margin-top: 36px; border-radius: 14px; }
+        .hero-mockup-bar { padding: 10px 14px; }
+        .traffic { width: 10px; height: 10px; }
+        .hero-mockup-url { font-size: 11px; }
+
+        .stats { padding: 40px 0 12px; }
+        .stat { padding: 22px 16px; }
+        .stat-num { font-size: 28px; }
+        .stat-label { font-size: 11px; letter-spacing: 0.06em; }
+
+        .section-eyebrow { font-size: 11px; letter-spacing: 0.14em; margin-bottom: 10px; }
+        .section-title { letter-spacing: -0.02em; }
+        .section-lead { font-size: 15.5px; margin-bottom: 36px; }
+
+        .features-grid { gap: 14px; }
+        .feature-card { padding: 24px 20px 20px; }
+        .feature-card h3 { font-size: 16.5px; }
+        .feature-card p { font-size: 13.5px; }
+
+        .showcase-grid { gap: 16px; }
+        .showcase-body { padding: 16px 18px 20px; }
+
         .install {
           grid-template-columns: 1fr;
           padding: 28px;
           gap: 24px;
         }
-        .nav-link.hide-mobile { display: none; }
-        .footer-inner { grid-template-columns: 1fr 1fr; }
-        .hero { padding: 72px 16px 36px; }
-        section {
-          padding-top: 64px;
-          padding-bottom: 64px;
-        }
+        .install-text h3 { font-size: 24px; }
+        .install-text .btn { margin-right: 8px; margin-bottom: 8px; }
+
+        .values-grid, .archetype-grid, .how-grid, .pages-grid, .stack-grid { gap: 14px; }
+        .archetype { padding: 22px 20px; }
+        .how-step { padding: 22px 20px; }
+
+        .faq-item summary { padding: 18px 20px; font-size: 14.5px; }
+        .faq-item p { padding: 0 20px 18px; }
+
+        .big-cta { padding: 64px 18px; }
+        .big-cta-card { border-radius: 22px; }
+        .big-cta-inner { padding: 56px 28px 48px; border-radius: 21px; }
+        .big-cta-card p { font-size: 15.5px; }
+
+        .footer-inner { grid-template-columns: 1fr 1fr; gap: 28px; }
+        footer { padding: 40px 18px 28px; }
+
+        .orb.o3 { display: none; }
       }
-      @media (max-width: 540px) {
-        .footer-inner { grid-template-columns: 1fr; }
-        .footer-bottom { flex-direction: column; align-items: flex-start; }
+
+      /* Mobile — single-column everything, full-width CTAs, even tighter
+         padding, font shrink for headlines. Hero mockup goes near edge-
+         to-edge so the screenshot is still legible. */
+      @media (max-width: 640px) {
+        :root { --radius: 12px; --radius-sm: 9px; }
+
+        .nav-inner { padding: 10px 14px; }
+        .container { padding-left: 16px; padding-right: 16px; }
+        section { padding-top: 56px; padding-bottom: 56px; }
+
+        .hero { padding: 52px 16px 28px; }
+        .hero h1 {
+          font-size: clamp(34px, 9.5vw, 48px);
+          line-height: 1.05;
+          letter-spacing: -0.035em;
+          max-width: 14ch;
+          margin-bottom: 18px;
+        }
+        .hero p { font-size: 15.5px; margin-bottom: 28px; line-height: 1.55; }
+        .hero-ctas {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: 10px;
+          max-width: 360px;
+          margin: 0 auto;
+        }
+        .hero-ctas .btn {
+          width: 100%;
+          justify-content: center;
+          padding: 13px 22px;
+          font-size: 14.5px;
+        }
+        .badge { font-size: 11.5px; padding: 5px 11px; margin-bottom: 18px; }
+
+        .hero-mockup {
+          margin: 32px -4px 0;
+          border-radius: 12px;
+          box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+            0 40px 60px -30px rgba(99, 102, 241, 0.4),
+            0 16px 30px rgba(0, 0, 0, 0.6);
+        }
+
+        .stats { padding: 32px 0 8px; }
+        .stats-grid {
+          /* 2 columns at this size — single-column looks empty and the
+             auto-fit min of 180px would otherwise force one. */
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .stat { padding: 20px 12px; }
+        .stat-num { font-size: 26px; }
+
+        .section-title { font-size: clamp(26px, 7vw, 34px); }
+        .section-lead { font-size: 15px; margin-bottom: 28px; }
+
+        .features-grid {
+          /* override auto-fit minmax so it doesn't keep 2 cols at 540px */
+          grid-template-columns: 1fr;
+        }
+        .feature-card { padding: 22px 18px 18px; }
+
+        .showcase-grid { grid-template-columns: 1fr; gap: 14px; }
+        .showcase-body h4 { font-size: 16px; }
+        .showcase-body p { font-size: 13.5px; }
+
+        .install { padding: 22px 18px; border-radius: 14px; }
+        .install-text h3 { font-size: 22px; }
+        .install-text .btn {
+          width: 100%;
+          margin-right: 0;
+          justify-content: center;
+        }
+        .code-window { border-radius: 10px; }
+        .code-window-bar { padding: 9px 12px; }
+        .code-window-title { font-size: 10.5px; }
+        .code-window-copy { padding: 3px 8px; font-size: 10.5px; }
+        .code-block { padding: 16px 14px; font-size: 12px; line-height: 1.7; }
+
+        .values-grid, .archetype-grid, .how-grid {
+          grid-template-columns: 1fr;
+        }
+        /* Pages list — collapse the 4-col row to a 2-col stacked row so
+           the route code wraps under name+desc instead of getting squashed. */
+        .page-chip {
+          grid-template-columns: auto 1fr auto;
+          grid-template-areas:
+            "dot title arrow"
+            "dot desc  arrow"
+            "dot code  arrow";
+          gap: 4px 14px;
+          padding: 14px 18px;
+        }
+        .page-chip-dot { grid-area: dot; align-self: start; margin-top: 6px; }
+        .page-chip-name { grid-area: title; }
+        .page-chip-desc { grid-area: desc; }
+        .page-chip code { grid-area: code; justify-self: start; margin-top: 4px; font-size: 11.5px; padding: 3px 8px; }
+        .page-chip-arrow { grid-area: arrow; align-self: center; }
+        .stack-grid { grid-template-columns: repeat(2, 1fr); }
+
+        .archetype { padding: 20px 18px; }
+        .archetype h4 { font-size: 16.5px; }
+        .how-step { padding: 20px 18px; }
+        .how-step h4 { font-size: 15.5px; }
+
+        .faq { padding: 0; }
+        .faq-item summary { padding: 16px 18px; font-size: 14px; gap: 12px; }
+        .faq-item summary::after { font-size: 20px; }
+        .faq-item p { padding: 0 18px 16px; font-size: 13.5px; }
+
+        .big-cta { padding: 48px 16px; }
+        .big-cta-card { border-radius: 20px; }
+        .big-cta-inner { padding: 44px 22px 36px; border-radius: 19px; }
+        .big-cta-trust { gap: 6px 12px; padding-top: 22px; margin-top: 24px; }
+        .big-cta-trust span { font-size: 12px; }
+        .big-cta-buttons {
+          display: flex;
+          flex-direction: column;
+          width: 100%;
+          gap: 10px;
+        }
+        .big-cta-buttons .btn { width: 100%; justify-content: center; }
+
+        .footer-inner { grid-template-columns: 1fr; gap: 24px; }
+        .footer-bottom {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 12px;
+        }
+        footer { padding: 36px 16px calc(24px + env(safe-area-inset-bottom, 0)); }
+
+        /* Decorative orbs are expensive on mobile GPUs and the gradient
+           bg already gives plenty of color. Keep one for ambience. */
+        .orb.o2 { display: none; }
+        .orb.o1 { width: 320px; height: 320px; opacity: 0.4; }
+
+        /* Reveal-on-scroll: drop the blur filter on mobile (it stutters
+           on Safari iOS during scroll-triggered transitions). */
+        .reveal, .reveal-stagger > * { filter: none !important; }
+      }
+
+      /* Small phones (iPhone SE, narrow Androids) — drop one more notch. */
+      @media (max-width: 380px) {
+        .nav-inner { padding: 9px 12px; gap: 8px; }
+        .brand-mark { width: 26px; height: 26px; }
+        .brand span:not(.brand-mark) { display: none; }
+        .nav-toggle { width: 38px; height: 38px; }
+
+        .hero { padding: 44px 14px 24px; }
+        .hero h1 { font-size: clamp(30px, 10vw, 40px); }
+        .hero p { font-size: 14.5px; }
+
+        .container { padding-left: 14px; padding-right: 14px; }
+        section { padding-top: 48px; padding-bottom: 48px; }
+
+        .stats-grid { grid-template-columns: 1fr; }
+        .stack-grid { grid-template-columns: 1fr; }
+
+        .install { padding: 18px 14px; }
+        .code-block { padding: 14px 12px; font-size: 11.5px; }
+      }
+
+      /* Touch-device safety: disable hover-driven transforms so cards
+         don't get stuck "lifted" after a tap on iOS Safari. */
+      @media (hover: none) {
+        .feature-card:hover,
+        .showcase-card:hover,
+        .value-card:hover,
+        .archetype:hover,
+        .how-step:hover,
+        .stack-item:hover,
+        .nav-link:hover,
+        .nav-cta:hover,
+        .nav-wiki:hover,
+        .btn:hover {
+          transform: none;
+        }
+        .hero-mockup:hover { transform: none; }
+        .hero-mockup:hover img { transform: none; }
       }
     </style>
   </head>
@@ -1476,20 +2093,20 @@
     <div class="orb o2"></div>
     <div class="orb o3"></div>
 
-    <header class="nav">
+    <header class="nav" id="nav">
       <div class="nav-inner">
         <a href="#" class="brand">
           <span class="brand-mark">CC</span>
           <span>Claude Code Agent Monitor</span>
         </a>
         <nav class="nav-links" aria-label="Primary">
-          <a href="#values" data-section="values" class="nav-link hide-mobile">Why</a>
-          <a href="#features" data-section="features" class="nav-link hide-mobile">Features</a>
-          <a href="#showcase" data-section="showcase" class="nav-link hide-mobile">Showcase</a>
-          <a href="#who" data-section="who" class="nav-link hide-mobile">Built for</a>
-          <a href="#install" data-section="install" class="nav-link hide-mobile">Install</a>
-          <a href="#stack" data-section="stack" class="nav-link hide-mobile">Stack</a>
-          <a href="#faq" data-section="faq" class="nav-link hide-mobile">FAQ</a>
+          <a href="#values" data-section="values" class="nav-link">Why</a>
+          <a href="#features" data-section="features" class="nav-link">Features</a>
+          <a href="#showcase" data-section="showcase" class="nav-link">Showcase</a>
+          <a href="#who" data-section="who" class="nav-link">Built for</a>
+          <a href="#install" data-section="install" class="nav-link">Install</a>
+          <a href="#stack" data-section="stack" class="nav-link">Stack</a>
+          <a href="#faq" data-section="faq" class="nav-link">FAQ</a>
           <a href="wiki/" class="nav-wiki" target="_blank" rel="noopener noreferrer">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -1513,17 +2130,82 @@
             GitHub
           </a>
         </nav>
+        <button
+          class="nav-toggle"
+          id="nav-toggle"
+          type="button"
+          aria-label="Open menu"
+          aria-controls="mobile-panel"
+          aria-expanded="false"
+        >
+          <svg class="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="17" x2="20" y2="17" />
+          </svg>
+          <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
+        </button>
       </div>
       <div class="scroll-progress" aria-hidden="true">
         <div class="scroll-progress-fill" id="scroll-progress-fill"></div>
       </div>
     </header>
 
+    <div class="mobile-overlay" id="mobile-overlay" aria-hidden="true"></div>
+    <aside
+      class="mobile-panel"
+      id="mobile-panel"
+      aria-label="Mobile menu"
+      aria-hidden="true"
+    >
+      <button
+        type="button"
+        class="mobile-panel-close"
+        id="mobile-panel-close"
+        aria-label="Close menu"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="6" y1="6" x2="18" y2="18" />
+          <line x1="18" y1="6" x2="6" y2="18" />
+        </svg>
+      </button>
+      <a href="#values" data-mp data-section="values">Why</a>
+      <a href="#features" data-mp data-section="features">Features</a>
+      <a href="#showcase" data-mp data-section="showcase">Showcase</a>
+      <a href="#who" data-mp data-section="who">Built for</a>
+      <a href="#install" data-mp data-section="install">Install</a>
+      <a href="#stack" data-mp data-section="stack">Stack</a>
+      <a href="#faq" data-mp data-section="faq">FAQ</a>
+      <div class="mobile-panel-divider"></div>
+      <a href="wiki/" class="mp-wiki" target="_blank" rel="noopener noreferrer" data-mp>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+        </svg>
+        Open the wiki
+      </a>
+      <a
+        href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor"
+        class="mp-cta"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-mp
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.2-.1-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.3.9 1 .9 2v3c0 .3.2.7.8.6A12 12 0 0 0 12 .3" />
+        </svg>
+        Star on GitHub
+      </a>
+    </aside>
+
     <main id="main">
       <!-- ─── HERO ──────────────────────────────────────── -->
       <section class="hero">
         <div class="reveal">
-          <div class="badge">v1.0 - Real-time monitoring + Run + Config Explorer</div>
+          <div class="badge">100% local · zero telemetry · real-time everything</div>
         </div>
         <h1 class="reveal">
           Real-time control plane for <span class="accent">Claude&nbsp;Code</span>.
@@ -1620,6 +2302,38 @@
               <span class="marquee-item"><span class="dot"></span>Kanban board</span>
               <span class="marquee-item"><span class="dot cyan"></span>Update notifier</span>
               <span class="marquee-item"><span class="dot emerald"></span>Local-first, zero telemetry</span>
+            </div>
+          </div>
+          <!-- Third lane: same outline-pill style as the other two,
+               action-oriented copy, slightly slower speed so the three
+               lanes don't visually sync up. -->
+          <div class="marquee slow">
+            <div class="marquee-track">
+              <span class="marquee-item"><span class="dot emerald"></span>Spawn Claude in one click</span>
+              <span class="marquee-item"><span class="dot cyan"></span>Resume any session instantly</span>
+              <span class="marquee-item"><span class="dot violet"></span>Watch tool calls live</span>
+              <span class="marquee-item"><span class="dot amber"></span>Track cost per turn</span>
+              <span class="marquee-item"><span class="dot pink"></span>Replay full session history</span>
+              <span class="marquee-item"><span class="dot emerald"></span>60-second install</span>
+              <span class="marquee-item"><span class="dot rose"></span>Edit skills with backups</span>
+              <span class="marquee-item"><span class="dot violet"></span>Push notify on Stop</span>
+              <span class="marquee-item"><span class="dot cyan"></span>Hooks fire in &lt;5ms</span>
+              <span class="marquee-item"><span class="dot amber"></span>Single binary, single port</span>
+              <span class="marquee-item"><span class="dot pink"></span>Inspect every plugin</span>
+              <span class="marquee-item"><span class="dot emerald"></span>Works fully offline</span>
+              <!-- duplicate for seamless loop -->
+              <span class="marquee-item"><span class="dot emerald"></span>Spawn Claude in one click</span>
+              <span class="marquee-item"><span class="dot cyan"></span>Resume any session instantly</span>
+              <span class="marquee-item"><span class="dot violet"></span>Watch tool calls live</span>
+              <span class="marquee-item"><span class="dot amber"></span>Track cost per turn</span>
+              <span class="marquee-item"><span class="dot pink"></span>Replay full session history</span>
+              <span class="marquee-item"><span class="dot emerald"></span>60-second install</span>
+              <span class="marquee-item"><span class="dot rose"></span>Edit skills with backups</span>
+              <span class="marquee-item"><span class="dot violet"></span>Push notify on Stop</span>
+              <span class="marquee-item"><span class="dot cyan"></span>Hooks fire in &lt;5ms</span>
+              <span class="marquee-item"><span class="dot amber"></span>Single binary, single port</span>
+              <span class="marquee-item"><span class="dot pink"></span>Inspect every plugin</span>
+              <span class="marquee-item"><span class="dot emerald"></span>Works fully offline</span>
             </div>
           </div>
         </div>
@@ -2134,52 +2848,83 @@
       <section id="pages" class="container">
         <div class="reveal">
           <div class="section-eyebrow">Tour the dashboard</div>
-          <h2 class="section-title">13 pages, every detail covered.</h2>
+          <h2 class="section-title">A purpose-built page for every job.</h2>
           <p class="section-lead">
-            Every route is purpose-built - overview, kanban, sessions, analytics, workflows, run,
-            config - and ties back into the same hook-driven event store underneath.
+            Each route is its own focused workspace — kanban for at-a-glance status, sessions for
+            drill-down, analytics for trends, run for live spawning. They all sit on the same
+            hook-driven event store, so what you see anywhere is the same source of truth.
           </p>
         </div>
         <div class="pages-grid reveal-stagger">
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--accent); color: var(--accent)"></span>Dashboard
+            <span class="page-chip-dot" style="background: var(--accent); color: var(--accent)"></span>
+            <span class="page-chip-name">Dashboard</span>
+            <span class="page-chip-desc">Live overview of every active session, agent, and tool call across all projects.</span>
             <code>/</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--emerald); color: var(--emerald)"></span>Kanban
+            <span class="page-chip-dot" style="background: var(--emerald); color: var(--emerald)"></span>
+            <span class="page-chip-name">Kanban</span>
+            <span class="page-chip-desc">Drag-free swim lanes by agent status — waiting, working, completed, error, abandoned.</span>
             <code>/kanban</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--cyan); color: var(--cyan)"></span>Sessions
+            <span class="page-chip-dot" style="background: var(--cyan); color: var(--cyan)"></span>
+            <span class="page-chip-name">Sessions</span>
+            <span class="page-chip-desc">Searchable, filterable list of every session with token, cost, and status facets.</span>
             <code>/sessions</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--pink); color: var(--pink)"></span>Session detail
+            <span class="page-chip-dot" style="background: var(--pink); color: var(--pink)"></span>
+            <span class="page-chip-name">Session detail</span>
+            <span class="page-chip-desc">Full conversation transcript, agent tree, tool calls, errors, and per-turn token cost.</span>
             <code>/sessions/:id</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--violet); color: var(--violet)"></span>Activity feed
+            <span class="page-chip-dot" style="background: var(--violet); color: var(--violet)"></span>
+            <span class="page-chip-name">Activity feed</span>
+            <span class="page-chip-desc">Real-time event log with grouping, multi-dimension filters, and pause / resume.</span>
             <code>/activity</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--amber); color: var(--amber)"></span>Analytics
+            <span class="page-chip-dot" style="background: var(--amber); color: var(--amber)"></span>
+            <span class="page-chip-name">Analytics</span>
+            <span class="page-chip-desc">Cost trends, model mix, tool usage, error rates, productivity heatmaps — 11 datasets.</span>
             <code>/analytics</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--rose); color: var(--rose)"></span>Workflows
+            <span class="page-chip-dot" style="background: var(--rose); color: var(--rose)"></span>
+            <span class="page-chip-name">Workflows</span>
+            <span class="page-chip-desc">D3-rendered subagent DAGs, propagation maps, and complexity bubbles per session.</span>
             <code>/workflows</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--amber); color: var(--amber)"></span>Config Explorer
+            <span class="page-chip-dot" style="background: var(--amber); color: var(--amber)"></span>
+            <span class="page-chip-name">Config Explorer</span>
+            <span class="page-chip-desc">12-tab inspector for skills, subagents, plugins, MCP, hooks, settings, memory, and more.</span>
             <code>/cc-config</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#features" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--emerald); color: var(--emerald)"></span>Run Claude
+            <span class="page-chip-dot" style="background: var(--emerald); color: var(--emerald)"></span>
+            <span class="page-chip-name">Run Claude</span>
+            <span class="page-chip-desc">Spawn, resume, attach, and stream Claude subprocesses straight from the browser.</span>
             <code>/run</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#settings-page" class="page-chip" target="_blank" rel="noopener noreferrer">
-            <span class="page-chip-dot" style="background: var(--text-dim); color: var(--text-dim)"></span>Settings
+            <span class="page-chip-dot" style="background: var(--text-dim); color: var(--text-dim)"></span>
+            <span class="page-chip-name">Settings</span>
+            <span class="page-chip-desc">Pricing rules, hook installer, notification setup, theme, language, and data tools.</span>
             <code>/settings</code>
+            <svg class="page-chip-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
         </div>
       </section>
@@ -2325,32 +3070,64 @@
       <section class="big-cta">
         <div class="container">
           <div class="big-cta-card reveal">
-            <h2>Ready to dig in?</h2>
-            <p>
-              The wiki has the full architecture diagrams, hook lifecycle details, API reference,
-              MCP tool catalog, plugin marketplace setup, and deployment guides.
-            </p>
-            <div class="big-cta-buttons">
-              <a href="wiki/" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                </svg>
-                Open the wiki
-              </a>
-              <a
-                href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor"
-                class="btn btn-secondary"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.2-.1-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.3.9 1 .9 2v3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"
-                  />
-                </svg>
-                Star on GitHub
-              </a>
+            <div class="big-cta-inner">
+              <div class="big-cta-eyebrow">One-line install · zero config</div>
+              <h2 style="padding-bottom: 4px">Take Claude Code from black box to glass box.</h2>
+              <p>
+                See every session, agent, and tool call as it happens. Spawn and resume Claude from
+                your browser. Inspect every plugin, skill, hook, and setting in 12 tabs. All on
+                your machine — no telemetry, no signup, no cloud.
+              </p>
+              <div class="big-cta-buttons">
+                <a href="#install" class="btn btn-primary">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                  Install in 60 seconds
+                </a>
+                <a href="wiki/" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  Read the wiki
+                </a>
+                <a
+                  href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor"
+                  class="btn btn-tertiary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                      d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.4 3.6 1 .1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.3-3.2-.1-.4-.6-1.6.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.3.9 1 .9 2v3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"
+                    />
+                  </svg>
+                  Star on GitHub
+                </a>
+              </div>
+              <div class="big-cta-trust">
+                <span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  MIT licensed
+                </span>
+                <span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  100% local-first
+                </span>
+                <span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Zero telemetry
+                </span>
+                <span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  13 pages, 1 binary
+                </span>
+                <span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  Works offline
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -2432,6 +3209,58 @@
     </footer>
 
     <script>
+      // ── Mobile menu toggle ───────────────────────────────
+      // The hamburger button slides in a side panel from the right and
+      // dims the page behind it. ESC, overlay click, link click, and
+      // window-resize-past-breakpoint all close it.
+      (function () {
+        const nav = document.getElementById("nav");
+        const toggle = document.getElementById("nav-toggle");
+        const panel = document.getElementById("mobile-panel");
+        const overlay = document.getElementById("mobile-overlay");
+        if (!toggle || !panel || !overlay) return;
+
+        function open() {
+          nav.classList.add("menu-open");
+          panel.classList.add("open");
+          overlay.classList.add("open");
+          document.body.classList.add("menu-open");
+          toggle.setAttribute("aria-expanded", "true");
+          panel.setAttribute("aria-hidden", "false");
+        }
+        function close() {
+          nav.classList.remove("menu-open");
+          panel.classList.remove("open");
+          overlay.classList.remove("open");
+          document.body.classList.remove("menu-open");
+          toggle.setAttribute("aria-expanded", "false");
+          panel.setAttribute("aria-hidden", "true");
+        }
+        function toggleMenu() {
+          if (panel.classList.contains("open")) close();
+          else open();
+        }
+
+        toggle.addEventListener("click", toggleMenu);
+        overlay.addEventListener("click", close);
+        const panelClose = document.getElementById("mobile-panel-close");
+        if (panelClose) panelClose.addEventListener("click", close);
+        panel.querySelectorAll("a[data-mp]").forEach((a) =>
+          a.addEventListener("click", close)
+        );
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && panel.classList.contains("open")) close();
+        });
+        // Close if the viewport grows past the hamburger breakpoint while open.
+        // Mirrors the CSS breakpoint at @media (max-width: 1100px) above.
+        const mql = window.matchMedia("(min-width: 1101px)");
+        const onChange = (ev) => {
+          if (ev.matches) close();
+        };
+        if (mql.addEventListener) mql.addEventListener("change", onChange);
+        else mql.addListener(onChange);
+      })();
+
       // ── Reveal-on-scroll ─────────────────────────────────
       const io = new IntersectionObserver(
         (entries) => {
@@ -2535,7 +3364,12 @@
       // one whose top has scrolled past a threshold near the navbar bottom.
       // Avoids the intersection-observer race where multiple sections can
       // briefly both look active.
-      const sectionLinks = Array.from(document.querySelectorAll(".nav-link[data-section]"));
+      // Match desktop nav links AND mobile panel links so the active
+       // indicator stays in sync in both views (and remains correct if
+      // the user resizes between them mid-scroll).
+      const sectionLinks = Array.from(
+        document.querySelectorAll(".nav-link[data-section], .mobile-panel a[data-section]")
+      );
       const sectionPairs = sectionLinks
         .map((link) => {
           const el = document.getElementById(link.dataset.section);

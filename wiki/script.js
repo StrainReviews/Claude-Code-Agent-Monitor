@@ -219,18 +219,212 @@ mermaid.initialize({
   });
 })();
 
-/* ─── Active nav link on scroll ─────────────────────────────────────────── */
+/* ─── Active nav link on scroll + smart scroll-to-section ──────────────── */
+/* Two responsibilities:
+ *   1. Highlight the active sidebar link as the user scrolls.
+ *   2. Handle nav-link clicks ourselves so we can:
+ *      a. Eager-load every still-lazy <img> on the page first. Most wiki
+ *         screenshots use `width="100%"` (which is an invalid HTML width
+ *         attribute and produces zero reserved height) plus `loading="lazy"`,
+ *         so the browser's smooth-scroll lands several sections short of
+ *         the target as later images stream in and push content down. By
+ *         flipping every lazy image to eager BEFORE we start scrolling, the
+ *         layout settles to its final height first and the scroll lands
+ *         exactly where it should.
+ *      b. Pulse-highlight the target section briefly so the user sees what
+ *         they jumped to — fades automatically and is dismissed on next
+ *         click or scroll-input.
+ */
 (function () {
   const sections = document.querySelectorAll("section[id]");
   const navLinks = document.querySelectorAll('.nav-link[href^="#"]');
-  var clickedId = null;
-  var clickTimer = null;
+  let clickedId = null;
+  let clickTimer = null;
+  let highlightTimer = null;
+  let highlighted = null;
 
-  /* On click: lock the highlight so the observer doesn't fight it.
-     Do NOT preventDefault — let the browser handle the actual scroll. */
+  function clearHighlight() {
+    if (!highlighted) return;
+    highlighted.classList.remove("nav-target-highlight");
+    highlighted = null;
+    clearTimeout(highlightTimer);
+  }
+
+  function highlight(target) {
+    clearHighlight();
+    highlighted = target;
+    target.classList.add("nav-target-highlight");
+    // Animation runs 2.2s and ends at opacity 0 → remove the class
+    // shortly after so it can re-fire on the next click.
+    highlightTimer = setTimeout(clearHighlight, 2300);
+  }
+
+  // Any user-initiated click or wheel/touch scroll dismisses the highlight
+  // immediately — gives the "click anywhere to dismiss" UX the user asked for.
+  function attachDismissHandlers() {
+    const dismissOnInput = (e) => {
+      // Don't dismiss on the very click that triggered the highlight.
+      if (e && e.target && e.target.closest && e.target.closest(".nav-link")) return;
+      clearHighlight();
+      document.removeEventListener("pointerdown", dismissOnInput, true);
+      document.removeEventListener("wheel", dismissOnInput, { capture: true, passive: true });
+      document.removeEventListener("touchmove", dismissOnInput, { capture: true, passive: true });
+      document.removeEventListener("keydown", dismissOnInput, true);
+    };
+    // Defer so the click that opened the highlight doesn't immediately close it.
+    setTimeout(() => {
+      document.addEventListener("pointerdown", dismissOnInput, true);
+      document.addEventListener("wheel", dismissOnInput, { capture: true, passive: true });
+      document.addEventListener("touchmove", dismissOnInput, { capture: true, passive: true });
+      document.addEventListener("keydown", dismissOnInput, true);
+    }, 50);
+  }
+
+  function eagerLoadAllImages() {
+    document.querySelectorAll('img[loading="lazy"]').forEach((img) => {
+      img.loading = "eager";
+    });
+  }
+
+  // Matches `[id] { scroll-margin-top: 32px }` in style.css.
+  const SCROLL_OFFSET = 32;
+  let activeScrollId = 0;
+
+  /* Custom smooth scroll, fully under our control.
+   *
+   * Why this exists (and why every previous attempt failed):
+   *   `html { scroll-behavior: smooth }` is set globally in style.css, so
+   *   ANY programmatic scroll the browser does — including the one
+   *   triggered by `scrollIntoView({behavior: "smooth"})` — gets wrapped
+   *   in the browser's own animation that commits to a FIXED pixel
+   *   target at start time. When lazy images decode mid-flight and push
+   *   the target lower, the browser keeps animating to the original
+   *   pixel, lands short, then any follow-up correction queues ANOTHER
+   *   smooth animation — that's the "scroll, pause, scroll-again" the
+   *   user keeps reporting.
+   *
+   *   The only reliable fix is to bypass the browser's smoothing
+   *   entirely: temporarily flip scroll-behavior to "auto", drive the
+   *   animation ourselves with rAF using direct scrollTo() calls (which
+   *   are then truly instant), and re-measure the target every frame so
+   *   late layout changes don't strand us in the wrong place. One
+   *   continuous animation from start to target — no pauses, no double
+   *   scrolls, no fighting.
+   *
+   * Algorithm: exponential approach. Each frame, move ~15% of the
+   * remaining distance toward the (re-measured) target. Naturally:
+   *   - Decelerates toward the end without explicit easing math.
+   *   - Adapts smoothly when the target moves mid-flight.
+   *   - Stops when within 0.5px of target for several consecutive
+   *     frames (so the user doesn't see micro-corrections).
+   */
+  function smoothScrollAndSettle(target, onArrive) {
+    eagerLoadAllImages();
+
+    const myId = ++activeScrollId; // newer calls cancel older ones
+    const html = document.documentElement;
+    const prevBehavior = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto"; // critical: defeat global CSS
+
+    let canceled = false;
+    let stableFrames = 0;
+    let onArriveFired = false;
+
+    function cleanup() {
+      html.style.scrollBehavior = prevBehavior;
+      window.removeEventListener("wheel", onUserScroll, { capture: true, passive: true });
+      window.removeEventListener("touchstart", onUserScroll, { capture: true, passive: true });
+      window.removeEventListener("keydown", onUserKey, true);
+    }
+    function fireArrive() {
+      if (onArriveFired) return;
+      onArriveFired = true;
+      cleanup();
+      if (onArrive) onArrive();
+    }
+    function onUserScroll() {
+      // Real user input — let them take over. Don't fire onArrive
+      // (highlight would feel out of place if they scrolled away).
+      canceled = true;
+      cleanup();
+    }
+    function onUserKey(e) {
+      const k = e.key;
+      if (
+        k === "ArrowUp" ||
+        k === "ArrowDown" ||
+        k === "PageUp" ||
+        k === "PageDown" ||
+        k === "Home" ||
+        k === "End" ||
+        k === " " ||
+        k === "Escape"
+      )
+        onUserScroll();
+    }
+    window.addEventListener("wheel", onUserScroll, { capture: true, passive: true });
+    window.addEventListener("touchstart", onUserScroll, { capture: true, passive: true });
+    window.addEventListener("keydown", onUserKey, true);
+
+    const startTime = performance.now();
+    const HARD_TIMEOUT_MS = 2200;
+
+    function step(now) {
+      if (canceled || myId !== activeScrollId) return;
+      if (now - startTime > HARD_TIMEOUT_MS) {
+        // Safety net — never spin forever. Snap and arrive.
+        const finalRect = target.getBoundingClientRect();
+        window.scrollTo(0, window.scrollY + finalRect.top - SCROLL_OFFSET);
+        fireArrive();
+        return;
+      }
+
+      // Re-measure the target every frame so we adapt to layout shifts
+      // (lazy images decoding, fonts swapping, mermaid rendering, etc).
+      const rect = target.getBoundingClientRect();
+      const desired = window.scrollY + rect.top - SCROLL_OFFSET;
+      const current = window.scrollY;
+      const distance = desired - current;
+      const absDist = Math.abs(distance);
+
+      if (absDist < 0.5) {
+        // Snap to exact target and require it to stay stable for a few
+        // frames before declaring arrival — guards against late layout
+        // shifts within ~80ms of arrival.
+        window.scrollTo(0, desired);
+        if (++stableFrames >= 5) {
+          fireArrive();
+          return;
+        }
+        requestAnimationFrame(step);
+        return;
+      }
+
+      stableFrames = 0;
+      // Exponential approach. The 0.18 factor gives a snappy-but-smooth
+      // feel that converges to <1px in ~25 frames (~400ms at 60fps) for
+      // a 2000px jump. Tuned by hand.
+      const move = distance * 0.18;
+      // Floor on absolute movement so the very last pixels don't crawl.
+      const stepPx = Math.abs(move) < 1 ? distance : move;
+      window.scrollTo(0, current + stepPx);
+      requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+  }
+
   navLinks.forEach(function (link) {
-    link.addEventListener("click", function () {
-      var id = link.getAttribute("href").slice(1);
+    link.addEventListener("click", function (ev) {
+      const href = link.getAttribute("href") || "";
+      if (!href.startsWith("#") || href.length < 2) return;
+      const id = href.slice(1);
+      const target = document.getElementById(id);
+      if (!target) return;
+
+      // Take over from the browser so we can stabilize layout first.
+      ev.preventDefault();
+
       clickedId = id;
       navLinks.forEach(function (l) {
         l.classList.toggle("active", l.getAttribute("href") === "#" + id);
@@ -239,6 +433,23 @@ mermaid.initialize({
       clickTimer = setTimeout(function () {
         clickedId = null;
       }, 1500);
+
+      // 1. Force layout to its final height (kills mid-scroll drift).
+      eagerLoadAllImages();
+
+      // 2. Update the URL hash now (before scroll) so back/forward works.
+      if (history.replaceState) {
+        history.replaceState(null, "", "#" + id);
+      }
+
+      // 3. Smooth-scroll, snap-correct after settle, THEN highlight.
+      //    The highlight only fires once the user can actually see the
+      //    target — firing it at click time is useless because long
+      //    scrolls take ~600-900ms to arrive.
+      smoothScrollAndSettle(target, function () {
+        highlight(target);
+        attachDismissHandlers();
+      });
     });
   });
 
