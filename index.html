@@ -911,26 +911,6 @@
         opacity: 1;
         transform: scale(1);
       }
-      .showcase-tag {
-        display: inline-block;
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        padding: 2px 7px;
-        border-radius: 4px;
-        margin-bottom: 6px;
-      }
-      .showcase-tag.live {
-        background: rgba(244, 114, 182, 0.18);
-        color: var(--pink);
-        border: 1px solid rgba(244, 114, 182, 0.35);
-      }
-      .showcase-tag.ext {
-        background: rgba(59, 130, 246, 0.18);
-        color: var(--blue);
-        border: 1px solid rgba(59, 130, 246, 0.35);
-      }
       .showcase-lightbox {
         position: fixed;
         inset: 0;
@@ -2853,12 +2833,21 @@
               </div>
             </div>
           </div>
+          <div class="showcase-card" data-cat="system" data-title="Connection Status">
+            <div class="showcase-img">
+              <img src="images/live.png" alt="Connection details modal with throughput sparkline and event-type breakdown" loading="lazy" />
+              <span class="showcase-expand-icon">⤢</span>
+              <div class="showcase-overlay">
+                <h4>Connection Status</h4>
+                <p>WebSocket details modal with 60-second throughput sparkline, top event types, and recent activity</p>
+              </div>
+            </div>
+          </div>
           <div class="showcase-card" data-cat="system" data-title="VS Code Extension">
             <div class="showcase-img">
               <img src="vscode-extension/vscode.png" alt="VS Code extension sidebar" loading="lazy" />
               <span class="showcase-expand-icon">⤢</span>
               <div class="showcase-overlay">
-                <span class="showcase-tag ext">Extension</span>
                 <h4>VS Code Extension</h4>
                 <p>Full dashboard sidebar inside VS Code with session monitoring</p>
               </div>

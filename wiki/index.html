@@ -551,6 +551,7 @@
           <a href="#vscode-ext" class="nav-link"><span class="nav-icon">◈</span>VS Code Extension</a>
           <a href="#settings-page" class="nav-link"><span class="nav-icon">◈</span>Settings Page</a>
           <a href="#update-notifier" class="nav-link"><span class="nav-icon">◈</span>Update Notifier</a>
+          <a href="#connection-status" class="nav-link"><span class="nav-icon">◈</span>Connection Status</a>
 
           <div class="nav-section">Ops & Reference</div>
           <a href="#deployment" class="nav-link"><span class="nav-icon">◈</span>Deployment Modes</a>
@@ -4105,6 +4106,42 @@ ccam-export all --output backup.json</code></pre>
               </p>
             </div>
           </div>
+        </section>
+
+        <!-- ─── Connection Status ──────────────────────────────────────────── -->
+        <section id="connection-status">
+          <div class="section-label">◈ Integrations</div>
+          <h2>Connection Status</h2>
+
+          <div class="screenshot-gallery gallery-single">
+            <div class="screenshot-card">
+              <img src="../images/live.png" alt="Connection details modal with throughput sparkline, top event types, and recent activity" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">◈</span> Connection Status — sidebar-launched details modal with WebSocket endpoint, connection uptime, 60-second throughput sparkline, top event-type breakdown, and recent activity list</div>
+            </div>
+          </div>
+
+          <p>
+            The <strong>Live</strong> / <strong>Disconnected</strong> pill in the sidebar footer
+            opens a small details panel about the dashboard's WebSocket transport. It surfaces the
+            active <code>ws://</code> endpoint, how long the current socket has been up, total
+            events received, the top event types as a horizontal bar chart, a 60-second
+            throughput sparkline, and the most recent 8 events as an activity list. Cumulative
+            stats (totals, type breakdown, recent list) persist across reloads via
+            <code>localStorage</code> under <code>sidebar-connection-stats</code>; the rolling
+            sparkline and "connected since" timer are intentionally ephemeral since they only
+            make sense relative to "now". A <strong>Reset</strong> button clears everything on
+            demand.
+          </p>
+
+          <p>
+            Implementation note: per-event state lives in <code>useRef</code> buffers on the
+            sidebar so the WS firehose never re-renders the navigation tree — the modal does its
+            own one-second tick to sample the refs while open. Writes are throttled (single-flight
+            timer, 2 s window) and flushed on <code>pagehide</code> / <code>visibilitychange</code>
+            so the latest events aren't lost to the throttle window. The modal itself is
+            portalled to <code>document.body</code> so the sidebar's stacking context can't trap
+            it.
+          </p>
         </section>
 
         <!-- ─── Deployment ─────────────────────────────────────────────────── -->

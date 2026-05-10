@@ -74,6 +74,7 @@ A professional dashboard to track and visualize your Claude Code agent sessions,
 - [Hook Events](#hook-events)
 - [Browser Notifications](#browser-notifications)
 - [Update Notifier](#update-notifier)
+- [Connection Status Modal](#connection-status-modal)
 - [VS Code Extension](#vs-code-extension)
 - [Data Storage](#data-storage)
 - [Statusline](#statusline)
@@ -1164,6 +1165,16 @@ There is no `POST /api/updates/apply` and no self-restart helper, by design. Sel
 | --- | --- | --- |
 | `DASHBOARD_UPDATE_CHECK` | enabled | Set to `0` / `false` / `off` to disable the scheduler entirely. |
 | `DASHBOARD_UPDATE_CHECK_INTERVAL_MS` | `300000` (5 min) | Interval between automatic checks. Floor is 60 000 ms — values below are clamped. |
+
+---
+
+## Connection Status Modal
+
+Click the **Live** / **Disconnected** pill in the sidebar footer to open a small details panel about the dashboard's WebSocket transport. It shows the active `ws://` endpoint, how long the current socket has been up, total events received, top event types as a horizontal bar chart, a 60-second throughput sparkline, and the last 8 events as a recent-activity list. Cumulative stats (totals, type breakdown, recent list) persist across reloads via `localStorage` under `sidebar-connection-stats`; the rolling sparkline and "connected since" timer are intentionally ephemeral. A **Reset** button in the footer clears everything on demand.
+
+<p align="center">
+  <img src="images/live.png" alt="Connection details modal with throughput sparkline, top event types, and recent activity" width="100%">
+</p>
 
 ---
 
