@@ -1,4 +1,4 @@
-const CACHE_NAME = "wiki-v1";
+const CACHE_NAME = "wiki-v2";
 const PRECACHE = [
   "./",
   "./index.html",
