@@ -61,22 +61,16 @@ body {
 }
 
 /* ─── Scroll Reveal ─────────────────────────────────────────────────────── */
-.reveal-on-scroll {
-  --reveal-delay: 0ms;
-  opacity: 0;
-  transform: translate3d(0, 24px, 0) scale(0.985);
-  filter: blur(10px);
-  transition:
-    opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay),
-    filter 0.55s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay);
-  will-change: opacity, transform, filter;
-}
-
+/* Reveal animations are intentionally disabled on the wiki — content should
+   appear immediately so users can read / scan / Cmd+F without waiting for
+   transitions. The reveal-on-scroll class is still applied by script.js but
+   is treated as a no-op via the rules below. */
+.reveal-on-scroll,
 .reveal-on-scroll.is-visible {
   opacity: 1;
-  transform: translate3d(0, 0, 0) scale(1);
-  filter: blur(0);
+  transform: none;
+  filter: none;
+  transition: none;
 }
 
 /* ─── Layout ────────────────────────────────────────────────────────────── */
@@ -665,6 +659,23 @@ h2 {
   letter-spacing: -0.01em;
 }
 
+/* Section-level h2s anchor the nav-target highlight (a 2px underline at
+ * bottom: -6px plus a soft glow). The default 8px gap leaves the underline
+ * crowding whatever content sits below — bump it so the ring/underline has
+ * room to breathe across every section. */
+section > h2:first-of-type,
+section > header > h2:first-of-type {
+  margin-bottom: 15px;
+}
+
+/* When the section h2 is immediately followed by an h3 subheader, the
+ * default h3 top margin (32px) plus the h2's bottom margin reads as a
+ * yawning gap. Collapse it so the subhead sits close under the section
+ * title — but still leaves room for the highlight underline. */
+section > h2:first-of-type + h3 {
+  margin-top: 4px;
+}
+
 h3 {
   font-size: 18px;
   font-weight: 600;
@@ -1068,14 +1079,21 @@ tr:hover td {
   border-radius: var(--radius-lg);
   padding: 24px;
   transition:
-    border-color 0.2s,
+    border-color 0.3s,
     transform 0.2s,
-    box-shadow 0.2s;
+    box-shadow 0.3s;
   min-height: 180px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   box-sizing: border-box;
+}
+
+.carousel .feature-card.hash-highlight {
+  border-color: var(--accent, #818cf8);
+  box-shadow:
+    0 0 24px rgba(129, 140, 248, 0.35),
+    inset 0 0 0 1px rgba(129, 140, 248, 0.15);
 }
 
 .carousel .feature-card:hover {
@@ -1472,6 +1490,102 @@ tr:hover td {
   scroll-margin-top: 32px;
 }
 
+/* ─── Nav-target highlight ──────────────────────────────────────────────── */
+/* Smooth, single-curve effect on the section heading. Two layers, one
+   eased curve, no abrupt mid-keyframe transitions:
+     1. The heading text itself "breathes" — color eases into a soft
+        indigo tint with a matching text-shadow glow, then eases back
+        to normal. One continuous in-and-out.
+     2. A thin gradient underline draws under the heading and softly
+        fades. Cubic-bezier eased so the draw and the fade share the
+        same gentle motion.
+   Total duration: 2.2s. Both animations use the same easing curve so
+   they feel unified rather than layered. */
+
+@keyframes navTextBreathe {
+  0%,
+  100% {
+    color: var(--text);
+    text-shadow: 0 0 0 transparent;
+  }
+  45% {
+    color: #c7d2fe;
+    text-shadow:
+      0 0 28px rgba(129, 140, 248, 0.45),
+      0 0 6px rgba(167, 139, 250, 0.2);
+  }
+}
+
+@keyframes navUnderlineDraw {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+  45% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+/* Heading text breathes in/out (color + glow). Single eased curve from
+   start to end, no jumpy intermediate stops. Only the section's TOP
+   heading (h1 or h2 — never h3, those are subheads inside the body). */
+.nav-target-highlight > h1:first-of-type,
+.nav-target-highlight > h2:first-of-type,
+.nav-target-highlight > header > h1:first-of-type,
+.nav-target-highlight > header > h2:first-of-type {
+  position: relative;
+  animation: navTextBreathe 2.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+  transition: color 0.4s ease;
+}
+
+/* Soft underline that draws then fades. */
+.nav-target-highlight > h1:first-of-type::after,
+.nav-target-highlight > h2:first-of-type::after,
+.nav-target-highlight > header > h1:first-of-type::after,
+.nav-target-highlight > header > h2:first-of-type::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 30%;
+  bottom: -6px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(129, 140, 248, 0.85) 0%,
+    rgba(167, 139, 250, 0.55) 60%,
+    transparent 100%
+  );
+  box-shadow: 0 0 14px rgba(129, 140, 248, 0.4);
+  transform-origin: left center;
+  animation: navUnderlineDraw 2.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-target-highlight > h1:first-of-type,
+  .nav-target-highlight > h2:first-of-type,
+  .nav-target-highlight > header > h1:first-of-type,
+  .nav-target-highlight > header > h2:first-of-type {
+    animation: none;
+    color: #c7d2fe;
+    transition: color 0.5s ease;
+  }
+  .nav-target-highlight > h1:first-of-type::after,
+  .nav-target-highlight > h2:first-of-type::after,
+  .nav-target-highlight > header > h1:first-of-type::after,
+  .nav-target-highlight > header > h2:first-of-type::after {
+    animation: none;
+    transform: scaleX(1);
+    opacity: 0.6;
+  }
+}
+
 /* ─── Divider ───────────────────────────────────────────────────────────── */
 hr {
   border: none;
@@ -1498,7 +1612,8 @@ hr {
   background: var(--bg-card);
   transition:
     transform 0.2s,
-    box-shadow 0.2s;
+    box-shadow 0.2s,
+    border-color 0.4s;
 }
 
 .screenshot-card:hover {
@@ -1601,8 +1716,9 @@ hr {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.93);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 9999;
@@ -1611,8 +1727,8 @@ hr {
   transition:
     opacity 0.3s ease,
     visibility 0.3s ease;
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .lightbox-overlay.active {
@@ -1620,32 +1736,85 @@ hr {
   visibility: visible;
 }
 
+.lightbox-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 92vw;
+  max-height: 92vh;
+  gap: 16px;
+}
+
 .lightbox-image {
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 88vw;
+  max-height: 75vh;
   object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  transform: scale(0.95);
-  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  border-radius: 12px;
+  box-shadow:
+    0 20px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  transform: scale(0.92);
+  transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 .lightbox-overlay.active .lightbox-image {
   transform: scale(1);
 }
 
+.lightbox-caption {
+  max-width: 720px;
+  width: 100%;
+  padding: 16px 28px;
+  background: rgba(18, 18, 30, 0.85);
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  letter-spacing: 0.01em;
+  transform: translateY(8px);
+  opacity: 0;
+  transition:
+    transform 0.4s ease 0.1s,
+    opacity 0.4s ease 0.1s;
+}
+
+.lightbox-overlay.active .lightbox-caption {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.lightbox-caption-title {
+  font-weight: 700;
+  color: rgba(129, 140, 248, 1);
+  margin-right: 4px;
+}
+
+.lightbox-counter {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .lightbox-close {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 42px;
-  font-weight: 300;
+  top: 18px;
+  right: 22px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 24px;
+  font-weight: 400;
   cursor: pointer;
-  background: none;
-  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   transition:
     color 0.2s,
+    background 0.2s,
     transform 0.2s;
   z-index: 10000;
   line-height: 1;
@@ -1653,13 +1822,88 @@ hr {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
 }
 
 .lightbox-close:hover {
   color: #fff;
-  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+}
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  width: 44px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.2s;
+  z-index: 10000;
+  user-select: none;
+  font-size: 0;
+}
+
+.lightbox-nav::after {
+  content: none;
+}
+
+.lightbox-prev::after,
+.lightbox-next::after {
+  content: none;
+}
+
+.lightbox-nav:hover {
+  color: #fff;
+  background: rgba(129, 140, 248, 0.12);
+  border-color: rgba(129, 140, 248, 0.3);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.lightbox-prev {
+  left: 20px;
+}
+.lightbox-next {
+  right: 20px;
+}
+
+@media (max-width: 640px) {
+  .lightbox-nav {
+    width: 36px;
+    height: 50px;
+    border-radius: 8px;
+  }
+  .lightbox-nav::after {
+    width: 10px;
+    height: 10px;
+  }
+  .lightbox-prev {
+    left: 8px;
+  }
+  .lightbox-next {
+    right: 8px;
+  }
+  .lightbox-caption {
+    font-size: 12px;
+    padding: 12px 16px;
+    max-width: 90vw;
+  }
+  .lightbox-image {
+    max-width: 94vw;
+  }
 }
 
 .screenshot-card img {

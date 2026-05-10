@@ -193,6 +193,33 @@ export interface UpdateStatusPayload {
   fetch_error?: string;
 }
 
+export interface RunStreamPayload {
+  id: string;
+  envelope: unknown;
+}
+export interface RunStatusPayload {
+  id: string;
+  status: "spawning" | "running" | "completed" | "error" | "killed";
+  at: number;
+  exitCode?: number;
+  sessionId?: string | null;
+  error?: string;
+}
+export interface RunInputAckPayload {
+  id: string;
+  messageId: string;
+  at: number;
+}
+
+export interface CcConfigChangedPayload {
+  source: "dashboard" | "fs";
+  action?: "write" | "delete";
+  scope?: "user" | "project";
+  type?: string;
+  name?: string | null;
+  paths?: string[];
+}
+
 export interface WSMessage {
   type:
     | "session_created"
@@ -201,8 +228,21 @@ export interface WSMessage {
     | "agent_updated"
     | "new_event"
     | "import.progress"
-    | "update_status";
-  data: Session | Agent | DashboardEvent | ImportProgressMessage | UpdateStatusPayload;
+    | "update_status"
+    | "run_stream"
+    | "run_status"
+    | "run_input_ack"
+    | "cc_config_changed";
+  data:
+    | Session
+    | Agent
+    | DashboardEvent
+    | ImportProgressMessage
+    | UpdateStatusPayload
+    | RunStreamPayload
+    | RunStatusPayload
+    | RunInputAckPayload
+    | CcConfigChangedPayload;
   timestamp: string;
 }
 
@@ -443,7 +483,12 @@ export interface TranscriptMessage {
   timestamp: string | null;
   content: TranscriptContent[];
   model?: string;
-  usage?: { input_tokens: number; output_tokens: number };
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
 }
 
 export interface TranscriptResult {

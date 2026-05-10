@@ -10,6 +10,7 @@ client/package-lock.json
 .vs/
 *.md
 index.html
+wiki/index.html
 *.yml
 *.yaml
 mcp/build/

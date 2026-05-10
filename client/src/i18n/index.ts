@@ -52,6 +52,12 @@ import settings_de from "./locales/de/settings.json";
 import kanban_de from "./locales/de/kanban.json";
 import errors_de from "./locales/de/errors.json";
 import updates_de from "./locales/de/updates.json";
+import ccConfig_en from "./locales/en/ccConfig.json";
+import ccConfig_zh from "./locales/zh/ccConfig.json";
+import ccConfig_vi from "./locales/vi/ccConfig.json";
+import run_en from "./locales/en/run.json";
+import run_zh from "./locales/zh/run.json";
+import run_vi from "./locales/vi/run.json";
 
 i18n
   .use(LanguageDetector)
@@ -70,6 +76,8 @@ i18n
         kanban: kanban_en,
         errors: errors_en,
         updates: updates_en,
+        ccConfig: ccConfig_en,
+        run: run_en,
       },
       zh: {
         common: common_zh,
@@ -83,6 +91,8 @@ i18n
         kanban: kanban_zh,
         errors: errors_zh,
         updates: updates_zh,
+        ccConfig: ccConfig_zh,
+        run: run_zh,
       },
       vi: {
         common: common_vi,
@@ -96,6 +106,8 @@ i18n
         kanban: kanban_vi,
         errors: errors_vi,
         updates: updates_vi,
+        ccConfig: ccConfig_vi,
+        run: run_vi,
       },
       de: {
         common: common_de,
@@ -126,6 +138,8 @@ i18n
       "kanban",
       "errors",
       "updates",
+      "ccConfig",
+      "run",
     ],
     defaultNS: "common",
     interpolation: { escapeValue: false },

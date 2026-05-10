@@ -288,7 +288,393 @@ export const api = {
       return res.json();
     },
   },
+
+  ccConfig: {
+    overview: () => request<CcOverview>("/cc-config/overview"),
+    skills: (scope?: CcScope) =>
+      request<{ items: CcMdItem[] }>(`/cc-config/skills${scope ? `?scope=${scope}` : ""}`),
+    agents: (scope?: CcScope) =>
+      request<{ items: CcMdItem[] }>(`/cc-config/agents${scope ? `?scope=${scope}` : ""}`),
+    commands: (scope?: CcScope) =>
+      request<{ items: CcMdItem[] }>(`/cc-config/commands${scope ? `?scope=${scope}` : ""}`),
+    outputStyles: (scope?: CcScope) =>
+      request<{ items: CcMdItem[] }>(`/cc-config/output-styles${scope ? `?scope=${scope}` : ""}`),
+    plugins: () => request<CcPluginsResponse>("/cc-config/plugins"),
+    mcp: () => request<CcMcpResponse>("/cc-config/mcp"),
+    hooks: () => request<{ items: CcHookSource[] }>("/cc-config/hooks"),
+    settings: () => request<{ items: CcSettingsSource[] }>("/cc-config/settings"),
+    memory: () => request<{ items: CcMemoryItem[] }>("/cc-config/memory"),
+    file: (absPath: string) =>
+      request<CcFileResponse>(`/cc-config/file?path=${encodeURIComponent(absPath)}`),
+    write: (args: CcWriteArgs) =>
+      request<CcMutationResult>("/cc-config/file", {
+        method: "PUT",
+        body: JSON.stringify(args),
+      }),
+    delete: (args: CcDeleteArgs) =>
+      request<CcMutationResult>("/cc-config/file", {
+        method: "DELETE",
+        body: JSON.stringify(args),
+      }),
+    marketplaces: () => request<CcMarketplacesResponse>("/cc-config/marketplaces"),
+    keybindings: () => request<CcKeybindings>("/cc-config/keybindings"),
+    statusline: () => request<CcStatusline>("/cc-config/statusline"),
+    hookScripts: () => request<CcHookScripts>("/cc-config/hook-scripts"),
+    backups: (params?: { scope?: "user" | "project"; type?: CcArtifactType }) =>
+      requestBackupsHelper(params),
+  },
+
+  run: {
+    list: () => request<RunListResponse>("/run"),
+    history: (limit = 50) =>
+      request<{ items: DashboardRunHistoryItem[] }>(`/run/history?limit=${limit}`),
+    binary: () => request<{ found: boolean; path: string | null }>("/run/binary"),
+    cwds: () => request<{ items: CwdSuggestion[] }>("/run/cwds"),
+    files: (cwd: string, q?: string) => {
+      const qs = new URLSearchParams({ cwd });
+      if (q) qs.set("q", q);
+      return request<{ items: string[] }>(`/run/files?${qs.toString()}`);
+    },
+    start: (args: RunStartArgs) =>
+      request<RunHandle>("/run", { method: "POST", body: JSON.stringify(args) }),
+    get: (id: string, opts?: { envelopes?: boolean }) =>
+      request<RunHandle>(`/run/${encodeURIComponent(id)}${opts?.envelopes ? "?envelopes=1" : ""}`),
+    send: (id: string, text: string) =>
+      request<{ messageId: string }>(`/run/${encodeURIComponent(id)}/message`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      }),
+    kill: (id: string) =>
+      request<{ ok: true }>(`/run/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  },
 };
+
+function requestBackupsHelper(params?: { scope?: "user" | "project"; type?: CcArtifactType }) {
+  const qs = new URLSearchParams();
+  if (params?.scope) qs.set("scope", params.scope);
+  if (params?.type) qs.set("type", params.type);
+  const q = qs.toString();
+  return request<{ items: CcBackup[] }>(`/cc-config/backups${q ? `?${q}` : ""}`);
+}
+
+export type CcArtifactType = "skills" | "agents" | "commands" | "output-styles" | "memory";
+
+export interface CcWriteArgs {
+  scope: "user" | "project";
+  type: CcArtifactType;
+  name?: string;
+  content: string;
+}
+
+export interface CcDeleteArgs {
+  scope: "user" | "project";
+  type: CcArtifactType;
+  name?: string;
+}
+
+export interface CcMutationResult {
+  ok: true;
+  file: string;
+  target: string;
+  backupPath: string | null;
+  created?: boolean;
+}
+
+export interface CcBackup {
+  scope: "user" | "project";
+  type: CcArtifactType;
+  name: string;
+  backupPath: string;
+  isDir: boolean;
+  mtime: number;
+  size: number | null;
+}
+
+export type CcScope = "user" | "project" | "all";
+
+export interface CcMdItem {
+  scope: "user" | "project";
+  name: string;
+  file?: string;
+  path?: string;
+  size: number;
+  mtime: number;
+  truncated: boolean;
+  frontmatter: Record<string, string>;
+  preview: string;
+}
+
+export interface CcPluginContributions {
+  skills: number;
+  agents: number;
+  commands: number;
+  outputStyles: number;
+  hooks: number;
+  pluginJson: {
+    name?: string;
+    description?: string;
+    version?: string;
+    author?: { name?: string; email?: string };
+    homepage?: string;
+    repository?: string;
+    license?: string;
+    keywords?: string[];
+  } | null;
+}
+
+export interface CcPlugin {
+  key: string;
+  name: string;
+  marketplace: string | null;
+  scope: string;
+  version: string | null;
+  installPath: string | null;
+  installedAt: string | null;
+  lastUpdated: string | null;
+  gitCommitSha: string | null;
+  installPathExists: boolean;
+  enabled: boolean | null;
+  contributes: CcPluginContributions | null;
+}
+
+export interface CcPluginsResponse {
+  manifestPath: string;
+  manifestExists: boolean;
+  plugins: CcPlugin[];
+}
+
+export interface CcMcpServer {
+  name: string;
+  source: string;
+  kind: "stdio" | "http" | "unknown";
+  command?: string;
+  args?: string[];
+  envNames?: string[];
+  url?: string;
+  headers?: string[];
+}
+
+export interface CcMcpResponse {
+  user: CcMcpServer[];
+  projectScoped: CcMcpServer[];
+}
+
+export interface CcHookEntry {
+  matcher: string;
+  type: string;
+  command: string | null;
+  timeout: number | null;
+}
+
+export interface CcHookSource {
+  scope: "user" | "project" | "project-local";
+  file: string;
+  exists: boolean;
+  hooks: Record<string, CcHookEntry[]>;
+}
+
+export interface CcSettingsSource {
+  scope: "user" | "project" | "project-local";
+  file: string;
+  exists: boolean;
+  data?: unknown;
+  raw_size?: number;
+}
+
+export interface CcMemoryItem {
+  scope: "user" | "project";
+  file: string;
+  size: number;
+  mtime: number;
+  truncated: boolean;
+  preview: string;
+}
+
+export interface CcFileResponse {
+  ok: true;
+  file: string;
+  text: string;
+  size: number;
+  mtime: number;
+  truncated: boolean;
+}
+
+export interface CcOverview {
+  roots: {
+    claudeHome: string;
+    projectClaudeDir: string;
+    projectRoot: string;
+    claudeJson: string;
+  };
+  counts: {
+    skills: { user: number; project: number };
+    agents: { user: number; project: number };
+    commands: { user: number; project: number };
+    outputStyles: { user: number; project: number };
+    plugins: number;
+    pluginsEnabled: number;
+    pluginsDisabled: number;
+    marketplaces: number;
+    keybindings: number;
+    mcpServers: { user: number; project: number };
+    hooks: Record<string, number>;
+    memory: number;
+    settingsFiles: number;
+  };
+}
+
+export interface CcMarketplace {
+  name: string;
+  source: { source?: string; repo?: string; url?: string } | null;
+  installLocation: string | null;
+  lastUpdated: string | null;
+  pluginCount: number | null;
+  marketplaceName: string | null;
+  marketplaceDescription: string | null;
+  marketplaceOwner: { name?: string; url?: string } | null;
+}
+
+export interface CcMarketplacesResponse {
+  knownPath: string;
+  knownExists: boolean;
+  items: CcMarketplace[];
+}
+
+export interface CcKeybindingGroup {
+  context: string;
+  bindings: { key: string; action: string }[];
+}
+
+export interface CcKeybindings {
+  file: string;
+  exists: boolean;
+  schema?: string | null;
+  docs?: string | null;
+  groups: CcKeybindingGroup[];
+}
+
+export interface CcStatuslineScript {
+  file: string;
+  size: number;
+  mtime: number;
+  truncated: boolean;
+  preview: string;
+}
+
+export interface CcStatusline {
+  config: { type?: string; command?: string } | null;
+  scripts: CcStatuslineScript[];
+}
+
+export interface CcHookScripts {
+  dir: string;
+  items: { name: string; file: string; size: number; mtime: number }[];
+}
+
+export type RunMode = "headless" | "conversation";
+export type RunStatus = "spawning" | "running" | "completed" | "error" | "killed" | "abandoned";
+export type PermissionMode = "acceptEdits" | "default" | "plan" | "bypassPermissions";
+export type EffortLevel = "" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export interface RunStartArgs {
+  prompt: string;
+  mode: RunMode;
+  cwd?: string;
+  model?: string;
+  permissionMode?: PermissionMode;
+  resumeSessionId?: string;
+  effort?: EffortLevel;
+}
+
+export interface RunHandle {
+  id: string;
+  pid: number | null;
+  mode: RunMode;
+  cwd: string;
+  model: string | null;
+  permissionMode: PermissionMode;
+  effort: EffortLevel | null;
+  prompt: string;
+  argv: string[];
+  resumeSessionId: string | null;
+  status: RunStatus;
+  startedAt: number;
+  endedAt: number | null;
+  exitCode: number | null;
+  signal: string | null;
+  error: string | null;
+  sessionId: string | null;
+  envelopeCount: number;
+  stdoutTail: string;
+  stderrTail: string;
+  envelopes?: unknown[]; // present when fetched with ?envelopes=1
+}
+
+export interface RunListResponse {
+  items: RunHandle[];
+  maxConcurrent: number;
+  activeCount: number;
+}
+
+/**
+ * A row from the persistent `dashboard_runs` sqlite table — every run ever
+ * spawned via /api/run, including completed / errored / killed ones long
+ * after the in-memory handle has been reaped.
+ */
+export interface DashboardRunHistoryItem {
+  id: string;
+  session_id: string | null;
+  mode: RunMode;
+  cwd: string;
+  model: string | null;
+  permission_mode: PermissionMode | null;
+  effort: EffortLevel | null;
+  resume_session_id: string | null;
+  prompt_preview: string | null;
+  status: RunStatus;
+  exit_code: number | null;
+  started_at: string;
+  ended_at: string | null;
+  isLive: boolean;
+}
+
+export interface CwdSuggestion {
+  kind: "dashboard" | "home" | "recent";
+  path: string;
+  label: string;
+}
+
+export interface ModelChoice {
+  id: string; // value sent to claude --model
+  label: string; // user-facing
+  hint?: string;
+}
+
+// Effort level choices for `claude --effort`. Higher = more thinking tokens
+// before the assistant turn. Empty inherits the model's default.
+export interface EffortChoice {
+  id: EffortLevel;
+  label: string;
+  hint?: string;
+}
+
+export const RUN_EFFORT_CHOICES: EffortChoice[] = [
+  { id: "", label: "Default (model decides)", hint: "No --effort flag" },
+  { id: "low", label: "Low", hint: "Fast, minimal thinking" },
+  { id: "medium", label: "Medium", hint: "Balanced" },
+  { id: "high", label: "High", hint: "More reasoning, slower" },
+  { id: "xhigh", label: "Extra-high", hint: "Deep reasoning" },
+  { id: "max", label: "Max", hint: "All-out — slowest, most tokens" },
+];
+
+// Curated model list. "" means "inherit from settings.json" — no --model flag.
+export const RUN_MODEL_CHOICES: ModelChoice[] = [
+  { id: "", label: "Inherit from settings", hint: "Use whatever your settings.json model is" },
+  { id: "opus[1m]", label: "Opus 4.7 (1M context)", hint: "Highest capability, 1M token window" },
+  { id: "opus", label: "Opus 4.7", hint: "Highest capability, default window" },
+  { id: "sonnet", label: "Sonnet 4.6", hint: "Balanced capability and speed" },
+  { id: "haiku", label: "Haiku 4.5", hint: "Fastest, lightest" },
+];
 
 export interface ImportResult {
   ok: boolean;

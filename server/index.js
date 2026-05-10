@@ -48,6 +48,8 @@ const workflowsRouter = require("./routes/workflows");
 const pushRouter = require("./routes/push");
 const importRouter = require("./routes/import");
 const updatesRouter = require("./routes/updates");
+const ccConfigRouter = require("./routes/cc-config");
+const runRouter = require("./routes/run");
 
 function createApp() {
   const app = express();
@@ -68,6 +70,8 @@ function createApp() {
   app.use("/api/push", pushRouter);
   app.use("/api/import", importRouter);
   app.use("/api/updates", updatesRouter);
+  app.use("/api/cc-config", ccConfigRouter);
+  app.use("/api/run", runRouter);
   app.get("/api/openapi.json", (_req, res) => {
     res.json(openApiSpec);
   });
@@ -121,11 +125,36 @@ if (require.main === module) {
     const { startUpdateScheduler } = require("./update-scheduler");
     const { broadcast } = require("./websocket");
     startUpdateScheduler({ broadcast });
+    try {
+      const { startCcWatcher } = require("./lib/cc-watcher");
+      startCcWatcher({ broadcast });
+    } catch (err) {
+      console.warn("cc-watcher failed to start:", err.message);
+    }
+    // Flip any dashboard_runs rows the previous process left flagged
+    // running/spawning — those handles died with the previous server, so
+    // there's no way to attach to them anymore. Marking them abandoned
+    // keeps the Run history honest and unblocks Resume on conversation rows.
+    try {
+      const { reconcileOrphans } = require("./lib/dashboard-runs");
+      const reconciled = reconcileOrphans();
+      if (reconciled > 0) {
+        console.log(`[runs] reconciled ${reconciled} orphan run(s) → abandoned`);
+      }
+    } catch (err) {
+      console.warn("dashboard-runs reconciliation failed:", err.message);
+    }
   });
 
   // Graceful shutdown — close connections and DB cleanly
+  let shutdownInProgress = false;
   const shutdown = (signal) => {
-    console.log(`\n${signal} received — shutting down gracefully…`);
+    if (shutdownInProgress) {
+      console.log(`\n${signal} received again — forcing immediate exit.`);
+      process.exit(1);
+    }
+    shutdownInProgress = true;
+    console.log(`\n${signal} received — shutting down gracefully… (hit Ctrl+C again to force)`);
     if (httpServer) {
       httpServer.close(() => {
         console.log("HTTP server closed.");

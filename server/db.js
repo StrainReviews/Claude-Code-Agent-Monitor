@@ -134,6 +134,26 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   );
 
+  -- Persistent record of every Claude run spawned via the dashboard's
+  -- /api/run endpoint. Survives the in-memory handle reap so the Run page
+  -- can list completed / errored / killed runs and offer Resume long after
+  -- the spawner has forgotten about them.
+  CREATE TABLE IF NOT EXISTS dashboard_runs (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    mode TEXT NOT NULL,
+    cwd TEXT NOT NULL,
+    model TEXT,
+    permission_mode TEXT,
+    effort TEXT,
+    resume_session_id TEXT,
+    prompt_preview TEXT,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ended_at TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS idx_agents_session ON agents(session_id);
   CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
   CREATE INDEX IF NOT EXISTS idx_agents_parent ON agents(parent_agent_id);
@@ -153,6 +173,8 @@ db.exec(`
   -- Composite indexes for frequent query patterns (columns that exist at table creation time)
   CREATE INDEX IF NOT EXISTS idx_events_session_type ON events(session_id, event_type);
   CREATE INDEX IF NOT EXISTS idx_agents_session_type ON agents(session_id, type);
+  CREATE INDEX IF NOT EXISTS idx_dashboard_runs_started ON dashboard_runs(started_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_dashboard_runs_session ON dashboard_runs(session_id);
 `);
 
 // Default model pricing — shared by initial seed + startup top-up + reset endpoint

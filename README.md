@@ -74,6 +74,7 @@ A professional dashboard to track and visualize your Claude Code agent sessions,
 - [Hook Events](#hook-events)
 - [Browser Notifications](#browser-notifications)
 - [Update Notifier](#update-notifier)
+- [Connection Status Modal](#connection-status-modal)
 - [VS Code Extension](#vs-code-extension)
 - [Data Storage](#data-storage)
 - [Statusline](#statusline)
@@ -198,6 +199,24 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
 </p>
 
 <p align="center">
+  <img src="images/config.png" alt="Claude Config Explorer" width="100%">
+  <br>
+  <em>🧰 <strong>Claude Config Explorer</strong> — 12-tab inspector for everything Claude Code knows about: skills, subagents, slash commands, output styles, plugins (with per-plugin contributions), marketplaces, MCP servers, hooks, settings (with secret-key redaction), memory, keybindings, and statusline. Create / edit / delete on low-risk text-file surfaces with mandatory timestamped backups</em>
+</p>
+
+<p align="center">
+  <img src="images/run.png" alt="Run Claude — pre-run config" width="100%">
+  <br>
+  <em>▶️ <strong>Run Claude</strong> — spawn <code>claude</code> subprocesses right inside the dashboard. Pick mode (Conversation / One-shot), source (new session vs resume from your full history), working directory (autocomplete with recent cwds), model, permission mode, and thinking effort. Same-origin guard prevents browser drive-by spawning</em>
+</p>
+
+<p align="center">
+  <img src="images/run-results.png" alt="Run Claude — live streaming output" width="100%">
+  <br>
+  <em>💬 <strong>Run Claude · live stream</strong> — chat-style streaming output with real character-by-character rendering via <code>--include-partial-messages</code>. Tool uses, tool results, and thinking blocks all collapsible. Active runs switcher in the header lets you leave a run in the background and re-attach later. "View session →" deep-links into the regular Sessions UI as soon as the session ID is known</em>
+</p>
+
+<p align="center">
   <img src="images/settings.png" alt="Settings Overview" width="100%">
   <br>
   <em>⚙️ <strong>Settings</strong> — model pricing rules, hook installation status, data management, notification preferences, and system info</em>
@@ -241,6 +260,9 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 | **Statusline**                     | Color-coded CLI statusline showing model, context usage, git branch, per-direction tokens, and session cost (USD)                                                                                                                                                            |
 | **Model Name Formatting**          | Human-friendly model names throughout the UI: raw identifiers like `claude-opus-4-7-20260101` or `claude-opus-4-7[1m]` display as "Claude Opus 4.7" or "Claude Opus 4.7 (1M)". Handles Claude, GPT, and Gemini families with automatic version dot-joining, date/latest suffix stripping, provider prefix removal, and context-window tag formatting. Settings page retains raw names for pricing rule configuration |
 | **Plugin Marketplace**             | Official Claude Code plugin marketplace with 5 plugins (ccam-analytics, ccam-productivity, ccam-devtools, ccam-insights, ccam-dashboard). 18 skills, 4 agents, 3 CLI tools, 2 hook configs. All grounded in actual data model — token baselines, pricing engine, workflow intelligence (11 datasets), session metadata. Install via `claude plugin marketplace add` |
+| **Run Claude**                     | Spawn `claude` subprocesses directly from the dashboard with a chat-style streaming UI. Two modes: **Conversation** (multi-turn — stdin stays open, follow-up turns are piped as stream-json envelopes) and **One-shot** (headless, single prompt → single response). Conversation mode also supports **resuming any existing session** via `claude --resume <id>` — pick from your full sessions history with a searchable picker. The unified active-runs / history modal also offers two zero-config jump buttons: **Resume** on any past conversation row spawns `claude --resume <id>` immediately and seeds the chat with the prior transcript so you land in the live view with full context (no need to retype a prompt — the spawn idles on stdin until you send a follow-up); **View** on any past one-shot row loads the captured transcript inline into the run viewer as read-only (no spawn — same panel, no Stop/follow-up controls). Active runs switcher in the header lets you leave a run in the background, start another, and re-attach later. Re-attach is durable: the client reconciles the spawner's in-memory envelope log (`?envelopes=1`) with the session's on-disk JSONL transcript and prefers whichever has more user/assistant messages, so navigating away from a resumed run and coming back keeps the full prior history visible (the spawner only sees post-spawn turns; the transcript file has prior + current). Model dropdown (Opus 4.7 / 1M / Sonnet 4.6 / Haiku 4.5 / custom), permission-mode picker with explicit `bypassPermissions` warning, **thinking-effort** field (low / medium / high — wired to `--effort`), cwd autocomplete pre-filled with the dashboard's own cwd plus recent session cwds. Real character-by-character streaming via `--include-partial-messages`, plus a client-side **typewriter smoothing layer** that drips each `text_delta` / `thinking_delta` through `requestAnimationFrame` so even short replies (where claude bundles the whole answer into one or two chunks) appear to type in. The merge code keeps the `_streaming` flag and the delta-accumulated `content` array intact when claude's canonical `assistant` envelope arrives mid-stream, so thinking blocks aren't dropped at completion. WebSocket dispatch wraps each envelope in `flushSync` so React 18's auto-batching doesn't collapse bursts of deltas into a single render. **TUI parity (Tier 1)**: a collapsible **limitations banner** that minimizes to a slim pill (never disappears) explaining what stream-json mode can and can't do vs. the terminal TUI; a **prompt editor with slash-command autocomplete** with tiered scoring (exact name → starts-with → word-boundary → contains → subsequence → description-contains) that lists user / project / plugin commands (executed client-side via template expansion before send) and surfaces built-in CLI commands like `/clear`, `/model`, `/config` with a "CLI only — won't run from here" badge; **`@`-file references** with debounced fuzzy-search across the run's cwd (skipping `node_modules`, `.git`, `dist`, `build`, etc.); a **live context-window / token meter** showing input + output + cache-read tokens and running cost, computed from `stream_event` and `result.usage` envelopes during live streaming and from finalized assistant `usage` blocks (input / output / cache-read / cache-creation) when seeded from a transcript on resume / view / re-attach, so the meter populates immediately instead of sitting at 0/200k. Progress bar goes indigo → amber → red at 80% / 95% of the model's context cap; a **status header** with the active model, effort, permission mode, cwd, session ID, envelope count, and elapsed time. Autocomplete dropdowns open upward so they don't collide with the cwd picker below. Live / Offline indicator next to the title. Same-origin guard on the route prevents browser drive-by spawning. Concurrency is effectively uncapped by default (sanity ceiling of 10000 to prevent fork-bomb footguns from a buggy client; the terminal TUI has no cap and neither do we). Set `RUN_MAX_CONCURRENT` if you want a real ceiling. Spawned sessions fire the same hooks any `claude` process does, so they show up automatically in Sessions / Analytics / Kanban / Workflows — and Sessions / SessionDetail surface a green **▶ Run** badge / banner that links back to the Run page for any session that's currently being driven from there |
+| **Claude Config Explorer**         | A 12-tab inspector at `/cc-config` for everything Claude Code knows about: skills, subagents, slash commands, output styles, plugins (with per-plugin contributions count + author/license/homepage from `plugin.json`), marketplaces (with plugin counts read from each `marketplace.json`), MCP servers, hooks (with `~/.claude/hooks/` script listing), settings (structured key-value view + raw JSON toggle, secret-key redaction), memory (`CLAUDE.md` files), keybindings (grouped by context with `<kbd>` chips), and statusline (config + script content). For low-risk text-file surfaces (skills / agents / commands / output styles / memory) the page supports **create / edit / delete with mandatory timestamped backups** atomically written outside the directories Claude Code scans, plus a Backups modal with auto-built `mv` restore commands. Plugins, MCP, hooks-in-settings, and `settings.json` files stay read-only with explainer banners + copy-able CLI commands so the user knows the exact command to run themselves. **Live updates**: a `cc-watcher` running on the server uses `fs.watch` on `~/.claude/` (recursive where the platform supports it) plus `~/.claude.json`, debounced at 500 ms, to broadcast a `cc_config_changed` WebSocket message whenever Claude Code config changes — either via dashboard mutations or external tools (CLI installing a plugin, manually editing `settings.json`, dropping a new skill). The page subscribes and refetches automatically; a Live / Offline pill next to the title shows WebSocket status |
+| **Progressive Web App (PWA)**      | Three independent PWAs — dashboard, landing page, and wiki — each with its own Web App Manifest and Service Worker. Install any of them to your home screen / dock for a standalone, chrome-less experience. The dashboard SW caches the app shell and static assets (cache-first), serves navigation network-first, and preserves the existing VAPID push-notification pipeline. The landing-page and wiki SWs precache their respective shells and lazy-cache images on first visit, enabling offline access after a single load. All manifests use SVG icons (`favicon.svg`) with `sizes="any"` for modern browsers, and include `apple-mobile-web-app-capable` + `apple-touch-icon` meta tags for iOS standalone mode |
 
 ---
 
@@ -764,7 +786,7 @@ The OpenAPI document is generated from `server/openapi.js`, and Swagger UI is se
 | `GET`   | `/api/sessions/:id`             | --                                                               | Session detail with agents and events                                                        |
 | `GET`   | `/api/sessions/:id/stats`       | --                                                               | Aggregated counts powering the Session Detail overview panel: events, events-by-type, top tool usage, error count, agent type/status counts, subagent type breakdown, token totals, time range |
 | `GET`   | `/api/sessions/:id/transcripts` | --                                                               | List available JSONL transcripts for the session (main + subagents + compactions)            |
-| `GET`   | `/api/sessions/:id/transcript`  | `agent_id`, `limit`, `offset`, `after`, `before`                 | Stream messages from a specific transcript with cursor-based pagination                      |
+| `GET`   | `/api/sessions/:id/transcript`  | `agent_id`, `limit`, `offset`, `after`, `before`                 | Stream messages from a specific transcript with cursor-based pagination. Assistant `usage` includes `input_tokens`, `output_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` so the Run page meter can hydrate fully on resume / re-attach |
 | `POST`  | `/api/sessions`                 | --                                                               | Create session (idempotent on `id`)                                                          |
 | `PATCH` | `/api/sessions/:id`             | --                                                               | Update session status/metadata                                                               |
 
@@ -842,6 +864,48 @@ The OpenAPI document is generated from `server/openapi.js`, and Swagger UI is se
 | `POST` | `/api/settings/reset-pricing`  | Reset pricing to defaults                        |
 | `GET`  | `/api/settings/export`         | Export all data as JSON download                 |
 | `POST` | `/api/settings/cleanup`        | Abandon stale sessions, purge old data           |
+
+### Claude Config Explorer (`/api/cc-config`)
+
+Read-only inspection of every Claude Code configuration surface, plus carefully-gated mutations for low-risk text-file artifacts. All write paths create timestamped backups under `<root>/cc-config-backups/<type>/` before mutating.
+
+| Method   | Path                                | Description |
+| -------- | ----------------------------------- | ----------- |
+| `GET`    | `/api/cc-config/overview`           | Roots (claude home, project .claude, project root, ~/.claude.json) + counts for every surface |
+| `GET`    | `/api/cc-config/skills`             | Skills under `<scope>/.claude/skills/<name>/SKILL.md` with parsed frontmatter; `?scope=user\|project\|all` |
+| `GET`    | `/api/cc-config/agents`             | Subagents `<scope>/.claude/agents/*.md` |
+| `GET`    | `/api/cc-config/commands`           | Slash commands `<scope>/.claude/commands/*.md` |
+| `GET`    | `/api/cc-config/output-styles`      | Output styles `<scope>/.claude/output-styles/*.md` |
+| `GET`    | `/api/cc-config/plugins`            | Installed plugins from `~/.claude/plugins/installed_plugins.json`, joined with `enabledPlugins` from settings; each entry includes `contributes` (count of skills/agents/commands/hooks/output-styles inside the plugin's install dir) plus `plugin.json` metadata |
+| `GET`    | `/api/cc-config/marketplaces`       | Registered marketplaces from `known_marketplaces.json`, enriched with each marketplace's own `marketplace.json` (plugin count, owner, description) |
+| `GET`    | `/api/cc-config/mcp`                | MCP servers from `~/.claude.json` (top-level + per-project) and `settings.json` |
+| `GET`    | `/api/cc-config/hooks`              | Hooks aggregated across user / project / project-local `settings.json` files |
+| `GET`    | `/api/cc-config/hook-scripts`       | Files in `~/.claude/hooks/` (the helper scripts referenced by `hooks.<event>.command`) |
+| `GET`    | `/api/cc-config/keybindings`        | `~/.claude/keybindings.json` parsed into context-grouped key/action pairs |
+| `GET`    | `/api/cc-config/statusline`         | `settings.json.statusLine` config + the actual `statusline.py` / `statusline-command.sh` content if present |
+| `GET`    | `/api/cc-config/settings`           | User / project / project-local settings JSON, with secret-like keys (matching `/token\|secret\|password\|api[_-]?key\|auth/i`) replaced by `"<redacted>"` |
+| `GET`    | `/api/cc-config/memory`             | `CLAUDE.md` files at user + project scope |
+| `GET`    | `/api/cc-config/file?path=…`        | Body of a single file (path-contained to CLAUDE_HOME / project .claude / project CLAUDE.md) |
+| `GET`    | `/api/cc-config/backups`            | Listing of all timestamped backups, optionally filtered `?scope=&type=` |
+| `PUT`    | `/api/cc-config/file`               | Create or overwrite a text-file artifact. Body: `{ scope, type, name?, content }`. Auto-backs-up if file exists. Atomic temp + rename. 256 KB content cap, strict `name` regex |
+| `DELETE` | `/api/cc-config/file`               | Backup-then-delete a text-file artifact. Skill dirs are backed up whole (preserving bundled assets) before recursive removal |
+
+### Run Claude (`/api/run`)
+
+HTTP surface for spawning and supervising `claude` subprocesses from the dashboard. Same-origin guard on every route — browser requests must come from a localhost origin; missing-Origin (CLI/curl) requests pass.
+
+| Method   | Path                              | Description |
+| -------- | --------------------------------- | ----------- |
+| `GET`    | `/api/run`                        | List all in-memory run handles (live + recently finished); also returns `maxConcurrent` and `activeCount` |
+| `GET`    | `/api/run/binary`                 | Probe whether `claude` is on `PATH` and where it lives — used by the UI to surface a clear error before spawning |
+| `GET`    | `/api/run/cwds`                   | Suggested working directories: dashboard server cwd, `$HOME`, and recent cwds from the sessions table |
+| `GET`    | `/api/run/files?cwd=…&q=…`        | Fuzzy file search inside `cwd` for the Run page's `@`-file autocomplete. Skips `node_modules`, `.git`, `dist`, `build`, `.next`, `.cache`, `coverage`, etc. Cwd is required and must exist; results are capped and ranked by basename match |
+| `POST`   | `/api/run`                        | Spawn a new run. Body: `{ prompt, mode: "headless"\|"conversation", cwd?, model?, permissionMode?, resumeSessionId?, effort? }`. Headless puts prompt in argv via `-p` and closes stdin. Conversation pipes the prompt over stdin as a stream-json envelope and keeps stdin open for follow-ups. `resumeSessionId` (conversation only) adds `--resume <id>`; when set, `prompt` may be empty — the spawner skips the initial stdin write and `claude` idles on the resumed conversation until the user posts a follow-up via `POST /api/run/:id/message`. `effort` (`low` / `medium` / `high`) maps to `--effort`. The spawner always passes `--output-format stream-json --verbose --include-partial-messages` so the UI can render character-by-character deltas. Concurrency is effectively uncapped (default ceiling 10000 — override with `RUN_MAX_CONCURRENT`) |
+| `GET`    | `/api/run/:id`                    | Current handle state. `?envelopes=1` includes the in-memory envelope log so the UI can replay history when re-attaching |
+| `POST`   | `/api/run/:id/message`            | Send a follow-up turn to a running conversation (conversation mode only). Body: `{ text }` |
+| `DELETE` | `/api/run/:id`                    | Stop a run. SIGTERM, escalating to SIGKILL after 5 s |
+
+Output streams over the existing dashboard WebSocket as three message types: `run_stream` (parsed stream-json envelope, including `stream_event` deltas from `--include-partial-messages`), `run_status` (status transitions), `run_input_ack` (stdin write confirmed). The Config Explorer page subscribes to a fourth message — `cc_config_changed` — broadcast by `server/lib/cc-watcher.js` (via `fs.watch` on `~/.claude/`) and by `routes/cc-config.js` after every successful PUT/DELETE, with payload `{ source: "dashboard"|"fs", action?, scope?, type?, name?, paths? }`. The Sessions list and SessionDetail page poll `/api/run` (and listen for `run_status`) to badge any session currently being driven by an in-flight Run with a clickable **▶ Run** indicator that links back to `/run`.
 
 ### Import History
 
@@ -1004,6 +1068,22 @@ Additionally, any `Notification` hook event from Claude Code triggers a browser 
 - **Persistence:** Notifications arrive even if the browser is closed, as the Service Worker operates in the background.
 - **Test notification:** button in Settings lets you verify the VAPID pipeline and audio playback.
 
+### PWA & Offline Support
+
+The project ships three independent Progressive Web Apps — one each for the **dashboard**, **landing page**, and **wiki**. Each has its own `manifest.json` and Service Worker so the browser treats them as separate installable applications.
+
+| Surface | Manifest | Service Worker | Caching Strategy |
+| --- | --- | --- | --- |
+| Dashboard (`client/`) | `client/public/manifest.json` | `client/public/sw.js` | Precaches app shell (`/`, manifest, favicon). Static assets (JS/CSS bundles) are cached on first load (cache-first). Navigation requests are network-first with offline fallback to cached `/`. API (`/api/*`), WebSocket (`/ws`), and Vite HMR requests are never cached. Push notification handlers are preserved alongside the caching logic. |
+| Landing page (root) | `manifest.json` | `sw.js` | Precaches the HTML shell, favicon, and OG image. Screenshot PNGs are lazy-cached on first view (cache-first) to avoid a heavy initial precache. Navigation is network-first with offline fallback. |
+| Wiki (`wiki/`) | `wiki/manifest.json` | `wiki/sw.js` | Precaches `index.html`, `style.css`, `script.js`, manifest, and favicon. Fully offline-capable after one visit. Network-first HTML, cache-first for CSS/JS. |
+
+**Cache lifecycle:** All three SWs call `skipWaiting()` on install and delete stale caches on activate (keyed by version strings like `dashboard-v1`, `landing-v1`, `wiki-v1`). Bumping the version constant forces a clean refresh.
+
+**iOS support:** All three HTML files include `<meta name="apple-mobile-web-app-capable" content="yes">` and `<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">` for standalone home-screen mode on Safari.
+
+**Icons:** Manifests reference `favicon.svg` with `sizes="any"` and `type="image/svg+xml"` — supported in Chrome 107+, Firefox 110+, Edge 107+. Apple touch icons also use the SVG favicon.
+
 ---
 
 ## Update Notifier
@@ -1085,6 +1165,16 @@ There is no `POST /api/updates/apply` and no self-restart helper, by design. Sel
 | --- | --- | --- |
 | `DASHBOARD_UPDATE_CHECK` | enabled | Set to `0` / `false` / `off` to disable the scheduler entirely. |
 | `DASHBOARD_UPDATE_CHECK_INTERVAL_MS` | `300000` (5 min) | Interval between automatic checks. Floor is 60 000 ms — values below are clamped. |
+
+---
+
+## Connection Status Modal
+
+Click the **Live** / **Disconnected** pill in the sidebar footer to open a small details panel about the dashboard's WebSocket transport. It shows the active `ws://` endpoint, how long the current socket has been up, total events received, top event types as a horizontal bar chart, a 60-second throughput sparkline, and the last 8 events as a recent-activity list. Cumulative stats (totals, type breakdown, recent list) persist across reloads via `localStorage` under `sidebar-connection-stats`; the rolling sparkline and "connected since" timer are intentionally ephemeral. A **Reset** button in the footer clears everything on demand.
+
+<p align="center">
+  <img src="images/live.png" alt="Connection details modal with throughput sparkline, top event types, and recent activity" width="100%">
+</p>
 
 ---
 
@@ -1301,6 +1391,8 @@ graph LR
     A["/activity"] --> ACT["ActivityFeed<br/>streaming event log"]
     AN["/analytics"] --> ANALYTICS["Analytics<br/>tokens + heatmap + trends"]
     WF["/workflows"] --> WORKFLOWS["Workflows<br/>D3 visualizations + drill-in"]
+    CC["/cc-config"] --> CCCONFIG["CcConfig<br/>12-tab Claude Code config inspector + editor"]
+    RUN["/run"] --> RUNPAGE["Run<br/>spawn / resume / stream Claude subprocess"]
     ST["/settings"] --> SETTINGS["Settings<br/>pricing + notifications + hooks + export"]
     NF["/*"] --> NOTFOUND["NotFound<br/>404 catch-all"]
 

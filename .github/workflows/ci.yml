@@ -1,3 +1,16 @@
+# CI / CD Pipeline for Claude Code Agent Monitor
+#
+# This workflow runs on every push and pull request, executing the following stages:
+# 1. Format Check: Ensures code adheres to formatting standards.
+# 2. Tests: Runs server and client tests to validate functionality.
+# 3. Build: Builds the client application and uploads the artifact.
+# 4. Docker Build & Push: Builds a Docker image and pushes it to GitHub Container Registry (GHCR) on pushes to main/master branches.
+# 5. Pipeline Summary: Compiles results from all stages and posts a summary to the GitHub Actions step summary, including status
+#    icons, commit details, and links to artifacts if applicable.
+# Any failure in the stages will cause the pipeline to fail, ensuring that only well-formatted, tested, and built code is merged and deployed.
+# NOTE: Not to be confused with the action files in `deployments/ci/` which are for deployment-related tasks. This workflow focuses on CI/CD for the codebase itself.
+#
+# Author: Son Nguyen <hoangson091104@gmail.com>
 name: 🚀 CI / CD Pipeline for Claude Code Agent Monitor
 
 on:

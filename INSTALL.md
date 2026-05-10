@@ -85,6 +85,16 @@ After starting a Claude Code session, you should see:
 
 If nothing appears after 30 seconds, see [SETUP.md](./SETUP.md#troubleshooting).
 
+### PWA install (optional)
+
+The dashboard is a Progressive Web App. After opening it in a supported browser (Chrome, Edge, Firefox), you can install it to your dock / home screen:
+
+1. Look for the **install icon** (⊕) in the browser address bar, or open the browser menu → "Install app"
+2. Once installed, the dashboard launches in its own window with no browser chrome
+3. Offline support: previously visited pages and assets are served from the Service Worker cache when the network is unavailable
+
+The landing page and wiki are also installable PWAs with their own manifests and service workers — visit each in a browser to install independently.
+
 ---
 
 ## Step 5 — (Optional) Import existing Claude Code history

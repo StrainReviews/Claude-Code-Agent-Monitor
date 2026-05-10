@@ -1771,6 +1771,127 @@ describe("Transcript cache integration", () => {
 });
 
 // ============================================================
+// Watchdog: stale-error idempotence
+// ============================================================
+describe("Watchdog API-error detection", () => {
+  function writeTranscriptWithError(p) {
+    fs.writeFileSync(
+      p,
+      JSON.stringify({
+        isApiErrorMessage: true,
+        error: "rate_limit_error",
+        message: { content: [{ text: "Rate limit exceeded" }] },
+        timestamp: new Date().toISOString(),
+      }) + "\n"
+    );
+  }
+
+  it("should NOT re-flip a recovered session to error when only pre-existing transcript errors remain", async () => {
+    const tmpTranscript = path.join(os.tmpdir(), `watchdog-stale-${Date.now()}.jsonl`);
+    writeTranscriptWithError(tmpTranscript);
+
+    const sessionId = `watchdog-stale-${Date.now()}`;
+    const hooks = require("../routes/hooks");
+
+    try {
+      // Initial event creates the session and triggers error capture via processEvent.
+      await post("/api/hooks/event", {
+        hook_type: "PreToolUse",
+        data: {
+          session_id: sessionId,
+          transcript_path: tmpTranscript,
+          tool_name: "Read",
+          cwd: "/tmp",
+        },
+      });
+
+      // SessionEnd path is what reads errors out of the transcript inside processEvent;
+      // simulate the watchdog instead by manually marking the session as error.
+      stmts.updateSession.run(null, "error", null, null, sessionId);
+      const errored = stmts.getSession.get(sessionId);
+      assert.strictEqual(errored.status, "error", "precondition: session marked error");
+
+      // User retries → reactivation logic flips back to active.
+      await post("/api/hooks/event", {
+        hook_type: "UserPromptSubmit",
+        data: { session_id: sessionId, transcript_path: tmpTranscript, cwd: "/tmp" },
+      });
+      const recovered = stmts.getSession.get(sessionId);
+      assert.strictEqual(recovered.status, "active", "UserPromptSubmit should reactivate");
+
+      // Backdate updated_at so the watchdog considers the session stale.
+      db.prepare("UPDATE sessions SET updated_at = ? WHERE id = ?").run(
+        new Date(Date.now() - 60_000).toISOString(),
+        sessionId
+      );
+
+      // Invalidate the cache so the watchdog actually re-reads the transcript on this tick.
+      hooks.transcriptCache.invalidate(tmpTranscript);
+      hooks.watchdogCheck();
+
+      const after = stmts.getSession.get(sessionId);
+      assert.strictEqual(
+        after.status,
+        "active",
+        "watchdog must NOT revert recovered session to error when no new transcript errors arrived"
+      );
+    } finally {
+      try {
+        fs.unlinkSync(tmpTranscript);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  it("should still mark session as error when a NEW transcript error appears", async () => {
+    const tmpTranscript = path.join(os.tmpdir(), `watchdog-new-${Date.now()}.jsonl`);
+    fs.writeFileSync(tmpTranscript, ""); // start empty
+
+    const sessionId = `watchdog-new-${Date.now()}`;
+    const hooks = require("../routes/hooks");
+
+    try {
+      // Establish an active session against a clean transcript.
+      await post("/api/hooks/event", {
+        hook_type: "PreToolUse",
+        data: {
+          session_id: sessionId,
+          transcript_path: tmpTranscript,
+          tool_name: "Read",
+          cwd: "/tmp",
+        },
+      });
+      assert.strictEqual(stmts.getSession.get(sessionId).status, "active");
+
+      // A new API error appears in the transcript afterwards.
+      writeTranscriptWithError(tmpTranscript);
+
+      // Make session look stale to the watchdog.
+      db.prepare("UPDATE sessions SET updated_at = ? WHERE id = ?").run(
+        new Date(Date.now() - 60_000).toISOString(),
+        sessionId
+      );
+      hooks.transcriptCache.invalidate(tmpTranscript);
+      hooks.watchdogCheck();
+
+      const after = stmts.getSession.get(sessionId);
+      assert.strictEqual(
+        after.status,
+        "error",
+        "watchdog must flip session to error when a new transcript error is detected"
+      );
+    } finally {
+      try {
+        fs.unlinkSync(tmpTranscript);
+      } catch {
+        // ignore
+      }
+    }
+  });
+});
+
+// ============================================================
 // Nested Agent Spawning (agents spawning agents spawning agents)
 // ============================================================
 describe("Nested Agent Spawning", () => {

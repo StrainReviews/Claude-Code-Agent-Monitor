@@ -608,6 +608,7 @@ const processEvent = db.transaction((hookType, data) => {
 
       // Register API errors from transcript (quota limits, rate limits, overloaded, etc.)
       if (result.errors) {
+        let newErrorRecorded = false;
         for (const apiErr of result.errors) {
           // Deduplicate: check if we already recorded this error (same type+message+timestamp)
           const errKey = `${apiErr.type}:${apiErr.timestamp || ""}`;
@@ -635,12 +636,14 @@ const processEvent = db.transaction((hookType, data) => {
             summary: `${apiErr.type}: ${apiErr.message}`,
             created_at: apiErr.timestamp || new Date().toISOString(),
           });
+          newErrorRecorded = true;
         }
 
-        // Any API error immediately puts session + agent into error state.
-        // If the user retries (UserPromptSubmit / PreToolUse), the
-        // reactivation logic at the top of processEvent will recover them.
-        if (result.errors.length > 0) {
+        // Only flip to error when we recorded a NEW error this call. Pre-existing
+        // transcript errors must not re-overwrite status, otherwise sessions the
+        // user already recovered from (UserPromptSubmit reactivation above) get
+        // yanked back into 'error' the moment the transcript scan re-reads them.
+        if (newErrorRecorded) {
           const curSession = stmts.getSession.get(sessionId);
           if (curSession && curSession.status === "active") {
             stmts.updateSession.run(null, "error", null, null, sessionId);
@@ -874,16 +877,19 @@ function watchdogCheck() {
             created_at: apiErr.timestamp || new Date().toISOString(),
           });
         }
-      }
 
-      // Mark session + agent as error (whether errors are new or pre-existing)
-      stmts.updateSession.run(null, "error", null, null, sess.id);
-      broadcast("session_updated", stmts.getSession.get(sess.id));
-      if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
-        stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
-        if (mainAgentId) {
-          stmts.clearAgentAwaitingInput.run(mainAgentId);
-          broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        // Only flip to error when we actually detected a new error this tick.
+        // Pre-existing transcript errors must not re-overwrite status, otherwise
+        // sessions the user already recovered from (UserPromptSubmit reactivation
+        // at the top of processEvent) get yanked back into 'error' on every poll.
+        stmts.updateSession.run(null, "error", null, null, sess.id);
+        broadcast("session_updated", stmts.getSession.get(sess.id));
+        if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
+          stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
+          if (mainAgentId) {
+            stmts.clearAgentAwaitingInput.run(mainAgentId);
+            broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+          }
         }
       }
     }
@@ -898,4 +904,5 @@ const watchdogTimer = setInterval(watchdogCheck, WATCHDOG_INTERVAL_MS);
 if (watchdogTimer.unref) watchdogTimer.unref();
 
 router.transcriptCache = transcriptCache;
+router.watchdogCheck = watchdogCheck;
 module.exports = router;
