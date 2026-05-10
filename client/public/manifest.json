@@ -3,6 +3,7 @@
   "name": "Agent Dashboard - Claude Code Monitor",
   "short_name": "Agent Dashboard",
   "description": "Real-time monitoring platform for Claude Code agent activity.",
+  "author": "Son Nguyen",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
