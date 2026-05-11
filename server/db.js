@@ -275,6 +275,13 @@ try {
 } catch {
   db.prepare("ALTER TABLE agents ADD COLUMN model TEXT").run();
 }
+// Backfill: populate agents.model from metadata JSON for imported subagents.
+db.prepare(`
+  UPDATE agents SET model = json_extract(metadata, '$.model')
+  WHERE model IS NULL
+    AND metadata IS NOT NULL
+    AND json_extract(metadata, '$.model') IS NOT NULL
+`).run();
 
 // Composite index on (status, updated_at) — must be AFTER migration adds updated_at
 db.exec(

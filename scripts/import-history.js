@@ -673,6 +673,9 @@ function importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) {
   // Live subagents (created via the PreToolUse "Agent" hook) are detected by
   // findLiveSubagentForJsonl above; in that case tool events are emitted under
   // the live row's id and no parallel JSONL-keyed row is needed.
+  if (liveSub && !liveSub.model && subData.model) {
+    stmts.updateAgentModel.run(subData.model, liveSub.id);
+  }
   if (!liveSub && !existingJsonl) {
     stmts.insertAgent.run(
       jsonlSubId,
@@ -699,6 +702,9 @@ function importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) {
       subData.endedAt,
       jsonlSubId
     );
+    if (subData.model) {
+      stmts.updateAgentModel.run(subData.model, jsonlSubId);
+    }
     created++;
   }
 
