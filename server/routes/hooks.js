@@ -190,6 +190,9 @@ const processEvent = db.transaction((hookType, data) => {
           parentId,
           input.metadata ? JSON.stringify(input.metadata) : null
         );
+        if (input.model) {
+          stmts.updateAgentModel.run(input.model, subId);
+        }
         broadcast("agent_created", stmts.getAgent.get(subId));
         agentId = subId;
         summary = `Subagent spawned: ${subName}`;
