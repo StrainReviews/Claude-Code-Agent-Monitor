@@ -1,6 +1,7 @@
 {
   "id": "claude-code-agent-monitor-wiki",
   "name": "Claude Code Agent Monitor - Wiki",
+  "author": "Son Nguyen",
   "short_name": "CC Wiki",
   "description": "Comprehensive technical wiki for Claude Code Agent Monitor.",
   "start_url": ".",

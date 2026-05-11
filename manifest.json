@@ -3,6 +3,7 @@
   "name": "Claude Code Agent Monitor",
   "short_name": "CC Monitor",
   "description": "Local-first monitoring dashboard for Claude Code sessions.",
+  "author": "Son Nguyen",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
